@@ -1,0 +1,10 @@
+services:
+  front:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+    image: traintracks-front:latest
+    container_name: traintracks-front
+    ports:
+      - "8090:80"
+    restart: unless-stopped
