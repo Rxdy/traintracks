@@ -1,4 +1,4 @@
-"""Les 23 processus de Train Tracks (état cible : serveur et base de données font foi)."""
+"""Les 28 processus de Train Tracks (état cible : serveur et base de données font foi)."""
 from bpmn_kit import Process
 
 J = ("J", "Joueur", "joueur")
@@ -23,7 +23,7 @@ def navigation():
     p.gw("g", "Cube verrouillé ?", "A", 4)
     p.task("v", "Voit le cadenas : inscription requise (02)", "J", 5)
     p.end("e1", "Reste sur l'accueil", "J", 6)
-    p.task("go", "Affiche l'écran choisi, solde toujours visible", "A", 5)
+    p.task("go", "Affiche l'écran choisi (le pied de page mène aux mentions légales)", "A", 5)
     p.end("e2", "Écran affiché", "A", 6)
     p.chain("s", "a", "b", "c", "g")
     flows(p, ("g", "v", "Oui"), ("g", "go", "Non"), ("v", "e1"), ("go", "e2"))
@@ -34,8 +34,8 @@ def compte():
     p = Process("02-compte", "02 · Compte et session", [J, A, V])
     p.start("s", "Ouvre l'écran Compte", "J", 0)
     p.gw("g", "Connecté ?", "A", 1)
-    p.end("e1", "Choisit inscription, connexion ou Google (03, 05, 06)", "J", 1)
-    p.task("a", "Affiche pseudo, e-mail et solde de pièces", "A", 2)
+    p.end("e1", "Choisit une connexion (03, 05, 06, 24)", "J", 1)
+    p.task("a", "Affiche pseudo et e-mail, Déconnexion, Suppression (26)", "A", 2)
     p.task("d", "Clique Déconnexion", "J", 3)
     p.task("l", "Ferme la session", "V", 4)
     p.end("e2", "Retour au formulaire", "A", 5)
@@ -45,7 +45,7 @@ def compte():
 
 def inscription():
     p = Process("03-inscription", "03 · Inscription", [J, A, V, D])
-    p.start("s", "Remplit pseudo, e-mail, mot de passe", "J", 0)
+    p.start("s", "Remplit pseudo, e-mail, mot de passe (lien vers la confidentialité)", "J", 0)
     p.task("a", "Valide le format, affiche l'indicateur de robustesse en bits", "A", 1)
     p.gw("g1", "Format et robustesse OK ?", "A", 2)
     p.task("v", "Reçoit l'inscription, recalcule la robustesse", "V", 3)
@@ -91,7 +91,7 @@ def connexion():
     p.task("o", "Échecs à zéro, ouvre la session, rattache l'anonyme (07)", "V", 7)
     p.end("e", "Connecté", "A", 8)
     p.task("w", "Note l'échec ; au 5e, bloque 15 min", "D", 7)
-    p.task("err2", "Voit « identifiants incorrects »", "J", 8)
+    p.task("err2", "Voit « identifiants incorrects » (lien Mot de passe oublié, 24)", "J", 8)
     p.error("ee2", "Connexion refusée", "J", 9)
     p.chain("s", "a", "v", "d", "g1")
     flows(p, ("g1", "err1", "Oui"), ("g1", "c", "Non"), ("err1", "ee1"), ("c", "g2"), ("g2", "o", "Oui"),
@@ -146,7 +146,7 @@ def voyage():
     p.gw("g", "Tracé juste ?", "V", 8)
     p.error("n", "Tracé refusé, le joueur continue", "A", 8)
     p.task("w", "Enregistre niveau, temps, pièces (19), aides (18)", "D", 9)
-    p.end("e", "Voit Bravo, le train (13), puis Suivant", "A", 10)
+    p.end("e", "Voit le décor se dévoiler (27), le train (13), puis Suivant", "A", 10)
     p.chain("s", "r", "d", "c", "a", "p", "b", "v", "g")
     flows(p, ("g", "n", "Non"), ("g", "w", "Oui"), ("w", "e"))
     return p
@@ -234,11 +234,11 @@ def controle():
 def train():
     M = ("M", "Minuterie 30 ms", "technique")
     p = Process("13-animation-du-train", "13 · Animation du train", [A, M])
-    p.start("s", "Le serveur répond « juste » (08)", "A", 0)
+    p.start("s", "Le décor est dévoilé (27) ou le joueur relance le train", "A", 0)
     p.task("a", "tracePath, mesure grille et écran", "A", 1)
     p.task("b", "leadCells + buildRoute : droites et quarts de cercle", "A", 2)
     p.task("c", "Monte TrainRun", "A", 3)
-    p.task("tk", "Tick : vitesse 2,2 cases/s sur la grille, 9 hors grille", "M", 4)
+    p.task("tk", "Tick : vitesse constante, 3,2 cases/s partout", "M", 4)
     p.task("pt", "pointAt : place locomotive et 3 wagons", "M", 5)
     p.gw("g", "Route terminée ?", "A", 6)
     p.end("e1", "Tick suivant", "M", 6)
@@ -428,6 +428,85 @@ def solveur():
     return p
 
 
+def oubli():
+    p = Process("24-mot-de-passe-oublie", "24 · Mot de passe oublié", [J, A, V, D])
+    p.start("s", "Clique Mot de passe oublié, saisit son e-mail", "J", 0)
+    p.task("a", "Envoie la demande", "A", 1)
+    p.task("v", "Cherche un compte avec mot de passe pour cette adresse", "V", 2)
+    p.gw("g", "Compte et pas de mail récent ?", "V", 3)
+    p.task("t", "Crée un jeton à usage unique (empreinte seule, 1 h)", "D", 4)
+    p.task("m", "Envoie le lien par e-mail", "V", 5)
+    p.end("e1", "Ne fait rien : réponse identique, on ne révèle pas qui est inscrit", "V", 4)
+    p.end("e", "Voit « Si un compte existe, un lien vient d'être envoyé »", "A", 6)
+    p.chain("s", "a", "v", "g")
+    flows(p, ("g", "e1", "Non"), ("g", "t", "Oui"), ("t", "m"), ("m", "e"))
+    return p
+
+
+def reinit():
+    p = Process("25-nouveau-mot-de-passe", "25 · Nouveau mot de passe", [J, A, V, D])
+    p.start("s", "Clique le lien reçu par e-mail", "J", 0)
+    p.task("a", "Affiche le formulaire de nouveau mot de passe", "A", 1)
+    p.task("v", "Reçoit jeton et mot de passe, recalcule la robustesse", "V", 2)
+    p.gw("g", "Jeton et mot de passe OK ?", "V", 3)
+    p.error("err", "Lien invalide ou mot de passe trop faible", "A", 4)
+    p.task("d", "Jeton marqué utilisé, nouveau hash, sessions fermées, blocage levé", "D", 4)
+    p.task("m", "Prévient par e-mail que le mot de passe a changé", "V", 5)
+    p.end("e", "Voit « Mot de passe modifié », se connecte (05)", "A", 6)
+    p.chain("s", "a", "v", "g")
+    flows(p, ("g", "err", "Non"), ("g", "d", "Oui"), ("d", "m"), ("m", "e"))
+    return p
+
+
+def suppression():
+    p = Process("26-suppression-du-compte", "26 · Suppression du compte", [J, A, V, D])
+    p.start("s", "Clique Supprimer mon compte", "J", 0)
+    p.task("a", "Avertit : définitif. Demande le mot de passe", "A", 1)
+    p.task("v", "Vérifie le mot de passe (même blocage que la connexion)", "V", 2)
+    p.gw("g", "Mot de passe correct ?", "V", 3)
+    p.error("err", "Suppression refusée, le compte reste", "A", 4)
+    p.task("d", "Efface progression, pièces, aides, puzzle du jour, sessions, jetons, compte", "D", 4)
+    p.task("m", "Envoie un e-mail de confirmation de suppression", "V", 5)
+    p.end("e", "Déconnecté, retour à l'accueil, message de confirmation", "A", 6)
+    p.chain("s", "a", "v", "g")
+    flows(p, ("g", "err", "Non"), ("g", "d", "Oui"), ("d", "m"), ("m", "e"))
+    return p
+
+
+def decor():
+    p = Process("27-decor-de-victoire", "27 · Décor de victoire", [J, A])
+    p.start("s", "Le serveur répond « juste » (08)", "A", 0)
+    p.task("t", "Choisit l'environnement du chapitre (10 niveaux)", "A", 1)
+    p.task("r", "Rivière d'un bord à l'autre, pont sur une voie droite à angle droit", "A", 2)
+    p.task("h", "Hameau le long de la voie, champs groupés, montagnes sur les rochers", "A", 3)
+    p.task("f", "Fond la grille nue, dévoile le paysage, efface les compteurs", "A", 4)
+    p.task("c", "Rails aux couleurs de l'environnement", "A", 5)
+    p.task("w", "Attend la fin du fondu, puis lance le train (13)", "A", 6)
+    p.task("o", "Regarde, réduit ou rouvre le résultat, relance le train", "J", 7)
+    p.end("e", "Résultat et Niveau suivant (sous les aides sur téléphone)", "A", 8)
+    p.chain("s", "t", "r", "h", "f", "c", "w", "o", "e")
+    return p
+
+
+def ajout_niveaux():
+    D2 = ("G", "Développeur", "joueur")
+    V2 = ("V", "Serveur", "technique")
+    B2 = ("D", "Base PostgreSQL", "stockage")
+    p = Process("28-ajout-de-niveaux", "28 · Ajout de niveaux après déploiement", [D2, V2, B2])
+    p.start("s", "make build-levels TO=N : fabrique les niveaux, garde les gelés", "G", 0)
+    p.task("a", "make audit : unicité, difficulté, plan", "G", 1)
+    p.task("f", "make freeze : verrouille les niveaux publiés (empreintes)", "G", 2)
+    p.task("b", "Reconstruit l'image du serveur et le relance", "G", 3)
+    p.task("l", "Au démarrage, lit levels.json et compare à la base", "V", 4)
+    p.gw("g", "Niveau déjà en base ?", "V", 5)
+    p.task("i", "Insère le niveau (jamais de mise à jour)", "D", 6)
+    p.end("e1", "Ignoré, signalé s'il a changé dans le fichier", "V", 6)
+    p.end("e2", "Joueurs au bout : reprennent au nouveau niveau", "V", 7)
+    p.chain("s", "a", "f", "b", "l", "g")
+    flows(p, ("g", "e1", "Oui"), ("g", "i", "Non"), ("i", "e2"))
+    return p
+
+
 ALL = [navigation, compte, inscription, confirmation, connexion, google, rattachement, voyage, quotidien,
        generation, pose, controle, train, tutoriel, stats, aide, achat, deblocage, pieces, install,
-       sw_cycle, sw_fetch, solveur]
+       sw_cycle, sw_fetch, solveur, oubli, reinit, suppression, decor, ajout_niveaux]

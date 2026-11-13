@@ -1,6 +1,6 @@
 # Processus BPMN de Train Tracks
 
-23 diagrammes (état cible : serveur et base font foi) dans `out/` (PNG), générés depuis `processes.py` :
+28 diagrammes (état cible : serveur et base font foi) dans `out/` (PNG), générés depuis `processes.py` :
 
 | # | Processus | # | Processus |
 |---|-----------|---|-----------|
@@ -15,7 +15,9 @@
 | 09 | Puzzle du jour | 21 | Service worker : installation |
 | 10 | Génération du puzzle du jour | 22 | Service worker : requêtes |
 | 11 | Pose d'un rail | 23 | Résolution d'un puzzle (serveur) |
-| 12 | Contrôle de la grille complète | | |
+| 12 | Contrôle de la grille complète | 24 | Mot de passe oublié |
+| 25 | Nouveau mot de passe | 26 | Suppression du compte |
+| 27 | Décor de victoire | 28 | Ajout de niveaux après déploiement |
 
 ## Régénérer
 

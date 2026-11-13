@@ -47,15 +47,21 @@ backup: ## Sauvegarde la base dans backups/ (fichier .sql.gz horodaté)
 plan: ## Affiche le plan du Voyage (tailles, règles, alternance) ; TO=300 pour changer la fin
 	cd server && npx tsx src/plan.cli.ts $(or $(TO),300)
 
-.PHONY: build-levels audit freeze pace
+.PHONY: build-levels audit freeze pace add-levels
 build-levels: ## Fabrique les niveaux du plan (server/data/levels.json) ; les niveaux gelés sont conservés
 	cd server && npx tsx src/build.cli.ts $(TO)
 
 audit: ## Compare les niveaux au plan, vérifie l'unicité et la montée de difficulté
 	cd server && npx tsx src/audit.cli.ts
 
-freeze: ## Gèle les niveaux actuels : à lancer AVANT de publier (ensuite on ne peut plus que en ajouter)
+freeze: ## Gèle les niveaux actuels : protège les niveaux publiés (on peut toujours en AJOUTER à la suite, voir docs/niveaux.md)
 	cd server && npx tsx src/freeze.cli.ts
+
+add-levels: ## Publier de nouveaux niveaux : fabrique jusqu'à TO=N, audite, étend le gel (docs/niveaux.md)
+	@test -n "$(TO)" || (echo "Usage : make add-levels TO=350" && exit 1)
+	$(MAKE) build-levels TO=$(TO)
+	$(MAKE) audit
+	$(MAKE) freeze
 
 pace: ## Temps de jeu RÉELS par niveau (base en cours), à comparer aux durées estimées du plan
 	$(COMPOSE) exec -T api npx tsx src/pace.cli.ts
