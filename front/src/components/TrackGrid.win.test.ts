@@ -186,7 +186,7 @@ describe('TrackGrid : validation par le serveur', () => {
 describe('TrackGrid : décor à la victoire', () => {
   it('le décor se dévoile d\'abord, le train ne démarre qu\'ensuite', async () => {
     vi.useFakeTimers()
-    timing.revealMs = 1600
+    timing.revealMs = 2800
     try {
       const w = mount(TrackGrid, { props: { puzzle: samplePuzzle, theme: 'hiver' }, attachTo: document.body })
       expect(w.find('[data-test=scenery]').exists()).toBe(false) // pendant la partie : grille nue
@@ -198,7 +198,7 @@ describe('TrackGrid : décor à la victoire', () => {
       expect(w.find('[data-test=scenery]').exists()).toBe(true)
       expect(w.find('.board').classes()).toContain('board--won')
       expect(w.find('[data-test=train]').exists()).toBe(false)
-      vi.advanceTimersByTime(1700)
+      vi.advanceTimersByTime(2900)
       await w.vm.$nextTick()
       expect(w.find('[data-test=train]').exists()).toBe(true)
       w.unmount()
@@ -220,6 +220,40 @@ describe('TrackGrid : compteurs à la victoire', () => {
     await w.vm.$nextTick()
     expect(w.find('.board').classes()).toContain('board--won') // la règle CSS .board--won .clue les masque
     expect(w.findAll('[data-test=clue]').length).toBe(samplePuzzle.size * 2) // toujours dans le DOM : rien ne bouge
+    w.unmount()
+  })
+})
+
+describe('TrackGrid : réduire le résultat pour voir le décor', () => {
+  it('on réduit la fenêtre, on relance le train, puis on la rouvre', async () => {
+    const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
+    const cell = (r: number, c: number) => w.find(`[data-r="${r}"][data-c="${c}"]`)
+    await cell(sampleSolution[0][0], sampleSolution[0][1]).trigger('pointerdown')
+    for (const [r, c] of sampleSolution.slice(1)) await cell(r, c).trigger('pointerenter')
+    window.dispatchEvent(new Event('pointerup'))
+    await w.vm.$nextTick()
+    w.findComponent(TrainRun).vm.$emit('done')
+    await w.vm.$nextTick()
+    expect(w.find('[data-test=finish]').exists()).toBe(true)
+    expect(w.find('[data-test=dock]').exists()).toBe(false)
+
+    await w.find('[data-test=fold]').trigger('click') // réduit : le décor est libre
+    expect(w.find('[data-test=finish]').exists()).toBe(false)
+    expect(w.find('[data-test=scenery]').exists()).toBe(true)
+    expect(w.find('[data-test=dock]').exists()).toBe(true)
+
+    await w.find('[data-test=replay]').trigger('click') // le train repart
+    await w.vm.$nextTick()
+    await w.vm.$nextTick()
+    expect(w.find('[data-test=train]').exists()).toBe(true)
+    expect(w.find('[data-test=dock]').exists()).toBe(false) // pas de bouton pendant que le train roule
+    w.findComponent(TrainRun).vm.$emit('done')
+    await w.vm.$nextTick()
+    expect(w.find('[data-test=finish]').exists()).toBe(false) // reste réduit après le passage du train
+    expect(w.find('[data-test=dock]').exists()).toBe(true)
+
+    await w.find('[data-test=reopen]').trigger('click')
+    expect(w.find('[data-test=finish]').exists()).toBe(true)
     w.unmount()
   })
 })

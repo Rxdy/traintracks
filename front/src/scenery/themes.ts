@@ -2,7 +2,7 @@
 // et leur palette (couleurs de chaque élément ET de la voie : pas de rails enneigés sur un sol de prairie).
 // Un environnement par « chapitre » du Voyage : le décor reste cohérent d'un niveau à l'autre, puis change.
 // Durée pendant laquelle le décor se dévoile avant que le train ne démarre (0 : tout de suite, pour les tests).
-export const timing = { revealMs: 1600 }
+export const timing = { revealMs: 2800 }
 
 export type Theme = 'plaine' | 'foret' | 'automne' | 'montagne' | 'hiver'
 export const THEMES: Theme[] = ['plaine', 'foret', 'automne', 'montagne', 'hiver']

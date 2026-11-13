@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { range, railVariant, isLocked, isRock, type Given, type Puzzle } from '../puzzle'
 import type { CellMark } from '../cell'
 import {
@@ -113,6 +113,8 @@ const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
 const trainDone = ref(false)
+// Le résultat peut être réduit pour regarder le décor ; le train se relance à la demande.
+const panelOpen = ref(true)
 const boardEl = ref<HTMLElement | null>(null)
 let startedAt = 0
 let clock = 0
@@ -166,6 +168,11 @@ function revealScenery(): void {
   sceneryRoute.value = buildRoute(path, puz.value, 1)
   if (timing.revealMs > 0) trainTimer = window.setTimeout(runTrain, timing.revealMs)
   else runTrain()
+}
+function replayTrain(): void {
+  trainDone.value = false
+  route.value = null
+  void nextTick(runTrain)
 }
 function runTrain(): void {
   const path = tracePath(connections.value, puz.value)
@@ -478,10 +485,15 @@ onMounted(() => {
 
       <!-- Victoire : le train passe d'abord ; une fois arrivé, le résultat s'affiche AU CENTRE de la grille
            (temps, gain, « Suivant »), ce qui laisse le bas de l'écran libre pour les aides. -->
-      <div v-if="solved && trainDone" class="finish" data-test="finish">
+      <div v-if="solved && trainDone && panelOpen" class="finish" data-test="finish">
+        <button type="button" class="fold btn btn--ghost btn--small" data-test="fold" @click="panelOpen = false">Voir le décor</button>
         <p class="win" data-test="win">Niveau terminé</p>
         <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? elapsed) }}</p>
         <slot name="win" :ready="true" />
+      </div>
+      <div v-else-if="solved && trainDone" class="dock" data-test="dock">
+        <button type="button" class="btn btn--small" data-test="replay" @click="replayTrain">Relancer le train</button>
+        <button type="button" class="btn btn--small" data-test="reopen" @click="panelOpen = true">Résultat</button>
       </div>
     </div>
 
@@ -537,9 +549,8 @@ onMounted(() => {
 .finish {
   position: absolute;
   left: 50%;
-  top: 100%;
-  margin-top: 0.7rem;
-  transform: translateX(-50%);
+  top: 50%;
+  transform: translate(-50%, -50%);
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -552,6 +563,21 @@ onMounted(() => {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
   text-align: center;
   animation: finish-in 0.4s ease both;
+}
+.fold {
+  align-self: flex-end;
+  margin: -0.3rem -0.6rem 0 0;
+}
+.dock {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  margin-top: 0.6rem;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  gap: 0.5rem;
+  animation: win-in 0.4s ease both;
 }
 .finish .time span {
   font-size: 0.85rem;
@@ -568,7 +594,7 @@ onMounted(() => {
 @keyframes finish-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(10px) scale(0.96);
+    transform: translate(-50%, -46%) scale(0.94);
   }
 }
 .wait {
@@ -593,10 +619,11 @@ onMounted(() => {
   background: transparent;
   border-color: transparent;
   cursor: default;
+  transition: background 1.6s ease, border-color 1.6s ease;
 }
 .board--won :deep(.clue) {
   opacity: 0;
-  transition: opacity 0.6s ease;
+  transition: opacity 1.4s ease;
 }
 .board--won :deep(.cell--cross > *),
 .board--won :deep(.rock) {

@@ -27,7 +27,7 @@ const items = computed(() => {
   props.scenery.tiles.forEach((row, r) =>
     row.forEach((t, c) => {
       if (t.kind === 'rail' || props.scenery.water.has(`${r},${c}`)) return
-      out.push({ r, c, kind: t.kind, v: t.v, dir: t.dir, d: (r + c) * 70 })
+      out.push({ r, c, kind: t.kind, v: t.v, dir: t.dir, d: 500 + (r + c) * 120 })
     }),
   )
   return out
@@ -77,7 +77,7 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
   border-radius: 10px;
   pointer-events: none;
   overflow: hidden;
-  animation: scene-in 0.7s ease both;
+  animation: scene-in 1.8s ease-in-out both;
 }
 @keyframes scene-in {
   from {
@@ -85,7 +85,7 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
   }
 }
 .pop {
-  animation: pop 0.5s ease both;
+  animation: pop 1s ease-in-out both;
 }
 @keyframes pop {
   from {
