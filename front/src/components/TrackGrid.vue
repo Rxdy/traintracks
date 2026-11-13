@@ -18,7 +18,7 @@ import {
 } from '../track'
 import { lineStatuses } from '../lines'
 import { buildRoute, leadCells, type Route } from '../trainRoute'
-import { buildScenery, timing, type Scenery, type Theme } from '../scenery'
+import { buildScenery, PAL, timing, type Scenery, type Theme } from '../scenery'
 import TrainRun from './TrainRun.vue'
 import SceneryLayer from './SceneryLayer.vue'
 import TrackCell from './TrackCell.vue'
@@ -154,6 +154,8 @@ async function checkWin(): Promise<void> {
   revealScenery()
   emit('solved', elapsed.value)
 }
+// La voie prend l'allure de l'environnement : traverses grises sous la neige, acier plus sombre en forêt…
+const railStyle = computed(() => (scenery.value ? { '--won-rail': PAL[scenery.value.theme].rail.rail, '--won-tie': PAL[scenery.value.theme].rail.tie } : {}))
 function revealScenery(): void {
   const path = tracePath(connections.value, puz.value)
   if (!path) {
@@ -434,7 +436,7 @@ onMounted(() => {
       ref="boardEl"
       class="board"
       :class="{ picking, 'board--won': scenery }"
-      :style="{ '--size': puzzle.size }"
+      :style="{ '--size': puzzle.size, ...railStyle }"
       role="grid"
       aria-label="Grille de jeu"
       @pointermove="onMove"
@@ -601,8 +603,8 @@ onMounted(() => {
   opacity: 0;
 }
 .board--won :deep(.rail) {
-  --rail-color: #475569;
-  --tie-color: #7a4e2d;
+  --rail-color: var(--won-rail, #475569);
+  --tie-color: var(--won-tie, #7a4e2d);
 }
 .board.picking {
   cursor: crosshair;

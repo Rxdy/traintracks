@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { levels } from './testLevels'
-import { buildScenery, themeForLevel, THEMES } from './scenery'
+import { levels } from '../testLevels'
+import { buildScenery, themeForLevel, THEMES } from './generate'
 
 describe('décor des niveaux gagnés', () => {
   it('un environnement par chapitre de 10 niveaux, puis il change', () => {

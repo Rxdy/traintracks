@@ -9,38 +9,13 @@
 //   - les champs sont des groupes de cases voisines, tous labourés dans le même sens ;
 //   - les rochers deviennent des montagnes, avec des sapins à leurs pieds ;
 //   - le reste est de l'herbe, avec des arbres selon le thème.
-import type { Puzzle } from './puzzle'
+import type { Puzzle } from '../puzzle'
+import { PARAMS, THEMES, type Theme } from './themes'
 
-// Un environnement par « chapitre » du Voyage : le décor reste cohérent d'un niveau à l'autre, puis change.
-// Durée pendant laquelle le décor se dévoile avant que le train ne démarre (0 : tout de suite, pour les tests).
-export const timing = { revealMs: 1600 }
+export { THEMES, themeForLevel, LEVELS_PER_THEME, timing, type Theme } from './themes'
 
-export type Theme = 'plaine' | 'foret' | 'automne' | 'montagne' | 'hiver'
-export const THEMES: Theme[] = ['plaine', 'foret', 'automne', 'montagne', 'hiver']
-export const LEVELS_PER_THEME = 10
-export function themeForLevel(level: number): Theme {
-  return THEMES[Math.floor((Math.max(1, level) - 1) / LEVELS_PER_THEME) % THEMES.length]
-}
+
 export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman'
-
-interface Params {
-  river: number // probabilité d'une rivière
-  tree: number // part des cases libres plantées d'arbres
-  pine: number // parmi les arbres, part de sapins
-  houseBase: number
-  houseRatio: number
-  fields: number // nombre de champs
-  peaks: number // part des cases libres (loin de la voie) transformées en montagnes
-  boulders: number
-  snowmen: number
-}
-const PARAMS: Record<Theme, Params> = {
-  plaine: { river: 1, tree: 0.4, pine: 0.1, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0 },
-  foret: { river: 0.5, tree: 0.85, pine: 0.6, houseBase: 0, houseRatio: 0, fields: 0, peaks: 0, boulders: 0.05, snowmen: 0 },
-  automne: { river: 1, tree: 0.5, pine: 0.12, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0 },
-  montagne: { river: 0.7, tree: 0.25, pine: 0.7, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.3, boulders: 0.2, snowmen: 0 },
-  hiver: { river: 0.8, tree: 0.35, pine: 0.7, houseBase: 1, houseRatio: 0.1, fields: 0, peaks: 0.08, boulders: 0, snowmen: 0.2 },
-}
 
 export interface Tile {
   kind: TileKind
