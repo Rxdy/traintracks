@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest'
 import manifestRaw from '../public/manifest.webmanifest?raw'
 import swRaw from '../public/sw.js?raw'
 import indexHtml from '../index.html?raw'
-import styleCss from './style.css?raw'
+import { readFileSync } from 'node:fs'
+const styleCss = readFileSync(new URL('./style.css', import.meta.url), 'utf8')
 
 // Liste des fichiers du dossier public (clés relatives, ex. « ../public/icon.svg »).
 const publicFiles = Object.keys(import.meta.glob('../public/**/*', { query: '?url', import: 'default' }))
