@@ -119,6 +119,12 @@ const trainDone = ref(false)
 // Sons : la fin du trajet laisse la place au décor ; la barrière du passage à niveau a ses propres sons.
 watch(trainDone, (v) => v && sound.trainEnd())
 
+// Zone où le train est visible : exactement celle du décor (en cases de la grille de jeu).
+const trainClip = computed(() => {
+  const sc = scenery.value
+  return sc ? { x: -sc.margin.x, y: -sc.margin.y, w: sc.cols, h: sc.rows } : undefined
+})
+
 // Position de la locomotive sur son trajet : les barrières du passage à niveau se baissent quand elle approche.
 const trainS = ref(-1)
 const TRAIN_LENGTH = 2.4
@@ -232,11 +238,19 @@ function runTrain(): void {
     trainDone.value = true
     return
   }
-  // La voie est prolongée jusqu'au bord de l'ÉCRAN, des deux côtés.
-  const rect = boardEl.value?.getBoundingClientRect() ?? { left: 0, top: 0, width: 0 }
-  const vp = { width: window.innerWidth, height: window.innerHeight }
   trainS.value = -1
   sound.trainStart()
+  const sc = scenery.value
+  if (sc) {
+    // Le train vit DANS le décor : il y entre et en sort par ses bords, où il disparaît (voir `trainClip`). Il ne roule
+    // donc jamais sur le récapitulatif, les pouvoirs ni le bouton Suivant. La voie dépasse le bord de la longueur du train.
+    const lead = (dir: string) => (dir === 'left' || dir === 'right' ? sc.margin.x : sc.margin.y) + TRAIN_LENGTH + 1
+    route.value = buildRoute(path, puz.value, { entry: lead(puz.value.entry.dir), exit: lead(puz.value.exit.dir) })
+    return
+  }
+  // Pas de décor (cas limite) : la voie est prolongée jusqu'au bord de l'ÉCRAN.
+  const rect = boardEl.value?.getBoundingClientRect() ?? { left: 0, top: 0, width: 0 }
+  const vp = { width: window.innerWidth, height: window.innerHeight }
   route.value = buildRoute(path, puz.value, {
     entry: leadCells(puz.value.entry.dir, rect, puz.value.size, vp),
     exit: leadCells(puz.value.exit.dir, rect, puz.value.size, vp),
@@ -573,7 +587,7 @@ onMounted(() => {
 
       <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" />
 
-      <TrainRun v-if="route" :route="route" :size="puzzle.size" @progress="trainS = $event" @done="trainDone = true" />
+      <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" @progress="trainS = $event" @done="trainDone = true" />
     </div>
 
     <!-- Zone réservée dès le début : la victoire s'y affiche sans pousser la page. -->

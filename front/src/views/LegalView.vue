@@ -25,6 +25,7 @@ const todo = 'à renseigner'
     <ul>
       <li><b>Compte :</b> pseudo, adresse e-mail, mot de passe (jamais en clair : seule une empreinte est conservée).</li>
       <li><b>Jeu :</b> niveaux terminés et temps, pièces, aides, résultats du puzzle du jour.</li>
+      <li><b>Classement :</b> ton pseudo, ton niveau et tes temps sont visibles de tous dans les classements. Tu peux ne pas y apparaître (case à décocher dans l'écran Compte) ; ton adresse e-mail n'est jamais montrée.</li>
       <li><b>Sécurité :</b> les essais de connexion ratés, par adresse e-mail et par adresse IP, pour bloquer les tentatives de devinette. Ces compteurs s'effacent d'eux-mêmes.</li>
     </ul>
     <p>Sans compte, ta progression est rattachée à un identifiant aléatoire gardé dans ton navigateur (cookie). Elle est ajoutée à ton compte si tu t'inscris.</p>
@@ -42,7 +43,7 @@ const todo = 'à renseigner'
     <p>Tant que ton compte existe. Quand tu le supprimes, tout est effacé immédiatement. Les sauvegardes techniques sont renouvelées régulièrement et ne gardent donc pas ces données au-delà de leur durée de rotation.</p>
 
     <h3>Tes droits</h3>
-    <p>Tu peux accéder à tes données, les corriger, les récupérer ou les effacer. <b>La suppression se fait seul(e), depuis l'écran Compte</b> (bouton « Supprimer mon compte »). Pour le reste, écris à l'adresse de contact ci-dessus. Tu peux aussi saisir la CNIL (cnil.fr) si tu estimes que tes droits ne sont pas respectés.</p>
+    <p>Tu peux accéder à tes données, les corriger, les récupérer ou les effacer, <b>seul(e), depuis l'écran Compte</b> : changer ton adresse e-mail, exporter tes données (fichier signé, que tu peux réimporter) et supprimer ton compte (bouton « Supprimer mon compte »). Pour le reste, écris à l'adresse de contact ci-dessus. Tu peux aussi saisir la CNIL (cnil.fr) si tu estimes que tes droits ne sont pas respectés.</p>
   </article>
 </template>
 

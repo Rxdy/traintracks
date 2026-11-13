@@ -21,6 +21,7 @@ const app = buildApp({
   now: () => new Date(),
   secureCookies: cfg.secureCookies,
   trustProxy: cfg.trustProxy,
+  exportSecret: cfg.exportSecret,
   dailyTz: cfg.dailyTz,
   legal: cfg.legal,
 })

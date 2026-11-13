@@ -46,7 +46,7 @@ export function fakeServer(solvedAtStart = 0) {
       }
       return json(200, { ok: true, counted, timeMs: 83_000, earned: { base: counted ? 20 : 0, streakBonus: 0 }, streak: 1, coins })
     }
-    if (url === '/api/stats') return json(200, { journey: status(), daily: { count: dailyCount, avgMs: dailyTime, bestMs: dailyTime, worstMs: dailyTime, streak: dailyCount ? 1 : 0 } })
+    if (url === '/api/stats') return json(200, { journey: { ...status(), solved: 0, totalTimeMs: 0, avgMs: null, fastest: null, slowest: null, bySize: [], coinsEarned: 0, coins: 0, firstSolvedAt: null }, daily: { count: dailyCount, avgMs: dailyTime, bestMs: dailyTime, worstMs: dailyTime, streak: dailyCount ? 1 : 0 } })
     if (url === '/api/aids') return json(200, { coins, aids: [] })
     if (url === '/api/me' || url === '/api/auth/login') return json(401, {})
     return json(200, {})

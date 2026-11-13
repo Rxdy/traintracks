@@ -18,6 +18,7 @@ export interface PublicUser {
   pseudo: string
   email: string
   provider: string
+  leaderboard: boolean // apparaît dans le classement
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
@@ -26,8 +27,8 @@ export const SIGNUP_COINS = 100
 const CONFIRM_TTL_MS = 24 * 3600_000
 const SESSION_TTL_MS = 30 * 24 * 3600_000
 
-const sha256 = (v: string) => createHash('sha256').update(v).digest('hex')
-const newToken = () => randomBytes(32).toString('base64url')
+export const sha256 = (v: string) => createHash('sha256').update(v).digest('hex')
+export const newToken = () => randomBytes(32).toString('base64url')
 export const normEmail = (e: string) => e.trim().toLowerCase()
 // Clé d'unicité d'une adresse (même règle que la migration 007) : sans « +étiquette », et sans points chez Gmail.
 export function emailKeyOf(email: string): string {
@@ -125,8 +126,8 @@ export async function login(ctx: Ctx, input: { email: string; password: string; 
   const wait = await lockedFor(ctx.db, keys, now)
   if (wait > 0) return { ok: false, code: 'locked', retryAfterSec: wait }
 
-  const { rows } = await ctx.db.query<{ id: string; pseudo: string; email: string; provider: string; password_hash: string | null; email_confirmed_at: Date | null }>(
-    'SELECT id, pseudo, email, provider, password_hash, email_confirmed_at FROM users WHERE email = $1',
+  const { rows } = await ctx.db.query<{ id: string; pseudo: string; email: string; provider: string; leaderboard: boolean; password_hash: string | null; email_confirmed_at: Date | null }>(
+    'SELECT id, pseudo, email, provider, leaderboard, password_hash, email_confirmed_at FROM users WHERE email = $1',
     [email],
   )
   const u = rows[0]
@@ -147,13 +148,13 @@ export async function login(ctx: Ctx, input: { email: string; password: string; 
     now,
     new Date(now.getTime() + SESSION_TTL_MS),
   ])
-  return { ok: true, user: { id: u.id, pseudo: u.pseudo, email: u.email, provider: u.provider }, sessionToken: token }
+  return { ok: true, user: { id: u.id, pseudo: u.pseudo, email: u.email, provider: u.provider, leaderboard: u.leaderboard }, sessionToken: token }
 }
 
 export async function userForSession(ctx: Ctx, token: string | undefined): Promise<PublicUser | null> {
   if (!token) return null
   const { rows } = await ctx.db.query<PublicUser>(
-    `SELECT u.id, u.pseudo, u.email, u.provider FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.pseudo, u.email, u.provider, u.leaderboard FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > $2`,
     [sha256(token), ctx.now()],
   )
@@ -226,6 +227,25 @@ export async function resetPassword(ctx: Ctx, input: { token: string; password: 
 
 // --- Suppression du compte (droit à l'effacement) ---------------------------------------------------------------
 // Efface le compte ET toutes ses données : progression, pièces, aides, puzzle du jour, sessions, jetons.
+// Vérifie le mot de passe d'un compte connecté pour une action sensible (suppression, changement d'adresse) : même blocage
+// que la connexion, pour qu'on ne puisse pas deviner le mot de passe par ici non plus.
+export type PasswordCheck = { ok: true; email: string } | { ok: false; code: 'invalid' } | { ok: false; code: 'locked'; retryAfterSec: number }
+export async function checkOwnerPassword(ctx: Ctx, userId: string, password: string, ip: string): Promise<PasswordCheck> {
+  const now = ctx.now()
+  const { rows } = await ctx.db.query<{ email: string; password_hash: string | null }>('SELECT email, password_hash FROM users WHERE id = $1', [userId])
+  const u = rows[0]
+  if (!u) return { ok: false, code: 'invalid' }
+  const keys = [emailKey(u.email), ipKey(ip)]
+  const wait = await lockedFor(ctx.db, keys, now)
+  if (wait > 0) return { ok: false, code: 'locked', retryAfterSec: wait }
+  if (!u.password_hash || !(await checkPassword(u.password_hash, password))) {
+    await recordFailure(ctx.db, emailKey(u.email), EMAIL_MAX_FAILS, now)
+    await recordFailure(ctx.db, ipKey(ip), IP_MAX_FAILS, now)
+    return { ok: false, code: 'invalid' }
+  }
+  return { ok: true, email: u.email }
+}
+
 export type DeleteResult = { ok: true } | { ok: false; code: 'invalid' } | { ok: false; code: 'locked'; retryAfterSec: number }
 
 export async function deleteAccount(ctx: Ctx, input: { userId: string; password: string; ip: string }): Promise<DeleteResult> {

@@ -9,6 +9,7 @@ import { logout, user } from './auth'
 const IDS: Record<string, string> = {
   'Puzzle du jour': 'daily',
   Tutoriel: 'tuto',
+  Classement: 'ranking',
   Statistiques: 'stats',
   Compte: 'account',
 }
@@ -43,12 +44,12 @@ describe('App', () => {
     expect(w.text()).not.toMatch(/\d×\d/)
   })
 
-  it('4 petits cubes (2 de chaque côté du grand) mènent aux autres écrans, sans menu déroulant', async () => {
+  it('5 petits cubes (3 à gauche, 2 à droite du grand) mènent aux autres écrans, sans menu déroulant', async () => {
     const w = mount(App)
     expect(w.find('[data-test=menu]').exists()).toBe(false)
     const sides = w.findAll('.side')
     expect(sides).toHaveLength(2)
-    expect(sides[0].findAll('.mini').map((m) => m.attributes('data-test'))).toEqual(['nav-daily', 'nav-tuto'])
+    expect(sides[0].findAll('.mini').map((m) => m.attributes('data-test'))).toEqual(['nav-daily', 'nav-tuto', 'nav-ranking'])
     expect(sides[1].findAll('.mini').map((m) => m.attributes('data-test'))).toEqual(['nav-stats', 'nav-account'])
     await open(w, 'Tutoriel')
     expect(w.find('[data-test=tutorial]').exists()).toBe(true)
@@ -268,8 +269,8 @@ describe('icônes du menu', () => {
   it('chaque cube a son illustration (plus d\'emoji) et des libellés explicites', () => {
     const w = mount(App)
     const icons = w.findAll('.mini svg').map((s) => s.attributes('data-icon'))
-    expect(icons).toEqual(['daily', 'tuto', 'stats', 'account'])
-    expect(w.findAll('.mini .lbl').map((l) => l.text())).toEqual(['Puzzle du jour', 'Tutoriel', 'Statistiques', 'Compte'])
+    expect(icons).toEqual(['daily', 'tuto', 'ranking', 'stats', 'account'])
+    expect(w.findAll('.mini .lbl').map((l) => l.text())).toEqual(['Puzzle du jour', 'Tutoriel', 'Classement', 'Statistiques', 'Compte'])
     expect(w.find('[data-test=day]').text()).toBe(String(new Date().getDate())) // calendrier = date du jour
   })
   it('Compte : affiche l\'initiale du joueur une fois connecté', async () => {

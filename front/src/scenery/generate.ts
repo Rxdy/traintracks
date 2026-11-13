@@ -88,7 +88,7 @@ export function seedOf(p: Puzzle): number {
 // Combien de cases de paysage ajouter autour d'une grille de jeu : les petites grilles (4×4) donneraient un décor
 // minuscule, alors on montre un paysage d'environ 10×10 cases avec la voie au milieu.
 export function sceneryMargin(size: number): number {
-  return size <= 4 ? 3 : size <= 6 ? 2 : size <= 9 ? 1 : 0
+  return size <= 4 ? 3 : size <= 6 ? 2 : 1 // au moins 1 : le décor sépare toujours la grille de l'interface (récap, pouvoirs)
 }
 
 // `margin` : cases de paysage AJOUTÉES autour de la grille de jeu, en hauteur (y) et en largeur (x) : le décor est plus

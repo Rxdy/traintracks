@@ -25,6 +25,8 @@ services:
       MAIL_FROM: ${MAIL_FROM:-Train Tracks <no-reply@traintracks.local>}
       TRUST_PROXY: "1"
       # Mentions légales (page « Mentions légales ») : éditeur, contact, hébergeur.
+      # Clé qui signe les fichiers d'export de données : à fixer en production (sinon les exports sont signés avec une clé publique).
+      EXPORT_SECRET: ${EXPORT_SECRET:-dev-export-secret-change-me}
       LEGAL_NAME: ${LEGAL_NAME:-}
       LEGAL_CONTACT: ${LEGAL_CONTACT:-}
       LEGAL_HOST: ${LEGAL_HOST:-}

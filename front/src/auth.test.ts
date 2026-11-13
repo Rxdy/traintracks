@@ -80,7 +80,7 @@ describe('connexion et messages d\'erreur', () => {
   it('connecte et expose le pseudo', async () => {
     mockFetch({ status: 200, body: { user: { id: '1', pseudo: 'Rudy', email: 'r@x.fr', provider: 'local' } } })
     expect(await login('r@x.fr', 'x')).toEqual({ ok: true })
-    expect(user.value).toEqual({ name: 'Rudy', email: 'r@x.fr', provider: 'local' })
+    expect(user.value).toEqual({ name: 'Rudy', email: 'r@x.fr', provider: 'local', leaderboard: true })
   })
   it('messages distincts : mauvais identifiants, e-mail non confirmé, trop d\'essais, serveur injoignable', async () => {
     mockFetch({ status: 401 })
@@ -260,7 +260,7 @@ describe('changer de compte sur le même appareil', () => {
     await flushPromises()
     expect(calls2[0].url).toBe('/api/auth/login')
     expect(JSON.parse(String(calls2[0].init?.body))).toMatchObject({ email: 'bob@x.fr' })
-    expect(user.value).toEqual({ name: 'Bob', email: 'bob@x.fr', provider: 'local' })
+    expect(user.value).toEqual({ name: 'Bob', email: 'bob@x.fr', provider: 'local', leaderboard: true })
     expect(w.text()).toContain('Bob')
     expect(w.text()).toContain('bob@x.fr')
     expect(w.text()).not.toContain('Alice')

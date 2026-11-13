@@ -5,7 +5,9 @@ import { pointAt, type Route } from '../trainRoute'
 // Locomotive + wagons qui roulent le long du trajet, entrée → sortie.
 // `speed` : cases/s, CONSTANTE de l'apparition à la disparition (pas d'accélération hors de la grille).
 const props = withDefaults(
-  defineProps<{ route: Route; size: number; speed?: number; wagons?: number }>(),
+  // clip : zone (en cases) où le train est visible. Hors de cette zone (le décor), il disparaît : il ne roule jamais sur
+  // l'interface (récapitulatif, pouvoirs, bouton Suivant).
+  defineProps<{ route: Route; size: number; speed?: number; wagons?: number; clip?: { x: number; y: number; w: number; h: number } }>(),
   { speed: 3.2, wagons: 3 },
 )
 const emit = defineEmits<{ (e: 'done'): void; (e: 'progress', s: number): void }>()
@@ -53,6 +55,10 @@ onUnmounted(() => clearInterval(timer))
     data-test="train"
     aria-hidden="true"
   >
+    <defs v-if="clip">
+      <clipPath id="train-clip"><rect :x="clip.x" :y="clip.y" :width="clip.w" :height="clip.h" /></clipPath>
+    </defs>
+    <g :clip-path="clip ? 'url(#train-clip)' : undefined">
     <g
       v-for="car in [...cars].reverse()"
       :key="car.i"
@@ -77,6 +83,7 @@ onUnmounted(() => clearInterval(timer))
         <animate attributeName="r" from="0.03" to="0.1" dur="1.2s" :begin="`${-i * 0.4}s`" repeatCount="indefinite" />
         <animate attributeName="opacity" values="0.7;0" dur="1.2s" :begin="`${-i * 0.4}s`" repeatCount="indefinite" />
       </circle>
+    </g>
     </g>
   </svg>
 </template>

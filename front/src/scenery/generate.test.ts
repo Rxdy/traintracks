@@ -139,7 +139,7 @@ describe('décor des niveaux gagnés', () => {
       for (const k of lv.puzzle.rocks ?? []) expect(s.tiles[k.row + m][k.col + m].kind).toBe('mountain')
     }
     expect(sceneryMargin(4)).toBe(3)
-    expect(sceneryMargin(12)).toBe(0)
+    expect(sceneryMargin(12)).toBe(1) // jamais 0 : le décor entoure toujours la grille
   })
 
   it('décor plus LARGE que haut : la voie rejoint chaque bord, sur des écrans larges il n\'y a pas de blanc à traverser', () => {

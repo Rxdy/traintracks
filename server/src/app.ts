@@ -6,6 +6,8 @@ import { begin, mergeAnonymous, start, status, submit } from './journey.js'
 import { aidState, buyAid, useAid } from './aids.js'
 import { beginDaily, dailyStats, dailyStatus, dateKey, startDaily, submitDaily } from './daily.js'
 import { randomUUID } from 'node:crypto'
+import { confirmEmailChange, exportData, importData, requestEmailChange, setLeaderboard } from './accountData.js'
+import { journeyStats, leaderboard, type Board } from './stats.js'
 
 const COOKIE = 'tt_session'
 const ANON = 'tt_anon' // identifiant d'un joueur pas encore inscrit : sa progression est gardée côté serveur
@@ -16,6 +18,7 @@ export interface AppOptions extends Ctx {
   secureCookies?: boolean
   trustProxy?: boolean
   dailyTz?: string // fuseau horaire qui définit « aujourd'hui » pour le puzzle du jour
+  exportSecret?: string // clé qui signe les fichiers d'export (EXPORT_SECRET)
   legal?: LegalInfo // éditeur, contact et hébergeur affichés dans les mentions légales
 }
 
@@ -212,7 +215,58 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.get('/api/stats', async (req, reply) => {
     const owner = await accountOf(req, reply)
     if (!owner) return
-    return { journey: await status(opts.db, owner), daily: await dailyStats(opts.db, owner, today()) }
+    return { journey: { ...(await status(opts.db, owner)), ...(await journeyStats(opts.db, owner)) }, daily: await dailyStats(opts.db, owner, today()) }
+  })
+
+  // --- Classements : publics en lecture (pseudo seulement) ; « ma place » si on est connecté ---
+  app.get('/api/leaderboard', async (req, reply) => {
+    const board = String(((req.query ?? {}) as Body).board ?? 'voyage') as Board
+    if (!['voyage', 'jour', 'serie'].includes(board)) return reply.code(400).send({ error: 'invalid' })
+    const user = await userForSession(ctx, req.cookies[COOKIE])
+    return leaderboard(opts.db, board, today(), user?.id ?? null)
+  })
+
+  // --- Compte : changement d'adresse, préférence de classement, export / import ---
+  async function userOrFail(req: FastifyRequest, reply: FastifyReply) {
+    const user = await userForSession(ctx, req.cookies[COOKIE])
+    if (!user) reply.code(401).send({ error: 'unauthenticated' })
+    return user
+  }
+  app.post('/api/account/email', async (req, reply) => {
+    const user = await userOrFail(req, reply)
+    if (!user) return
+    const b = (req.body ?? {}) as Body
+    const r = await requestEmailChange(ctx, { userId: user.id, password: str(b.password), newEmail: str(b.email), ip: req.ip })
+    if (r.ok) return { ok: true }
+    if (r.code === 'locked') return reply.code(429).header('Retry-After', String(r.retryAfterSec)).send({ error: 'locked', retryAfterSec: r.retryAfterSec })
+    return reply.code(r.code === 'email_taken' ? 409 : r.code === 'wrong_password' ? 403 : 400).send({ error: r.code })
+  })
+  app.post('/api/account/email/confirm', async (req, reply) => {
+    const r = await confirmEmailChange(ctx, str(((req.body ?? {}) as Body).token))
+    if (r.ok) return { ok: true }
+    return reply.code(r.code === 'email_taken' ? 409 : 400).send({ error: r.code })
+  })
+  app.post('/api/account/leaderboard', async (req, reply) => {
+    const user = await userOrFail(req, reply)
+    if (!user) return
+    const v = ((req.body ?? {}) as Body).visible
+    if (typeof v !== 'boolean') return reply.code(400).send({ error: 'invalid' })
+    await setLeaderboard(ctx, user.id, v)
+    return { ok: true, visible: v }
+  })
+  const SECRET = opts.exportSecret ?? 'dev-export-secret-change-me'
+  app.get('/api/account/export', async (req, reply) => {
+    const user = await userOrFail(req, reply)
+    if (!user) return
+    reply.header('Content-Disposition', `attachment; filename="train-tracks-${user.pseudo}.json"`)
+    return exportData(ctx, user.id, SECRET)
+  })
+  app.post('/api/account/import', { bodyLimit: 1_000_000 }, async (req, reply) => {
+    const user = await userOrFail(req, reply)
+    if (!user) return
+    const r = await importData(ctx, { userId: user.id, file: req.body, secret: SECRET })
+    if (r.ok) return r
+    return reply.code(r.code === 'already_imported' ? 409 : r.code === 'bad_signature' ? 403 : 400).send({ error: r.code })
   })
 
   app.get('/api/auth/policy', async () => ({ minBits: MIN_BITS }))

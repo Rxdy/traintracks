@@ -1,16 +1,26 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, ref, watch } from 'vue'
 import AuthPanel from '../components/AuthPanel.vue'
 import { user } from '../auth'
-import { fetchStats, formatTime, type StatsData } from '../stats'
+import { fetchStats, formatLong, formatTime, type StatsData } from '../stats'
+import { THEME_NAMES, THEMES, LEVELS_PER_THEME, themeForLevel } from '../scenery'
 
-// Tout vient du serveur : niveau du Voyage et résultats du puzzle du jour.
+// Tout vient du serveur : le Voyage (niveaux, temps, records, pièces) et les résultats du puzzle du jour.
+const go = inject<(view: string) => void>('go', () => undefined)
 const s = ref<StatsData | null>(null)
 async function refresh(): Promise<void> {
   s.value = user.value ? await fetchStats() : null
 }
 onMounted(refresh)
 watch(user, refresh)
+
+// Environnement en cours, et nombre d'environnements déjà traversés (un tout nouveau tour recommence à zéro de ce côté).
+const j = computed(() => s.value?.journey ?? null)
+const place = computed(() => {
+  const level = j.value?.level ?? 1
+  const chapter = Math.floor((level - 1) / LEVELS_PER_THEME)
+  return { name: THEME_NAMES[themeForLevel(level)], crossed: chapter, total: THEMES.length }
+})
 </script>
 
 <template>
@@ -21,8 +31,28 @@ watch(user, refresh)
 
       <h3 class="halo">Voyage</h3>
       <div class="tiles">
-        <div class="tile tile--wide"><b data-test="highest">{{ s ? s.journey.level : '…' }}</b><span>Niveau atteint</span></div>
+        <div class="tile"><b data-test="highest">{{ j ? j.level : '…' }}</b><span>Niveau atteint</span></div>
+        <div class="tile"><b data-test="solved">{{ j ? j.solved : '…' }}</b><span>Niveaux terminés</span></div>
+        <div class="tile"><b data-test="playtime">{{ j ? formatLong(j.totalTimeMs) : '…' }}</b><span>Temps de jeu</span></div>
+        <div class="tile"><b>{{ j ? formatTime(j.avgMs) : '…' }}</b><span>Temps moyen</span></div>
+        <div class="tile"><b data-test="fastest">{{ j?.fastest ? formatTime(j.fastest.timeMs) : '—' }}</b><span>Le plus rapide{{ j?.fastest ? ` (niv. ${j.fastest.level})` : '' }}</span></div>
+        <div class="tile"><b>{{ j?.slowest ? formatTime(j.slowest.timeMs) : '—' }}</b><span>Le plus long{{ j?.slowest ? ` (niv. ${j.slowest.level})` : '' }}</span></div>
+        <div class="tile"><b data-test="coins-earned">{{ j ? j.coinsEarned : '…' }}</b><span>Pièces gagnées</span></div>
+        <div class="tile"><b>{{ j ? j.coins : '…' }}</b><span>Pièces en poche</span></div>
+        <div class="tile tile--wide" data-test="place"><b>{{ place.name }}</b><span>Environnement en cours · {{ place.crossed }} traversé{{ place.crossed > 1 ? 's' : '' }} sur {{ place.total }}</span></div>
       </div>
+
+      <template v-if="j && j.bySize.length">
+        <h3 class="halo">Par taille de grille</h3>
+        <ul class="sizes" data-test="by-size">
+          <li v-for="z in j.bySize" :key="z.size">
+            <b>{{ z.size }}×{{ z.size }}</b>
+            <span>{{ z.count }} niveau{{ z.count > 1 ? 'x' : '' }}</span>
+            <span>moy. {{ formatTime(z.avgMs) }}</span>
+            <span>record {{ formatTime(z.bestMs) }}</span>
+          </li>
+        </ul>
+      </template>
 
       <h3 class="halo">Puzzle du jour</h3>
       <div class="tiles" v-if="s">
@@ -32,7 +62,7 @@ watch(user, refresh)
         <div class="tile"><b>{{ formatTime(s.daily.bestMs) }}</b><span>Meilleur temps</span></div>
         <div class="tile tile--wide"><b>{{ formatTime(s.daily.worstMs) }}</b><span>Pire temps</span></div>
       </div>
-      <p class="note halo">Pas encore de classement.</p>
+      <button type="button" class="btn btn--small rank" data-test="to-ranking" @click="go('ranking')">Voir le classement</button>
     </template>
   </section>
 </template>
@@ -84,5 +114,26 @@ h3 {
   margin-top: 1rem;
   font-size: 0.85rem;
   font-weight: 600;
+}
+.sizes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.sizes li {
+  display: grid;
+  grid-template-columns: 3.4rem 1fr 1fr 1fr;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 0.82rem;
+  text-align: left;
+}
+.rank {
+  margin-top: 1rem;
 }
 </style>

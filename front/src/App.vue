@@ -4,6 +4,7 @@ import TutorialView from './views/TutorialView.vue'
 import DailyView from './views/DailyView.vue'
 import JourneyView from './views/JourneyView.vue'
 import StatsView from './views/StatsView.vue'
+import RankingView from './views/RankingView.vue'
 import AccountView from './views/AccountView.vue'
 import LegalView from './views/LegalView.vue'
 import LandscapeBg from './components/LandscapeBg.vue'
@@ -14,12 +15,13 @@ import { suspend, unlock } from './sound/director'
 
 // Accueil = le Voyage (mode principal). Les autres écrans s'ouvrent depuis
 // les petits cubes de l'accueil.
-type View = 'home' | 'daily' | 'tuto' | 'stats' | 'account' | 'legal'
+type View = 'home' | 'daily' | 'tuto' | 'stats' | 'ranking' | 'account' | 'legal'
 const TITLES: Record<View, string> = {
   home: '',
   daily: 'Puzzle du jour',
   tuto: 'Tutoriel',
   stats: 'Statistiques',
+  ranking: 'Classement',
   account: 'Compte',
   legal: 'Mentions légales',
 }
@@ -79,6 +81,7 @@ watch(resetToken, (t) => t && go('account'), { immediate: true })
         <DailyView v-else-if="view === 'daily'" @playing="playing = $event" />
         <TutorialView v-else-if="view === 'tuto'" />
         <StatsView v-else-if="view === 'stats'" />
+        <RankingView v-else-if="view === 'ranking'" />
         <LegalView v-else-if="view === 'legal'" />
         <AccountView v-else />
       </div>

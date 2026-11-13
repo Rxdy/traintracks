@@ -6,7 +6,7 @@
 //   stats   : podium 1-2-3 avec étoile                 → Statistiques
 //   account : avatar ; initiale du joueur s'il est connecté → Compte
 const props = defineProps<{
-  name: 'daily' | 'tuto' | 'stats' | 'account'
+  name: 'daily' | 'tuto' | 'stats' | 'ranking' | 'account'
   initial?: string
 }>()
 
@@ -37,6 +37,15 @@ const day = new Date().getDate()
       <path d="M37 42 H43 Q48 42 48 37 V33 Q48 28 53 28" fill="none" stroke="#2563eb" stroke-width="3.2" stroke-linecap="round" />
       <circle cx="51" cy="14" r="10" fill="#fbbf24" stroke="#fff" stroke-width="3" />
       <text x="51" y="19" text-anchor="middle" font-size="14" font-weight="800" fill="#fff" font-family="system-ui, sans-serif">?</text>
+    </g>
+
+    <!-- Classement : coupe -->
+    <g v-else-if="props.name === 'ranking'">
+      <path d="M18 8 H46 V26 Q46 40 32 42 Q18 40 18 26 Z" fill="#fbbf24" stroke="#fff" stroke-width="3" stroke-linejoin="round" />
+      <path d="M18 14 H9 Q9 28 20 30 M46 14 H55 Q55 28 44 30" fill="none" stroke="#f59e0b" stroke-width="3.5" stroke-linecap="round" />
+      <rect x="29" y="42" width="6" height="8" fill="#f59e0b" />
+      <rect x="21" y="50" width="22" height="7" rx="2.5" fill="#60a5fa" stroke="#fff" stroke-width="2" />
+      <path d="M32 14 L34 19 L39 19.6 L35.4 23 L36.4 28 L32 25.4 L27.6 28 L28.6 23 L25 19.6 L30 19 Z" fill="#fff" />
     </g>
 
     <!-- Stats : podium 2-1-3 + étoile -->

@@ -275,3 +275,30 @@ describe('TrackGrid : rails posés à côté de la voie', () => {
     w.unmount()
   })
 })
+
+describe('TrackGrid : le train reste dans le décor', () => {
+  it('il est découpé aux bords du décor (jamais sur le récapitulatif ni les pouvoirs) et sa voie les dépasse', async () => {
+    const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
+    const cell = (r: number, c: number) => w.find(`[data-r="${r}"][data-c="${c}"]`)
+    await cell(sampleSolution[0][0], sampleSolution[0][1]).trigger('pointerdown')
+    for (const [r, c] of sampleSolution.slice(1)) await cell(r, c).trigger('pointerenter')
+    window.dispatchEvent(new Event('pointerup'))
+    await w.vm.$nextTick()
+    await w.vm.$nextTick()
+    const train = w.findComponent(TrainRun)
+    const clip = train.props('clip') as { x: number; y: number; w: number; h: number }
+    expect(clip).toBeTruthy()
+    // la zone visible est celle du décor : elle déborde de la grille de chaque côté, en haut comme en bas
+    expect(clip.y).toBeLessThan(0)
+    expect(clip.x).toBeLessThan(0)
+    expect(clip.y + clip.h).toBeGreaterThan(samplePuzzle.size)
+    expect(clip.x + clip.w).toBeGreaterThan(samplePuzzle.size)
+    // la voie du train dépasse le bord du décor : il en sort entièrement avant de disparaître
+    const route = train.props('route') as { gridStart: number; gridEnd: number; length: number }
+    const mg = Math.max(-clip.x, -clip.y)
+    expect(route.gridStart).toBeGreaterThan(Math.min(-clip.x, -clip.y) + 2)
+    expect(route.length - route.gridEnd).toBeGreaterThan(Math.min(-clip.x, -clip.y) + 2)
+    expect(mg).toBeGreaterThan(0)
+    w.unmount()
+  })
+})

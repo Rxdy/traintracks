@@ -23,6 +23,7 @@ const emit = defineEmits<{
 const leftCubes = [
   { id: 'daily', label: 'Puzzle du jour' },
   { id: 'tuto', label: 'Tutoriel' },
+  { id: 'ranking', label: 'Classement' },
 ] as const
 // Ces écrans demandent un compte : cadenas tant qu'on n'est pas connecté
 // (le cube mène alors à l'écran de connexion).

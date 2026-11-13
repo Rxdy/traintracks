@@ -7,6 +7,7 @@ export interface User {
   name: string
   email: string
   provider: 'local' | 'google'
+  leaderboard?: boolean // apparaît dans le classement (oui si non précisé)
 }
 
 export type AuthResult = { ok: true; message?: string } | { ok: false; error: string }
@@ -24,8 +25,9 @@ interface ServerUser {
   pseudo: string
   email: string
   provider: 'local' | 'google'
+  leaderboard?: boolean
 }
-const toUser = (u: ServerUser): User => ({ name: u.pseudo, email: u.email, provider: u.provider })
+const toUser = (u: ServerUser): User => ({ name: u.pseudo, email: u.email, provider: u.provider, leaderboard: u.leaderboard !== false })
 
 // Au démarrage : le cookie de session dit-il qui je suis ?
 export async function refreshSession(): Promise<void> {
@@ -122,4 +124,50 @@ export async function deleteAccount(password: string): Promise<AuthResult> {
 export function logout(): void {
   user.value = null
   void api('POST', '/api/auth/logout', {})
+}
+
+// --- Changer d'adresse e-mail : un lien part vers la NOUVELLE boîte ; l'adresse ne change qu'une fois confirmée ---
+export async function changeEmail(newEmail: string, password: string): Promise<AuthResult> {
+  const r = await api('POST', '/api/account/email', { email: newEmail, password })
+  if (!r) return { ok: false, error: OFFLINE }
+  if (r.status === 200) return { ok: true, message: 'Un lien vient d\'être envoyé à la nouvelle adresse (valable 1 h). Ton adresse actuelle ne change qu\'après ce clic.' }
+  if (r.status === 429) return { ok: false, error: `Trop d'essais : réessaie dans ${minutes(r.retryAfter)} min.` }
+  if (r.status === 403) return { ok: false, error: 'Mot de passe incorrect.' }
+  if (r.status === 409) return { ok: false, error: 'Cette adresse e-mail a déjà un compte.' }
+  if (r.data.error === 'same') return { ok: false, error: 'C\'est déjà l\'adresse de ton compte.' }
+  if (r.data.error === 'invalid_email') return { ok: false, error: 'Adresse e-mail invalide.' }
+  return { ok: false, error: 'Changement impossible.' }
+}
+
+// Lien reçu par e-mail : https://site/?email-change=JETON
+export async function confirmEmailChangeFromUrl(search = window.location.search): Promise<void> {
+  const token = new URLSearchParams(search).get('email-change')
+  if (!token) return
+  const r = await api('POST', '/api/account/email/confirm', { token })
+  notice.value = r?.status === 200 ? 'Nouvelle adresse confirmée.' : r?.status === 409 ? 'Cette adresse est déjà utilisée par un autre compte.' : 'Lien invalide ou expiré.'
+  if (r?.status === 200) await refreshSession()
+  history.replaceState(null, '', window.location.pathname)
+}
+
+// --- Classement : apparaître ou non ---
+export async function setLeaderboard(visible: boolean): Promise<boolean> {
+  const r = await api('POST', '/api/account/leaderboard', { visible })
+  if (r?.status !== 200) return false
+  if (user.value) user.value = { ...user.value, leaderboard: visible }
+  return true
+}
+
+// --- Mes données : export (fichier signé par le serveur) et import ---
+export async function fetchExport(): Promise<Record<string, unknown> | null> {
+  const r = await api('GET', '/api/account/export')
+  return r?.status === 200 ? r.data : null
+}
+export type ImportOutcome = { ok: true; levels: number; daily: number } | { ok: false; error: string }
+export async function importFile(file: unknown): Promise<ImportOutcome> {
+  const r = await api('POST', '/api/account/import', file as object)
+  if (!r) return { ok: false, error: OFFLINE }
+  if (r.status === 200) return { ok: true, levels: Number(r.data.levels ?? 0), daily: Number(r.data.daily ?? 0) }
+  if (r.status === 409) return { ok: false, error: 'Ce fichier a déjà été importé : il ne sert qu\'une fois.' }
+  if (r.status === 403) return { ok: false, error: 'Fichier modifié ou venant d\'un autre serveur : import refusé.' }
+  return { ok: false, error: 'Fichier invalide : choisis un export Train Tracks.' }
 }
