@@ -9,6 +9,7 @@ import WinReceipt from '../components/WinReceipt.vue'
 import { beginLevel, fetchStatus, startLevel, submitLevel, type JourneyStatus, type PlayLevel, type StartedLevel } from '../journey'
 import { refreshWallet, setCoins } from '../wallet'
 import { user } from '../auth'
+import { themeForLevel } from '../scenery'
 
 // Le Voyage : page principale. On ne montre que le niveau en cours (pas de
 // liste, pas de taille de grille) et un gros bouton pour jouer.
@@ -160,6 +161,7 @@ function quit(): void {
           :puzzle="current.puzzle"
           :validate="validate"
           :official-ms="officialMs"
+          :theme="themeForLevel(current.id)"
           :picking="picking"
           :color-hints="colorHints"
           @begin="beginLevel()"

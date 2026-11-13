@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils'
 import TrackGrid from './TrackGrid.vue'
 import TrainRun from './TrainRun.vue'
 import { samplePuzzle, sampleSolution } from '../puzzle'
+import { timing } from '../scenery'
 
 describe('TrackGrid : victoire', () => {
   it('détecte la solution tracée, lance le train et émet solved', async () => {
@@ -179,5 +180,31 @@ describe('TrackGrid : validation par le serveur', () => {
     await flushPromises()
     expect(w.find('[data-test=win]').exists()).toBe(true)
     w.unmount()
+  })
+})
+
+describe('TrackGrid : décor à la victoire', () => {
+  it('le décor se dévoile d\'abord, le train ne démarre qu\'ensuite', async () => {
+    vi.useFakeTimers()
+    timing.revealMs = 1600
+    try {
+      const w = mount(TrackGrid, { props: { puzzle: samplePuzzle, theme: 'hiver' }, attachTo: document.body })
+      expect(w.find('[data-test=scenery]').exists()).toBe(false) // pendant la partie : grille nue
+      const cell = (r: number, c: number) => w.find(`[data-r="${r}"][data-c="${c}"]`)
+      await cell(...(sampleSolution[0] as [number, number])).trigger('pointerdown')
+      for (const [r, c] of sampleSolution.slice(1)) await cell(r, c).trigger('pointerenter')
+      window.dispatchEvent(new Event('pointerup'))
+      await w.vm.$nextTick()
+      expect(w.find('[data-test=scenery]').exists()).toBe(true)
+      expect(w.find('.board').classes()).toContain('board--won')
+      expect(w.find('[data-test=train]').exists()).toBe(false)
+      vi.advanceTimersByTime(1700)
+      await w.vm.$nextTick()
+      expect(w.find('[data-test=train]').exists()).toBe(true)
+      w.unmount()
+    } finally {
+      timing.revealMs = 0
+      vi.useRealTimers()
+    }
   })
 })

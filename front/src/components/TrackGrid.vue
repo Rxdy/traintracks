@@ -18,7 +18,9 @@ import {
 } from '../track'
 import { lineStatuses } from '../lines'
 import { buildRoute, leadCells, type Route } from '../trainRoute'
+import { buildScenery, timing, type Scenery, type Theme } from '../scenery'
 import TrainRun from './TrainRun.vue'
+import SceneryLayer from './SceneryLayer.vue'
 import TrackCell from './TrackCell.vue'
 import ClueNumber from './ClueNumber.vue'
 
@@ -32,6 +34,8 @@ const props = defineProps<{
   initial?: { givens: Given[]; crosses: { row: number; col: number }[] }
   // Temps officiel (mesuré par le serveur), affiché à la victoire à la place du chrono local.
   officialMs?: number | null
+  // Environnement du décor révélé à la victoire (saison / paysage) ; tiré du puzzle si absent.
+  theme?: Theme
   // Si fournie, la victoire n'est acquise que quand elle répond vrai (le serveur a vérifié le tracé).
   validate?: (ms: number, edges: string[]) => Promise<boolean>
 }>()
@@ -103,6 +107,10 @@ const statuses = computed(() => {
 const solved = ref(false)
 const elapsed = ref(0)
 const route = ref<Route | null>(null)
+// Décor : d'abord il se dévoile (voie posée), PUIS le train démarre.
+const scenery = ref<Scenery | null>(null)
+const sceneryRoute = ref<Route | null>(null)
+let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
 const trainDone = ref(false)
 const boardEl = ref<HTMLElement | null>(null)
@@ -143,8 +151,19 @@ async function checkWin(): Promise<void> {
   solved.value = true
   elapsed.value = Date.now() - startedAt
   clearInterval(clock)
-  runTrain()
+  revealScenery()
   emit('solved', elapsed.value)
+}
+function revealScenery(): void {
+  const path = tracePath(connections.value, puz.value)
+  if (!path) {
+    trainDone.value = true
+    return
+  }
+  scenery.value = buildScenery(puz.value, path, props.theme)
+  sceneryRoute.value = buildRoute(path, puz.value, 1)
+  if (timing.revealMs > 0) trainTimer = window.setTimeout(runTrain, timing.revealMs)
+  else runTrain()
 }
 function runTrain(): void {
   const path = tracePath(connections.value, puz.value)
@@ -352,6 +371,7 @@ onMounted(() => {
   window.addEventListener('keydown', onKey)
 })
 onUnmounted(() => {
+  clearTimeout(trainTimer)
   clearInterval(clock)
   window.removeEventListener('pointerup', onUp)
   window.removeEventListener('pointercancel', onCancel)
@@ -413,12 +433,14 @@ onMounted(() => {
     <div
       ref="boardEl"
       class="board"
-      :class="{ picking }"
+      :class="{ picking, 'board--won': scenery }"
       :style="{ '--size': puzzle.size }"
       role="grid"
       aria-label="Grille de jeu"
       @pointermove="onMove"
     >
+      <SceneryLayer v-if="scenery" :scenery="scenery" :route="sceneryRoute" />
+
       <template v-for="r in indices" :key="'row-' + r">
         <TrackCell
           v-for="c in indices"
@@ -513,8 +535,9 @@ onMounted(() => {
 .finish {
   position: absolute;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  top: 100%;
+  margin-top: 0.7rem;
+  transform: translateX(-50%);
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -543,7 +566,7 @@ onMounted(() => {
 @keyframes finish-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -46%) scale(0.92);
+    transform: translateX(-50%) translateY(10px) scale(0.96);
   }
 }
 .wait {
@@ -563,6 +586,20 @@ onMounted(() => {
   text-shadow: 0 0 6px #fff, 0 0 12px #fff;
 }
 
+/* Victoire : la grille se dénude, le paysage apparaît dessous, les rails prennent leur look de vraie voie. */
+.board--won :deep(.cell) {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+}
+.board--won :deep(.cell--cross > *),
+.board--won :deep(.rock) {
+  opacity: 0;
+}
+.board--won :deep(.rail) {
+  --rail-color: #475569;
+  --tie-color: #7a4e2d;
+}
 .board.picking {
   cursor: crosshair;
 }
