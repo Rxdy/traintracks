@@ -19,7 +19,7 @@ import {
 } from '../track'
 import { lineStatuses } from '../lines'
 import { buildRoute, leadCells, type Route } from '../trainRoute'
-import { buildScenery, distanceNear, PAL, timing, type Scenery, type Theme } from '../scenery'
+import { buildScenery, distanceNear, PAL, sceneryMargin, seedOf, timing, type Scenery, type Theme } from '../scenery'
 import TrainRun from './TrainRun.vue'
 import SceneryLayer from './SceneryLayer.vue'
 import SceneryLife from './SceneryLife.vue'
@@ -126,7 +126,8 @@ const trainNear = computed(() => {
   const x = scenery.value?.road?.crossing
   const rt = route.value
   if (!x || !rt || trainDone.value) return false
-  const cross = distanceNear(rt, x[1] + 0.5, x[0] + 0.5)
+  const m = scenery.value?.margin ?? 0
+  const cross = distanceNear(rt, x[1] - m + 0.5, x[0] - m + 0.5) // le passage à niveau est donné dans le repère du grand décor
   return trainS.value > cross - 3.2 && trainS.value < cross + TRAIN_LENGTH + 0.6
 })
 watch(trainNear, (v) => sound.crossing(v))
@@ -201,9 +202,10 @@ function revealScenery(): void {
   connections.value = keep
   rails.value = new Set()
   crosses.value = new Set()
-  scenery.value = buildScenery(puz.value, path, props.theme)
+  const m = sceneryMargin(puz.value.size)
+  scenery.value = buildScenery(puz.value, path, props.theme, seedOf(puz.value), m)
   sound.reveal(scenery.value)
-  sceneryRoute.value = buildRoute(path, puz.value, 1)
+  sceneryRoute.value = buildRoute(path, puz.value, m)
   if (timing.revealMs > 0) trainTimer = window.setTimeout(runTrain, timing.revealMs)
   else runTrain()
 }
@@ -519,7 +521,7 @@ onMounted(() => {
       ref="boardEl"
       class="board"
       :class="{ picking, 'board--won': scenery }"
-      :style="{ '--size': puzzle.size, ...railStyle }"
+      :style="{ '--size': puzzle.size, '--margin': scenery?.margin ?? 0, '--k': scenery ? puzzle.size / scenery.size : 1, ...railStyle }"
       role="grid"
       aria-label="Grille de jeu"
       @pointermove="onMove"
@@ -640,6 +642,11 @@ onMounted(() => {
   align-items: center;
   justify-content: flex-start;
   gap: 0.6rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .board {
+    transition: none;
+  }
 }
 @keyframes win-in {
   from {
@@ -769,7 +776,10 @@ onMounted(() => {
   aspect-ratio: 1;
   /* La colonne des compteurs est à droite : on décale VERS LA DROITE d'une demi-colonne pour
      que les CASES (pas la grille + compteurs) soient centrées sur la page. */
-  transform: translateX(calc(100% / (var(--size) + 1) / 2));
+  /* À la victoire, la grille rétrécit au centre d'un paysage plus grand (--k < 1) : le décor déborde autour. */
+  transform: translateX(calc(100% / (var(--size) + 1) / 2)) scale(var(--k, 1));
+  transform-origin: calc(50% * var(--size) / (var(--size) + 1)) calc(50% * var(--size) / (var(--size) + 1));
+  transition: transform 1.8s ease-in-out;
 
   /* Le glisser doit dessiner, pas faire défiler / sélectionner. */
   touch-action: none;

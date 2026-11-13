@@ -6,12 +6,12 @@ export const timing = { revealMs: 2800 }
 
 export type Theme =
   | 'plaine' | 'foret' | 'automne' | 'montagne' | 'hiver'
-  | 'desert' | 'tropical' | 'canyon' | 'volcan' | 'enfer' | 'bonbons' | 'lune' | 'neon' | 'fusion'
+  | 'ville' | 'desert' | 'tropical' | 'canyon' | 'volcan' | 'enfer' | 'bonbons' | 'lune' | 'neon' | 'fusion'
 // Premier tour : du plus calme au plus loufoque. Les tours suivants mélangent l'ordre (voir orderFor).
-export const THEMES: Theme[] = ['plaine', 'foret', 'automne', 'montagne', 'hiver', 'desert', 'tropical', 'canyon', 'volcan', 'enfer', 'bonbons', 'lune', 'neon', 'fusion']
+export const THEMES: Theme[] = ['plaine', 'foret', 'automne', 'montagne', 'hiver', 'ville', 'desert', 'tropical', 'canyon', 'volcan', 'enfer', 'bonbons', 'lune', 'neon', 'fusion']
 export const THEME_NAMES: Record<Theme, string> = {
   plaine: 'Plaine', foret: 'Forêt', automne: 'Automne', montagne: 'Montagne', hiver: 'Hiver',
-  desert: 'Désert', tropical: 'Île tropicale', canyon: 'Grand Canyon', volcan: 'Volcan', enfer: 'Enfer', bonbons: 'Pays des bonbons', lune: 'Lune', neon: 'Ville néon', fusion: 'Fusion feu et glace',
+  ville: 'Ville', desert: 'Désert', tropical: 'Île tropicale', canyon: 'Grand Canyon', volcan: 'Volcan', enfer: 'Enfer', bonbons: 'Pays des bonbons', lune: 'Lune', neon: 'Ville néon', fusion: 'Fusion feu et glace',
 }
 export const LEVELS_PER_THEME = 25
 
@@ -56,24 +56,28 @@ export interface Params {
   snowmen: number
   road: number // probabilité d'une route (avec passage à niveau quand elle croise la voie)
   windmills: number
+  houseKind?: 'house' | 'building' // ce que « maison » devient : immeuble en ville
+  peakKind?: 'mountain' | 'mesa' | 'dune' // ce que « montagne » devient : mesa au canyon, dune au désert
+  clump?: boolean // arbres et reliefs en GROUPES (bosquets, crêtes) plutôt qu'au hasard
   treeKind?: 'tree' | 'cactus' | 'palm' | 'crater' | 'deadtree' // ce que « arbre » devient dans cet environnement
   pineKind?: 'pine' | 'cactus' | 'palm' | 'vent' | 'skull' | 'boulder'
 }
 export const PARAMS: Record<Theme, Params> = {
-  plaine: { river: 1, tree: 0.4, pine: 0.1, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0, road: 0.85, windmills: 1 },
-  foret: { river: 0.5, tree: 0.85, pine: 0.6, houseBase: 0, houseRatio: 0, fields: 0, peaks: 0, boulders: 0.05, snowmen: 0, road: 0.35, windmills: 0 },
-  automne: { river: 1, tree: 0.5, pine: 0.12, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0, road: 0.8, windmills: 0 },
-  montagne: { river: 0.7, tree: 0.25, pine: 0.7, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.3, boulders: 0.2, snowmen: 0, road: 0.5, windmills: 0 },
-  hiver: { river: 0.8, tree: 0.35, pine: 0.7, houseBase: 1, houseRatio: 0.1, fields: 0, peaks: 0.08, boulders: 0, snowmen: 0.2, road: 0.6, windmills: 0 },
-  desert: { river: 0.4, tree: 0.3, pine: 0.5, houseBase: 1, houseRatio: 0.08, fields: 0, peaks: 0.12, boulders: 0.25, snowmen: 0, road: 0.7, windmills: 0, treeKind: 'cactus', pineKind: 'cactus' },
-  tropical: { river: 1, tree: 0.75, pine: 0.7, houseBase: 1, houseRatio: 0.06, fields: 0, peaks: 0, boulders: 0.1, snowmen: 0, road: 0.35, windmills: 0, pineKind: 'palm', treeKind: 'palm' },
-  canyon: { river: 0.8, tree: 0.2, pine: 0.4, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.5, boulders: 0.3, snowmen: 0, road: 0.7, windmills: 0, treeKind: 'cactus', pineKind: 'cactus' },
-  volcan: { river: 0.9, tree: 0.2, pine: 0.5, houseBase: 1, houseRatio: 0.04, fields: 0, peaks: 0.45, boulders: 0.3, snowmen: 0, road: 0.4, windmills: 0, pineKind: 'vent' },
-  enfer: { river: 1, tree: 0.4, pine: 0.6, houseBase: 1, houseRatio: 0.06, fields: 0, peaks: 0, boulders: 0.15, snowmen: 0, road: 0.3, windmills: 0, treeKind: 'deadtree', pineKind: 'skull' },
-  bonbons: { river: 1, tree: 0.6, pine: 0.5, houseBase: 2, houseRatio: 0.1, fields: 2, peaks: 0, boulders: 0.1, snowmen: 0, road: 0.8, windmills: 0 },
-  lune: { river: 0.25, tree: 0.5, pine: 0.4, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.15, boulders: 0.2, snowmen: 0, road: 0.5, windmills: 0, treeKind: 'crater', pineKind: 'boulder' },
-  neon: { river: 1, tree: 0.55, pine: 0.5, houseBase: 2, houseRatio: 0.1, fields: 0, peaks: 0.1, boulders: 0.1, snowmen: 0, road: 0.9, windmills: 0 },
-  fusion: { river: 0.8, tree: 0.4, pine: 0.6, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.2, boulders: 0.1, snowmen: 0.15, road: 0.5, windmills: 0 },
+  plaine: { clump: true, river: 1, tree: 0.4, pine: 0.1, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0, road: 0.85, windmills: 1 },
+  foret: { clump: true, river: 0.5, tree: 0.6, pine: 0.6, houseBase: 0, houseRatio: 0, fields: 0, peaks: 0, boulders: 0.05, snowmen: 0, road: 0.35, windmills: 0 },
+  automne: { clump: true, river: 1, tree: 0.5, pine: 0.12, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0, road: 0.8, windmills: 0 },
+  montagne: { clump: true, river: 0.7, tree: 0.25, pine: 0.7, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.3, boulders: 0.2, snowmen: 0, road: 0.5, windmills: 0 },
+  hiver: { clump: true, river: 0.8, tree: 0.35, pine: 0.7, houseBase: 1, houseRatio: 0.1, fields: 0, peaks: 0.08, boulders: 0, snowmen: 0.2, road: 0.6, windmills: 0 },
+  ville: { river: 0.7, tree: 0.25, pine: 0.1, houseBase: 3, houseRatio: 0.38, fields: 0, peaks: 0, boulders: 0, snowmen: 0, road: 1, windmills: 0, houseKind: 'building' },
+  desert: { clump: true, peakKind: 'dune', river: 0.4, tree: 0.3, pine: 0.5, houseBase: 1, houseRatio: 0.08, fields: 0, peaks: 0.3, boulders: 0.25, snowmen: 0, road: 0.7, windmills: 0, treeKind: 'cactus', pineKind: 'cactus' },
+  tropical: { clump: true, river: 1, tree: 0.75, pine: 0.7, houseBase: 1, houseRatio: 0.06, fields: 0, peaks: 0, boulders: 0.1, snowmen: 0, road: 0.35, windmills: 0, pineKind: 'palm', treeKind: 'palm' },
+  canyon: { clump: true, peakKind: 'mesa', river: 0.8, tree: 0.2, pine: 0.4, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.36, boulders: 0.3, snowmen: 0, road: 0.7, windmills: 0, treeKind: 'cactus', pineKind: 'cactus' },
+  volcan: { clump: true, river: 0.9, tree: 0.2, pine: 0.5, houseBase: 1, houseRatio: 0.04, fields: 0, peaks: 0.45, boulders: 0.3, snowmen: 0, road: 0.4, windmills: 0, pineKind: 'vent' },
+  enfer: { clump: true, river: 1, tree: 0.4, pine: 0.6, houseBase: 1, houseRatio: 0.06, fields: 0, peaks: 0, boulders: 0.15, snowmen: 0, road: 0.3, windmills: 0, treeKind: 'deadtree', pineKind: 'skull' },
+  bonbons: { clump: true, river: 1, tree: 0.6, pine: 0.5, houseBase: 2, houseRatio: 0.1, fields: 2, peaks: 0, boulders: 0.1, snowmen: 0, road: 0.8, windmills: 0 },
+  lune: { clump: true, river: 0.25, tree: 0.5, pine: 0.4, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.15, boulders: 0.2, snowmen: 0, road: 0.5, windmills: 0, treeKind: 'crater', pineKind: 'boulder' },
+  neon: { clump: true, river: 1, tree: 0.55, pine: 0.5, houseBase: 2, houseRatio: 0.1, fields: 0, peaks: 0.1, boulders: 0.1, snowmen: 0, road: 0.9, windmills: 0 },
+  fusion: { clump: true, river: 0.8, tree: 0.4, pine: 0.6, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.2, boulders: 0.1, snowmen: 0.15, road: 0.5, windmills: 0 },
 }
 export interface Pal {
   a: string // herbe / sol
@@ -141,7 +145,8 @@ export const PAL: Record<Theme, Pal> = {
     walls: ['#f6e3c0', '#f3d1b0', '#efe0a6', '#fff4e0'], roofs: ['#f8fbff', '#eef4fa', '#f8fbff', '#e6eef7'],
     dots: ['#dbe7f3', '#cbd9e8', '#ffffff'], tuft: '#b4c4d6', rock: ['#b5bfcb', '#8a96a5'],
     rail: { rail: '#64748b', tie: '#dfe8f2' },
-  },  desert: {
+  },
+  desert: {
     a: '#e9cf8e', b: '#e0c17c', bed: '#c9a86a', bedEdge: '#a9864a', bank: '#c9a86a', water: '#3cc7c0', shine: '#aef0ea', deep: '#1f8f93', shallow: '#6fdcd6', road: '#8a7358',
     canopy: ['#4f9a5b', '#5fae6b', '#418a50'], fruit: '#f472b6', pine: ['#4a8f54', '#5aa564'], snow: false,
     crops: [['#d9b866', '#c9a655']],
@@ -223,12 +228,20 @@ export const PAL: Record<Theme, Pal> = {
     trunk: '#6d28d9',
   },
   fusion: {
-    a: '#6b5b7a', b: '#615170', bed: '#a8a0b8', bedEdge: '#7c7490', bank: '#a8a0b8', water: '#a78bfa', shine: '#ede9fe', deep: '#5b21b6', shallow: '#c4b5fd', road: '#3f3a4f',
+    a: '#6b5b7a', b: '#615170', bed: '#e6e0f2', bedEdge: '#8b7fa8', bank: '#a8a0b8', water: '#a78bfa', shine: '#ede9fe', deep: '#5b21b6', shallow: '#c4b5fd', road: '#3f3a4f',
     canopy: ['#dce7f1', '#edf3f9', '#cbd9e8'], fruit: null, pine: ['#2f6b57', '#3b806a'], snow: false,
     crops: [['#e5edf6', '#d6e1ee']],
     walls: ['#f6e3c0', '#f3d1b0', '#efe0a6', '#fff4e0'], roofs: ['#f8fbff', '#eef4fa', '#7f1d1d', '#e6eef7'],
     dots: ['#dbe7f3', '#fb923c', '#ffffff'], tuft: '#b4c4d6', rock: ['#8a96a5', '#4a3f3f'],
-    rail: { rail: '#9ca3af', tie: '#6b7280' },
+    rail: { rail: '#2b2638', tie: '#7a4e2d' },
     life: false,
+  },
+  ville: {
+    a: '#9aa3ad', b: '#8f98a3', bed: '#e2dac4', bedEdge: '#a89f88', bank: '#e2dac4', water: '#4a90c8', shine: '#a5d1f0', deep: '#2c6a9a', shallow: '#7bb8e6', road: '#3d4450',
+    canopy: ['#3f9d4a', '#4cae56', '#45a550'], fruit: null, pine: ['#2f7d4a', '#3a9158'], snow: false,
+    crops: [['#7cc653', '#6bb745']],
+    walls: ['#e8d9c0', '#c97b5b', '#b5bcc8', '#f0e6d2'], roofs: ['#5b6472', '#3f4752', '#7b4b3a', '#2f3640'],
+    dots: ['#e5e7eb', '#fde68a', '#9ca3af'], tuft: '#7b8490', rock: ['#9ca3af', '#6b7280'],
+    rail: { rail: '#3f4a5c', tie: '#7a4e2d' },
   },
 }

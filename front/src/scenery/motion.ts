@@ -166,12 +166,13 @@ export interface AnimalState {
   look?: number
   wag?: number // écureuil : angle de la queue
 }
+export type BirdKind = 'gull' | 'crow' | 'eagle' | 'parrot' | 'vulture' | 'bat' | 'pigeon' | 'drone'
 export interface BirdState {
   id: number
   x: number
   y: number
   flap: number // -1..1
-  dark: boolean
+  kind: BirdKind
 }
 export interface Particle {
   x: number
@@ -321,10 +322,14 @@ export function createLandSim(sc: Scenery) {
   }
 
   // ---- oiseaux ----
-  const BIRDS: Partial<Record<typeof th, number>> = { plaine: 3, automne: 3, montagne: 1, desert: 2, canyon: 1, tropical: 3, volcan: 2, enfer: 2 }
-  const birdCount = BIRDS[th] ?? 0
-  const lightBirds = th === 'plaine' || th === 'tropical' // blancs ; sombres ailleurs (vautours, chauves-souris)
-  const birds = Array.from({ length: birdCount }, (_, i) => ({ id: i, off: i * 0.33, y0: 0.8 + i * (n / 4) + rand(), dark: !lightBirds, slow: th === 'montagne' || th === 'canyon' }))
+  // Chaque environnement a SES oiseaux : mouettes, corbeaux, aigle, perroquets, vautours, chauves-souris, pigeons, drones.
+  const BIRDS: Partial<Record<typeof th, [BirdKind, number]>> = {
+    plaine: ['gull', 3], automne: ['crow', 3], montagne: ['eagle', 1], canyon: ['eagle', 1], desert: ['vulture', 2],
+    tropical: ['parrot', 3], volcan: ['bat', 3], enfer: ['bat', 4], ville: ['pigeon', 4], neon: ['drone', 3],
+  }
+  const [birdKind, birdCount] = BIRDS[th] ?? (['gull', 0] as [BirdKind, number])
+  const slowBirds = birdKind === 'eagle' || birdKind === 'vulture'
+  const birds = Array.from({ length: birdCount }, (_, i) => ({ id: i, off: i * 0.33, y0: 0.8 + i * (n / 4) + rand(), slow: slowBirds }))
 
   // ---- météo ----
   const mkParticles = (count: number, vmin: number, vspan: number) => Array.from({ length: count }, () => ({ x: rand() * n, y: rand() * n, r: 0.02 + rand() * 0.025, spin: rand() * 6, v: vmin + rand() * vspan }))
@@ -388,7 +393,7 @@ export function createLandSim(sc: Scenery) {
       const bx = k * (n + 1) - 0.5
       if (birdPrev[i] < 1 && bx >= 1 && !Number.isNaN(birdPrev[i])) events.push('bird') // le chant part quand l'oiseau entre dans la grille
       birdPrev[i] = bx
-      return { id: i, x: bx, y: b.y0 + Math.sin(k * 6) * 0.2, flap: Math.sin(t * (b.slow ? 3 : 12) + i) * 0.5, dark: b.dark }
+      return { id: i, x: bx, y: b.y0 + Math.sin(k * 6) * 0.2, flap: Math.sin(t * (b.slow ? 2 : 12) + i) * (b.slow ? 0.25 : 0.5), kind: birdKind }
     })
     return {
       cars: cars.map((c) => ({ id: c.id, u: c.u, lane: c.lane, dir: c.dir, kind: c.kind, color: c.color })),

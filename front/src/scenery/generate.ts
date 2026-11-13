@@ -15,7 +15,7 @@ import { PARAMS, THEMES, type Theme } from './themes'
 export { THEMES, themeForLevel, LEVELS_PER_THEME, timing, type Theme } from './themes'
 
 
-export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'windmill' | 'cactus' | 'palm' | 'crater' | 'vent' | 'deadtree' | 'skull'
+export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'windmill' | 'cactus' | 'palm' | 'crater' | 'vent' | 'deadtree' | 'skull' | 'building' | 'mesa' | 'dune'
 
 export interface Tile {
   kind: TileKind
@@ -35,6 +35,8 @@ export interface Road {
 }
 export interface Scenery {
   seed: number
+  margin: number // cases de paysage autour de la grille de jeu
+  ext: Pt[][] // prolongements de la voie hors de la grille (entrée, sortie), en unités de case du décor
   road: Road | null
   size: number
   theme: Theme
@@ -81,14 +83,39 @@ export function seedOf(p: Puzzle): number {
   return hash(JSON.stringify([p.size, p.rowClues, p.colClues, p.entry, p.exit, p.rocks ?? []]))
 }
 
-export function buildScenery(puzzle: Puzzle, path: Cell[], theme?: Theme, seed = seedOf(puzzle)): Scenery {
-  const n = puzzle.size
+// Combien de cases de paysage ajouter autour d'une grille de jeu : les petites grilles (4×4) donneraient un décor
+// minuscule, alors on montre un paysage d'environ 10×10 cases avec la voie au milieu.
+export function sceneryMargin(size: number): number {
+  return size <= 4 ? 3 : size <= 6 ? 2 : size <= 9 ? 1 : 0
+}
+
+// `margin` : nombre de cases de paysage AJOUTÉES autour de la grille de jeu (le décor est plus grand que la grille :
+// la voie se prolonge en ligne droite jusqu'au bord). Tout se calcule alors sur la grande grille, chemin décalé.
+export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, seed = seedOf(puzzle), margin = 0): Scenery {
+  const m = margin
+  const n = puzzle.size + 2 * m
+  const shifted: Cell[] = smallPath.map(([r, c]) => [r + m, c + m])
+  const OUTV: Record<string, Cell> = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] }
+  let path = shifted
+  const ext: Pt[][] = []
+  if (m > 0 && shifted.length) {
+    const [er, ec] = shifted[0]
+    const [xr, xc] = shifted[shifted.length - 1]
+    const eo = OUTV[puzzle.entry.dir]
+    const xo = OUTV[puzzle.exit.dir]
+    const pre: Cell[] = Array.from({ length: m }, (_, k) => [er + eo[0] * (m - k), ec + eo[1] * (m - k)])
+    const post: Cell[] = Array.from({ length: m }, (_, k) => [xr + xo[0] * (k + 1), xc + xo[1] * (k + 1)])
+    path = [...pre, ...shifted, ...post]
+    // prolongements dessinés par le décor (la grille de jeu, elle, ne dessine que ses propres cases)
+    ext.push([{ x: ec + 0.5 + eo[1] * (m + 0.5), y: er + 0.5 + eo[0] * (m + 0.5) }, { x: ec + 0.5 + eo[1] * 0.5, y: er + 0.5 + eo[0] * 0.5 }])
+    ext.push([{ x: xc + 0.5 + xo[1] * 0.5, y: xr + 0.5 + xo[0] * 0.5 }, { x: xc + 0.5 + xo[1] * (m + 0.5), y: xr + 0.5 + xo[0] * (m + 0.5) }])
+  }
   const rand = rng(seed)
   const th: Theme = theme ?? THEMES[Math.floor(rand() * THEMES.length)]
   const P = PARAMS[th]
 
   const onPath = new Set(path.map(([r, c]) => key(r, c)))
-  const rocks = new Set((puzzle.rocks ?? []).map((k) => key(k.row, k.col)))
+  const rocks = new Set((puzzle.rocks ?? []).map((k) => key(k.row + m, k.col + m)))
   const inside = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n
   const isFree = (r: number, c: number) => inside(r, c) && !onPath.has(key(r, c)) && !rocks.has(key(r, c))
 
@@ -259,7 +286,7 @@ export function buildScenery(puzzle: Puzzle, path: Cell[], theme?: Theme, seed =
     const pool = cands.length ? cands : freeCells.filter(([r, c]) => free(r, c) && nearPath(r, c))
     if (!pool.length) break
     const [r, c] = pool[Math.floor(rand() * pool.length)]
-    tiles[r][c] = { kind: 'house', v: Math.floor(rand() * 4) }
+    tiles[r][c] = { kind: P.houseKind ?? 'house', v: Math.floor(rand() * 4) }
     taken.add(key(r, c))
     houses.push([r, c])
   }
@@ -299,6 +326,30 @@ export function buildScenery(puzzle: Puzzle, path: Cell[], theme?: Theme, seed =
 
   const treeKind: TileKind = P.treeKind ?? 'tree'
   const pineKind: TileKind = P.pineKind ?? 'pine'
+  // --- Groupes : bosquets d'arbres et crêtes de montagnes plutôt que des cases tirées au hasard ---
+  // Des centres sont tirés ; plus une case est proche d'un centre, plus elle a de chances d'être plantée. La densité
+  // moyenne reste celle de l'environnement (les poids sont normalisés), seule la répartition change.
+  const gr = rng(seed ^ 0xc1a3)
+  const freeNow: Cell[] = []
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (free(r, c)) freeNow.push([r, c])
+  const clumped = (density: number, perCentre: number): Map<string, number> => {
+    const out = new Map<string, number>()
+    if (!P.clump || !freeNow.length || density <= 0) return out
+    const k = Math.max(1, Math.round((freeNow.length * density) / perCentre))
+    const centres = shuffle(freeNow, gr).slice(0, k)
+    const w = (r: number, c: number) => {
+      const d = Math.min(...centres.map(([cr, cc]) => Math.hypot(cr - r, cc - c)))
+      return d < 0.5 ? 1.6 : d < 1.5 ? 1.1 : d < 2.5 ? 0.35 : 0.05
+    }
+    const raw = freeNow.map(([r, c]) => w(r, c))
+    const scale = (density * freeNow.length) / raw.reduce((a, b) => a + b, 0)
+    freeNow.forEach(([r, c], i) => out.set(key(r, c), Math.min(0.97, raw[i] * scale)))
+    return out
+  }
+  const treeHeat = clumped(P.tree, 4)
+  const peakHeat = clumped(P.peaks, 3)
+  const peakKind: TileKind = P.peakKind ?? 'mountain'
+
   // --- Reste : montagnes d'arrière-plan, arbres, sapins, rochers, bonshommes de neige, herbe ---
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
@@ -307,16 +358,18 @@ export function buildScenery(puzzle: Puzzle, path: Cell[], theme?: Theme, seed =
       const nearHouse = DIRS.some(([dr, dc]) => tiles[r + dr]?.[c + dc]?.kind === 'house')
       const roll = rand()
       const variant = Math.floor(rand() * 3)
-      if ((!nearPath(r, c) || P.peaks >= 0.3) && roll < P.peaks) tiles[r][c] = { kind: 'mountain', v: variant }
+      const pPeak = P.clump ? (peakHeat.get(key(r, c)) ?? 0) : P.peaks
+      const pTree = P.clump ? (treeHeat.get(key(r, c)) ?? 0) : P.tree
+      if ((!nearPath(r, c) || P.peaks >= 0.3) && roll < pPeak) tiles[r][c] = { kind: peakKind, v: variant }
       else if (nearRock && roll < 0.8) tiles[r][c] = { kind: pineKind, v: variant }
       else if (nearHouse && rand() < P.snowmen) tiles[r][c] = { kind: 'snowman', v: variant }
-      else if (roll < P.peaks + P.tree) tiles[r][c] = { kind: rand() < P.pine ? pineKind : treeKind, v: variant }
+      else if (roll < pPeak + pTree) tiles[r][c] = { kind: rand() < P.pine ? pineKind : treeKind, v: variant }
       else if (rand() < P.boulders) tiles[r][c] = { kind: 'boulder', v: variant }
       else tiles[r][c] = { kind: 'grass', v: variant }
     }
   }
 
-  return { seed, road, size: n, theme: th, tiles, water, river, pond, bridges }
+  return { seed, road, margin: m, ext, size: n, theme: th, tiles, water, river, pond, bridges }
 }
 
 function pathLen(prev: Map<string, { from: string }>, from: string, start: string): number {

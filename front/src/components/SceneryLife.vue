@@ -10,7 +10,8 @@ import { sound } from '../sound/director'
 // neige qui tombent. Les voitures s'arrêtent quand le train approche (`trainNear`) et repartent après son passage.
 // Même repère que le train : 1 case = 1×1, la grille occupe 0..size (le reste, c'est la colonne des indices).
 const props = defineProps<{ scenery: Scenery; trainNear: boolean }>()
-const n = computed(() => props.scenery.size)
+const n = computed(() => props.scenery.size) // taille du décor
+const board = computed(() => props.scenery.size - 2 * props.scenery.margin) // taille de la grille de jeu : le repère de la page
 const pal = computed(() => PAL[props.scenery.theme])
 const sim = createLandSim(props.scenery)
 const empty: LandFrame = { cars: [], barrier: 0, lights: false, animals: [], birds: [], flakes: [], leaves: [], embers: [], events: [] }
@@ -34,10 +35,11 @@ const uc = computed(() => sim.uc ?? 0)
 </script>
 
 <template>
-  <svg class="life" :viewBox="`0 0 ${n + 1} ${n + 1}`" data-test="scenery-life" aria-hidden="true">
+  <svg class="life" :viewBox="`0 0 ${board + 1} ${board + 1}`" data-test="scenery-life" aria-hidden="true">
     <defs>
       <clipPath id="life-clip"><rect x="0" y="0" :width="n" :height="n" rx="0.18" /></clipPath>
     </defs>
+    <g :transform="`translate(${-scenery.margin} ${-scenery.margin})`">
     <g clip-path="url(#life-clip)">
       <!-- route : voitures et barrières -->
       <g v-if="scenery.road" :transform="roadFrame">
@@ -134,12 +136,71 @@ const uc = computed(() => sim.uc ?? 0)
         </template>
       </g>
 
-      <!-- oiseaux : ombre au sol décalée, oiseau au-dessus -->
+      <!-- oiseaux : chaque environnement a les siens ; ombre au sol décalée -->
       <template v-for="b in frame.birds" :key="'b' + b.id">
-        <ellipse :cx="b.x + 0.22" :cy="b.y + 0.35" rx="0.07" ry="0.025" fill="#000" opacity="0.12" />
-        <g :transform="`translate(${b.x} ${b.y})`" fill="none" stroke-linecap="round" stroke-width="0.03" :stroke="b.dark ? '#1f2937' : '#ffffff'">
-          <path d="M0 0 q-0.08 -0.06 -0.16 0" :transform="`rotate(${b.flap * 30})`" />
-          <path d="M0 0 q0.08 -0.06 0.16 0" :transform="`rotate(${-b.flap * 30})`" />
+        <ellipse :cx="b.x + 0.22" :cy="b.y + 0.35" :rx="b.kind === 'eagle' || b.kind === 'vulture' ? 0.14 : 0.07" ry="0.025" fill="#000" opacity="0.12" />
+        <g :transform="`translate(${b.x} ${b.y})`" stroke-linecap="round" stroke-linejoin="round">
+          <template v-if="b.kind === 'gull'">
+            <g fill="none" stroke="#ffffff" stroke-width="0.03">
+              <path d="M0 0 q-0.08 -0.06 -0.16 0" :transform="`rotate(${b.flap * 30})`" />
+              <path d="M0 0 q0.08 -0.06 0.16 0" :transform="`rotate(${-b.flap * 30})`" />
+            </g>
+          </template>
+          <template v-else-if="b.kind === 'crow'">
+            <ellipse rx="0.045" ry="0.028" fill="#111827" />
+            <circle cx="0.05" cy="-0.005" r="0.02" fill="#111827" />
+            <path d="M0.065 -0.005 l0.03 0.008 l-0.03 0.008 Z" fill="#f59e0b" />
+            <g fill="none" stroke="#1f2937" stroke-width="0.035">
+              <path d="M-0.01 0 q-0.07 -0.07 -0.15 -0.01" :transform="`rotate(${b.flap * 35})`" />
+              <path d="M0.01 0 q0.07 -0.07 0.15 -0.01" :transform="`rotate(${-b.flap * 35})`" />
+            </g>
+          </template>
+          <template v-else-if="b.kind === 'eagle'">
+            <g transform="scale(1.8)">
+              <path d="M-0.2 0.01 q0.1 -0.07 0.2 -0.02 q0.1 -0.05 0.2 0.02 q-0.1 0.02 -0.2 0.01 q-0.1 0.01 -0.2 -0.01 Z" fill="#5b3a21" stroke="#3b2713" stroke-width="0.01" :transform="`rotate(${b.flap * 8})`" />
+              <circle cx="0.01" cy="-0.015" r="0.022" fill="#f8fafc" />
+              <path d="M0.03 -0.015 l0.03 0.005 l-0.03 0.01 Z" fill="#f59e0b" />
+            </g>
+          </template>
+          <template v-else-if="b.kind === 'vulture'">
+            <g transform="scale(1.5)">
+              <path d="M-0.18 0.02 q0.09 -0.06 0.18 -0.03 q0.09 -0.03 0.18 0.03 q-0.09 0.01 -0.18 0 q-0.09 0.01 -0.18 0 Z" fill="#3b2f2a" :transform="`rotate(${b.flap * 8})`" />
+              <circle cx="0.02" cy="-0.02" r="0.02" fill="#e8b4a0" />
+              <path d="M0.04 -0.02 l0.03 0.01 l-0.03 0.008 Z" fill="#d97706" />
+            </g>
+          </template>
+          <template v-else-if="b.kind === 'parrot'">
+            <ellipse rx="0.04" ry="0.025" fill="#ef4444" />
+            <path d="M-0.035 0.005 l-0.07 0.03 l0.07 -0.015 Z" fill="#2563eb" />
+            <circle cx="0.045" cy="-0.01" r="0.02" fill="#ef4444" />
+            <path d="M0.062 -0.012 l0.025 0.01 l-0.025 0.012 Z" fill="#facc15" />
+            <g fill="none" stroke-width="0.032">
+              <path d="M0 -0.005 q-0.06 -0.06 -0.14 -0.01" stroke="#22c55e" :transform="`rotate(${b.flap * 35})`" />
+              <path d="M0 -0.005 q0.06 -0.06 0.14 -0.01" stroke="#22c55e" :transform="`rotate(${-b.flap * 35})`" />
+            </g>
+          </template>
+          <template v-else-if="b.kind === 'bat'">
+            <ellipse rx="0.03" ry="0.025" fill="#1f1015" />
+            <circle cx="0.012" cy="-0.004" r="0.006" fill="#ff3b1f" /><circle cx="0.026" cy="-0.004" r="0.006" fill="#ff3b1f" />
+            <path d="M-0.01 0 q-0.05 -0.07 -0.15 -0.02 q0.03 0.01 0.03 0.03 q0.03 -0.01 0.04 0.02 q0.03 -0.02 0.08 -0.03 Z" fill="#1f1015" :transform="`rotate(${b.flap * 35})`" />
+            <path d="M0.01 0 q0.05 -0.07 0.15 -0.02 q-0.03 0.01 -0.03 0.03 q-0.03 -0.01 -0.04 0.02 q-0.03 -0.02 -0.08 -0.03 Z" fill="#1f1015" :transform="`rotate(${-b.flap * 35})`" />
+          </template>
+          <template v-else-if="b.kind === 'pigeon'">
+            <ellipse rx="0.05" ry="0.03" fill="#9ca3af" />
+            <circle cx="0.055" cy="-0.008" r="0.022" fill="#6b7280" />
+            <ellipse cx="0.04" cy="0.004" rx="0.018" ry="0.012" fill="#7c3aed" opacity="0.8" />
+            <path d="M0.076 -0.008 l0.02 0.006 l-0.02 0.006 Z" fill="#f59e0b" />
+            <g fill="none" stroke="#b6bcc6" stroke-width="0.035">
+              <path d="M-0.01 0 q-0.06 -0.06 -0.14 -0.01" :transform="`rotate(${b.flap * 35})`" />
+              <path d="M0.01 0 q0.06 -0.06 0.14 -0.01" :transform="`rotate(${-b.flap * 35})`" />
+            </g>
+          </template>
+          <template v-else-if="b.kind === 'drone'">
+            <rect x="-0.035" y="-0.02" width="0.07" height="0.04" rx="0.01" fill="#0b1024" stroke="#00e5ff" stroke-width="0.01" />
+            <circle cx="0" cy="0" r="0.008" fill="#ff2bd6" />
+            <path d="M-0.035 -0.02 l-0.045 -0.03 M0.035 -0.02 l0.045 -0.03 M-0.035 0.02 l-0.045 0.03 M0.035 0.02 l0.045 0.03" stroke="#00e5ff" stroke-width="0.012" />
+            <ellipse v-for="(o, k) in [[-0.08, -0.05], [0.08, -0.05], [-0.08, 0.05], [0.08, 0.05]]" :key="k" :cx="o[0]" :cy="o[1]" :rx="0.04 * (0.5 + Math.abs(b.flap))" ry="0.008" fill="#00e5ff" opacity="0.6" />
+          </template>
         </g>
       </template>
 
@@ -147,6 +208,7 @@ const uc = computed(() => sim.uc ?? 0)
       <circle v-for="(f, i) in frame.flakes" :key="'f' + i" :cx="f.x" :cy="f.y" :r="f.r" fill="#fff" opacity="0.9" />
       <circle v-for="(e, i) in frame.embers" :key="'e' + i" :cx="e.x" :cy="e.y" :r="e.r" fill="#fb923c" opacity="0.85" />
       <path v-for="(l, i) in frame.leaves" :key="'l' + i" d="M0 0 q0.03 -0.05 0.07 -0.02 q-0.03 0.05 -0.07 0.02 Z" :fill="pal.canopy[i % 3]" :transform="`translate(${l.x} ${l.y}) rotate(${l.spin})`" />
+    </g>
     </g>
   </svg>
 </template>

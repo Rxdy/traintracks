@@ -22,6 +22,9 @@ import CraterEl from './scenery/CraterEl.vue'
 import VentEl from './scenery/VentEl.vue'
 import DeadTreeEl from './scenery/DeadTreeEl.vue'
 import SkullEl from './scenery/SkullEl.vue'
+import BuildingEl from './scenery/BuildingEl.vue'
+import MesaEl from './scenery/MesaEl.vue'
+import DuneEl from './scenery/DuneEl.vue'
 
 // Assemble le paysage d'un niveau gagné, SOUS les rails (qui restent des éléments de la grille).
 // Ordre de dessin : sol, champs, lit de la voie, eau, ponts, puis les éléments debout (arbres, maisons…).
@@ -45,7 +48,9 @@ const items = computed(() => {
 })
 const fields = computed(() => items.value.filter((i) => i.kind === 'field'))
 const standing = computed(() => items.value.filter((i) => i.kind !== 'field'))
-const ballast = computed(() => (props.route ? 'M' + props.route.points.map((p) => `${p.x} ${p.y}`).join(' L') : ''))
+// la voie de la grille de jeu est donnée dans son propre repère : on la décale de la marge du décor
+const ballast = computed(() => (props.route ? 'M' + props.route.points.map((p) => `${p.x + props.scenery.margin} ${p.y + props.scenery.margin}`).join(' L') : ''))
+const extPaths = computed(() => props.scenery.ext.map((e) => 'M' + e.map((p) => `${p.x} ${p.y}`).join(' L')))
 const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ k, axis, rc: k.split(',').map(Number) })))
 </script>
 
@@ -72,6 +77,13 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
     <WaterLife :scenery="scenery" />
     <BridgeEl v-for="b in bridges" :key="'b' + b.k" :r="b.rc[0]" :c="b.rc[1]" :axis="b.axis" />
 
+    <!-- prolongements de la voie hors de la grille de jeu (qui, elle, ne dessine que ses cases) : au-dessus des ponts -->
+    <template v-for="(d, i) in extPaths" :key="'x' + i">
+      <path :d="d" fill="none" :stroke="pal.rail.tie" stroke-width="0.4" stroke-dasharray="0.07 0.2" />
+      <path :d="d" fill="none" :stroke="pal.rail.rail" stroke-width="0.2" />
+      <path :d="d" fill="none" :stroke="pal.bed" stroke-width="0.1" />
+    </template>
+
     <g v-for="it in standing" :key="'s' + it.r + '-' + it.c" class="pop" :style="{ animationDelay: it.d + 'ms' }" :transform="`translate(${it.c} ${it.r}) scale(0.01)`">
       <GrassEl v-if="it.kind === 'grass'" :pal="palFor(it.r, it.c)" :v="it.v" />
       <TreeEl v-else-if="it.kind === 'tree'" :pal="palFor(it.r, it.c)" :v="it.v" />
@@ -87,6 +99,9 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
       <VentEl v-else-if="it.kind === 'vent'" :pal="palFor(it.r, it.c)" :v="it.v" />
       <DeadTreeEl v-else-if="it.kind === 'deadtree'" :pal="palFor(it.r, it.c)" :v="it.v" />
       <SkullEl v-else-if="it.kind === 'skull'" :pal="palFor(it.r, it.c)" :v="it.v" />
+      <BuildingEl v-else-if="it.kind === 'building'" :pal="palFor(it.r, it.c)" :v="it.v" />
+      <MesaEl v-else-if="it.kind === 'mesa'" :pal="palFor(it.r, it.c)" :v="it.v" />
+      <DuneEl v-else-if="it.kind === 'dune'" :pal="palFor(it.r, it.c)" :v="it.v" />
     </g>
   </svg>
 </template>
@@ -94,11 +109,12 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
 <style scoped>
 .scenery {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: calc(100% * var(--size) / (var(--size) + 1));
-  height: calc(100% * var(--size) / (var(--size) + 1));
-  border-radius: 10px;
+  /* le décor est plus grand que la grille : sa marge déborde de chaque côté (--margin cases) */
+  width: calc(100% * (var(--size) + 2 * var(--margin, 0)) / (var(--size) + 1));
+  height: calc(100% * (var(--size) + 2 * var(--margin, 0)) / (var(--size) + 1));
+  left: calc(-100% * var(--margin, 0) / (var(--size) + 1));
+  top: calc(-100% * var(--margin, 0) / (var(--size) + 1));
+  border-radius: calc(10px / var(--k, 1));
   pointer-events: none;
   overflow: hidden;
   animation: scene-in 1.8s ease-in-out both;

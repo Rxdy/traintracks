@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { levels } from '../testLevels'
-import { buildScenery, themeForLevel, THEMES, LEVELS_PER_THEME } from './generate'
+import { buildScenery, themeForLevel, THEMES, LEVELS_PER_THEME, sceneryMargin, seedOf } from './generate'
 
 describe('décor des niveaux gagnés', () => {
   it('un environnement par chapitre de 25 niveaux ; chaque tour les montre tous, dans un ordre différent', () => {
@@ -118,5 +118,27 @@ describe('décor des niveaux gagnés', () => {
     const kinds = (th: (typeof THEMES)[number]) => buildScenery(lv.puzzle, lv.solution, th).tiles.flat().map((t) => t.kind)
     expect(kinds('plaine')).toContain('windmill')
     expect(kinds('foret')).not.toContain('windmill')
+  })
+
+  it('décor plus grand que la grille : la voie se prolonge en ligne droite jusqu\'au bord du paysage', () => {
+    for (const lv of levels.slice(0, 40)) {
+      const m = sceneryMargin(lv.puzzle.size)
+      const s = buildScenery(lv.puzzle, lv.solution, themeForLevel(lv.id), seedOf(lv.puzzle), m)
+      expect(s.size).toBe(lv.puzzle.size + 2 * m)
+      expect(s.margin).toBe(m)
+      for (const [r, c] of lv.solution) expect(s.tiles[r + m][c + m].kind, `niveau ${lv.id}`).toBe('rail')
+      const rails = s.tiles.flat().filter((t) => t.kind === 'rail').length
+      expect(rails, `niveau ${lv.id}`).toBe(lv.solution.length + 2 * m)
+      expect(s.ext).toHaveLength(m > 0 ? 2 : 0)
+      // les deux bouts de la voie touchent le bord du grand décor
+      for (const e of s.ext) {
+        const far = [e[0], e[1]].some((p) => Math.abs(p.x) < 1e-9 || Math.abs(p.y) < 1e-9 || Math.abs(p.x - s.size) < 1e-9 || Math.abs(p.y - s.size) < 1e-9)
+        expect(far, `niveau ${lv.id}`).toBe(true)
+      }
+      // les rochers de la grille restent des montagnes, décalés de la marge
+      for (const k of lv.puzzle.rocks ?? []) expect(s.tiles[k.row + m][k.col + m].kind).toBe('mountain')
+    }
+    expect(sceneryMargin(4)).toBe(3)
+    expect(sceneryMargin(12)).toBe(0)
   })
 })
