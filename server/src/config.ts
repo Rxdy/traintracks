@@ -7,6 +7,7 @@ export interface Config {
   secureCookies: boolean
   trustProxy: boolean
   dailyTz: string
+  legal: { name: string; contact: string; host: string } // mentions légales (variables LEGAL_*)
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -23,5 +24,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     secureCookies: appUrl.startsWith('https://'),
     trustProxy: env.TRUST_PROXY === '1',
     dailyTz: env.DAILY_TZ ?? 'Europe/Paris',
+    legal: { name: env.LEGAL_NAME ?? '', contact: env.LEGAL_CONTACT ?? '', host: env.LEGAL_HOST ?? '' },
   }
 }

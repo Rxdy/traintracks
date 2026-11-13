@@ -1,24 +1,26 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 import TutorialView from './views/TutorialView.vue'
 import DailyView from './views/DailyView.vue'
 import JourneyView from './views/JourneyView.vue'
 import StatsView from './views/StatsView.vue'
 import AccountView from './views/AccountView.vue'
+import LegalView from './views/LegalView.vue'
 import LandscapeBg from './components/LandscapeBg.vue'
 import InstallButton from './components/InstallButton.vue'
 import CoinBadge from './components/CoinBadge.vue'
-import { notice } from './auth'
+import { notice, resetToken } from './auth'
 
 // Accueil = le Voyage (mode principal). Les autres écrans s'ouvrent depuis
 // les petits cubes de l'accueil.
-type View = 'home' | 'daily' | 'tuto' | 'stats' | 'account'
+type View = 'home' | 'daily' | 'tuto' | 'stats' | 'account' | 'legal'
 const TITLES: Record<View, string> = {
   home: '',
   daily: 'Puzzle du jour',
   tuto: 'Tutoriel',
   stats: 'Statistiques',
   account: 'Compte',
+  legal: 'Mentions légales',
 }
 
 const view = ref<View>('home')
@@ -32,6 +34,9 @@ function go(v: string): void {
   view.value = v as View
   playing.value = false
 }
+provide('go', go) // les écrans (inscription, compte) renvoient vers les mentions légales
+// Lien « mot de passe oublié » ouvert depuis l'e-mail : on arrive sur l'écran Compte.
+watch(resetToken, (t) => t && go('account'), { immediate: true })
 </script>
 
 <template>
@@ -61,9 +66,14 @@ function go(v: string): void {
         <DailyView v-else-if="view === 'daily'" @playing="playing = $event" />
         <TutorialView v-else-if="view === 'tuto'" />
         <StatsView v-else-if="view === 'stats'" />
+        <LegalView v-else-if="view === 'legal'" />
         <AccountView v-else />
       </div>
     </main>
+
+    <footer v-if="!playing && view !== 'legal'" class="footer">
+      <button type="button" class="foot-link" data-test="legal-footer" @click="go('legal')">Mentions légales et confidentialité</button>
+    </footer>
   </div>
 </template>
 
@@ -101,6 +111,21 @@ function go(v: string): void {
   background: linear-gradient(#dbeefe, #ffffff 45%);
 }
 
+.footer {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+}
+.foot-link {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #475569;
+  text-decoration: underline;
+  cursor: pointer;
+}
 .header,
 .board-area {
   position: relative;

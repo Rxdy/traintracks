@@ -22,5 +22,6 @@ const app = buildApp({
   secureCookies: cfg.secureCookies,
   trustProxy: cfg.trustProxy,
   dailyTz: cfg.dailyTz,
+  legal: cfg.legal,
 })
 await app.listen({ port: cfg.port, host: '0.0.0.0' })

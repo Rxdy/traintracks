@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 import cookie from '@fastify/cookie'
-import { confirmEmail, login, logout, register, userForSession, type Ctx } from './auth.js'
+import { confirmEmail, deleteAccount, forgotPassword, login, logout, register, resetPassword, userForSession, type Ctx } from './auth.js'
 import { MIN_BITS } from './password.js'
 import { begin, mergeAnonymous, start, status, submit } from './journey.js'
 import { aidState, buyAid, useAid } from './aids.js'
@@ -16,6 +16,13 @@ export interface AppOptions extends Ctx {
   secureCookies?: boolean
   trustProxy?: boolean
   dailyTz?: string // fuseau horaire qui définit « aujourd'hui » pour le puzzle du jour
+  legal?: LegalInfo // éditeur, contact et hébergeur affichés dans les mentions légales
+}
+
+export interface LegalInfo {
+  name: string
+  contact: string
+  host: string
 }
 
 type Body = Record<string, unknown>
@@ -67,6 +74,35 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     if (r.code === 'unconfirmed') return reply.code(403).send({ error: 'unconfirmed' })
     return reply.code(401).send({ error: 'invalid' })
   })
+
+  // Mot de passe oublié : la réponse est la même que l'adresse ait un compte ou non.
+  app.post('/api/auth/forgot', async (req) => {
+    await forgotPassword(ctx, { email: str(((req.body ?? {}) as Body).email) })
+    return { ok: true }
+  })
+
+  app.post('/api/auth/reset', async (req, reply) => {
+    const b = (req.body ?? {}) as Body
+    const r = await resetPassword(ctx, { token: str(b.token), password: str(b.password) })
+    if (r.ok) return { ok: true }
+    if (r.code === 'weak') return reply.code(422).send({ error: 'weak', bits: r.bits, min: r.min })
+    return reply.code(400).send({ error: r.code })
+  })
+
+  // Droit à l'effacement : le compte et toutes ses données, après confirmation par le mot de passe.
+  app.post('/api/auth/delete-account', async (req, reply) => {
+    const user = await userForSession(ctx, req.cookies[COOKIE])
+    if (!user) return reply.code(401).send({ error: 'unauthenticated' })
+    const r = await deleteAccount(ctx, { userId: user.id, password: str(((req.body ?? {}) as Body).password), ip: req.ip })
+    if (r.ok) {
+      reply.clearCookie(COOKIE, { path: '/' })
+      return { ok: true }
+    }
+    if (r.code === 'locked') return reply.code(429).header('Retry-After', String(r.retryAfterSec)).send({ error: 'locked', retryAfterSec: r.retryAfterSec })
+    return reply.code(403).send({ error: 'invalid' })
+  })
+
+  app.get('/api/legal', async () => opts.legal ?? { name: '', contact: '', host: '' })
 
   app.post('/api/auth/logout', async (req, reply) => {
     await logout(ctx, req.cookies[COOKIE])

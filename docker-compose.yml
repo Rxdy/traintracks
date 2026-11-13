@@ -24,6 +24,10 @@ services:
       SMTP_URL: ${SMTP_URL:-smtp://mail:1025}
       MAIL_FROM: ${MAIL_FROM:-Train Tracks <no-reply@traintracks.local>}
       TRUST_PROXY: "1"
+      # Mentions légales (page « Mentions légales ») : éditeur, contact, hébergeur.
+      LEGAL_NAME: ${LEGAL_NAME:-}
+      LEGAL_CONTACT: ${LEGAL_CONTACT:-}
+      LEGAL_HOST: ${LEGAL_HOST:-}
     depends_on:
       db:
         condition: service_healthy

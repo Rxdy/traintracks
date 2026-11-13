@@ -42,6 +42,15 @@ export async function confirmFromUrl(search = window.location.search): Promise<v
   history.replaceState(null, '', window.location.pathname)
 }
 
+// Lien reçu par e-mail : https://site/?reset=JETON → l'écran Compte propose de choisir un nouveau mot de passe.
+export const resetToken = ref('')
+export function resetFromUrl(search = window.location.search): void {
+  const token = new URLSearchParams(search).get('reset')
+  if (!token) return
+  resetToken.value = token
+  history.replaceState(null, '', window.location.pathname)
+}
+
 // Robustesse en bits, estimée dans le navigateur pour l'indicateur (chargée à la demande : la bibliothèque est
 // lourde). Même calcul que le serveur, qui recalcule de toute façon à l'inscription.
 export async function estimateBits(password: string, inputs: string[] = []): Promise<number> {
@@ -75,6 +84,36 @@ export async function login(email: string, password: string): Promise<AuthResult
   if (r.status === 429) return { ok: false, error: `Trop d'essais : réessaie dans ${minutes(r.retryAfter)} min.` }
   if (r.status === 403) return { ok: false, error: 'Confirme d\'abord ton adresse e-mail (lien reçu par mail).' }
   return { ok: false, error: 'E-mail ou mot de passe incorrect.' }
+}
+
+// Mot de passe oublié : la réponse du serveur est la même que l'adresse ait un compte ou non.
+export async function forgotPassword(email: string): Promise<AuthResult> {
+  const r = await api('POST', '/api/auth/forgot', { email })
+  if (!r) return { ok: false, error: OFFLINE }
+  return { ok: true, message: "Si un compte existe pour cette adresse, un lien vient d'être envoyé (valable 1 h)." }
+}
+
+export async function resetPassword(token: string, password: string): Promise<AuthResult> {
+  const r = await api('POST', '/api/auth/reset', { token, password })
+  if (!r) return { ok: false, error: OFFLINE }
+  if (r.status === 200) {
+    resetToken.value = ''
+    return { ok: true, message: 'Mot de passe modifié. Tu peux te connecter.' }
+  }
+  if (r.status === 422) return { ok: false, error: `Mot de passe trop faible (${r.data.bits} bits, ${r.data.min} requis).` }
+  return { ok: false, error: 'Lien invalide ou expiré. Demande un nouveau lien.' }
+}
+
+// Droit à l'effacement : supprime le compte et toutes ses données.
+export async function deleteAccount(password: string): Promise<AuthResult> {
+  const r = await api('POST', '/api/auth/delete-account', { password })
+  if (!r) return { ok: false, error: OFFLINE }
+  if (r.status === 200) {
+    user.value = null
+    return { ok: true, message: 'Compte supprimé.' }
+  }
+  if (r.status === 429) return { ok: false, error: `Trop d'essais : réessaie dans ${minutes(r.retryAfter)} min.` }
+  return { ok: false, error: 'Mot de passe incorrect.' }
 }
 
 export function logout(): void {

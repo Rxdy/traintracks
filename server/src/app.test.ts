@@ -193,3 +193,36 @@ describe('API du puzzle du jour et des statistiques', () => {
     expect((await app.inject({ method: 'GET', url: '/api/aids', headers: { cookie } })).json().aids[0].stock).toBe(3) // rien consommé
   })
 })
+
+describe('API : mot de passe oublié, suppression de compte, mentions légales', () => {
+  it('parcours complet : oublié → lien → nouveau mot de passe → connexion', async () => {
+    const { app, tokenOf, mails } = await setup()
+    await post(app, '/api/auth/register', { pseudo: 'Rudy', email: 'r@x.fr', password: STRONG })
+    await post(app, '/api/auth/confirm', { token: tokenOf() })
+    expect((await post(app, '/api/auth/forgot', { email: 'inconnu@x.fr' })).json()).toEqual({ ok: true }) // même réponse
+    expect((await post(app, '/api/auth/forgot', { email: 'r@x.fr' })).json()).toEqual({ ok: true })
+    const token = /\?reset=([\w-]+)/.exec(mails.at(-1)!.text)![1]
+    expect((await post(app, '/api/auth/reset', { token, password: 'Password123!' })).statusCode).toBe(422)
+    expect((await post(app, '/api/auth/reset', { token, password: 'orage-lampe-sentier-pomme-quartz' })).statusCode).toBe(200)
+    expect((await post(app, '/api/auth/reset', { token, password: 'orage-lampe-sentier-pomme-quartz' })).statusCode).toBe(400)
+    expect((await post(app, '/api/auth/login', { email: 'r@x.fr', password: 'orage-lampe-sentier-pomme-quartz' })).statusCode).toBe(200)
+  })
+
+  it('suppression : connexion et mot de passe exigés, puis le compte n\'existe plus', async () => {
+    const { app, tokenOf } = await setup()
+    await post(app, '/api/auth/register', { pseudo: 'Rudy', email: 'r@x.fr', password: STRONG })
+    await post(app, '/api/auth/confirm', { token: tokenOf() })
+    expect((await post(app, '/api/auth/delete-account', { password: STRONG })).statusCode).toBe(401)
+    const cookie = String((await post(app, '/api/auth/login', { email: 'r@x.fr', password: STRONG })).headers['set-cookie']).split(';')[0]
+    expect((await post(app, '/api/auth/delete-account', { password: 'faux' }, cookie)).statusCode).toBe(403)
+    expect((await post(app, '/api/auth/delete-account', { password: STRONG }, cookie)).statusCode).toBe(200)
+    expect((await app.inject({ method: 'GET', url: '/api/me', headers: { cookie } })).statusCode).toBe(401)
+    expect((await post(app, '/api/auth/login', { email: 'r@x.fr', password: STRONG })).statusCode).toBe(401)
+  })
+
+  it('mentions légales : les informations de l\'éditeur viennent de la configuration', async () => {
+    const c = await makeGame()
+    const app = buildApp({ ...c.ctx, legal: { name: 'Jeanne Dupont', contact: 'contact@exemple.fr', host: 'l\'éditeur' } })
+    expect((await app.inject({ method: 'GET', url: '/api/legal' })).json()).toEqual({ name: 'Jeanne Dupont', contact: 'contact@exemple.fr', host: 'l\'éditeur' })
+  })
+})

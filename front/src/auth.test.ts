@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import AuthPanel from './components/AuthPanel.vue'
 import PasswordMeter from './components/PasswordMeter.vue'
-import { confirmFromUrl, estimateBits, login, logout, notice, refreshSession, register, user, MIN_BITS } from './auth'
+import { confirmFromUrl, deleteAccount, estimateBits, forgotPassword, login, logout, notice, refreshSession, register, resetFromUrl, resetPassword, resetToken, user, MIN_BITS } from './auth'
+import AccountView from './views/AccountView.vue'
+import LegalView from './views/LegalView.vue'
+import { flushPromises } from '@vue/test-utils'
 
 // Faux serveur : chaque appel consomme la réponse suivante.
 function mockFetch(...replies: { status: number; body?: object; headers?: Record<string, string> }[]) {
@@ -138,5 +141,94 @@ describe('lien de confirmation', () => {
     await confirmFromUrl('?autre=1')
     expect(calls).toHaveLength(0)
     expect(notice.value).toBe('')
+  })
+})
+
+
+describe('mot de passe oublié', () => {
+  it('la réponse ne dit pas si l\'adresse a un compte', async () => {
+    const calls = mockFetch({ status: 200, body: { ok: true } })
+    const r = await forgotPassword('a@b.fr')
+    expect(r).toMatchObject({ ok: true })
+    expect(calls[0].url).toBe('/api/auth/forgot')
+    expect((r as { message: string }).message).toContain('Si un compte existe')
+  })
+  it('le lien ?reset=… est lu puis retiré de l\'adresse', () => {
+    resetToken.value = ''
+    resetFromUrl('?reset=abc123')
+    expect(resetToken.value).toBe('abc123')
+    resetToken.value = ''
+  })
+  it('nouveau mot de passe : succès, trop faible, lien invalide', async () => {
+    resetToken.value = 'abc'
+    mockFetch({ status: 200 })
+    expect(await resetPassword('abc', 'x')).toMatchObject({ ok: true })
+    expect(resetToken.value).toBe('')
+    mockFetch({ status: 422, body: { bits: 10, min: 50 } })
+    expect(await resetPassword('abc', 'x')).toMatchObject({ ok: false, error: expect.stringContaining('trop faible') })
+    mockFetch({ status: 400 })
+    expect(await resetPassword('abc', 'x')).toMatchObject({ ok: false, error: expect.stringContaining('expiré') })
+  })
+  it('l\'écran de connexion propose « Mot de passe oublié ? » puis le formulaire d\'e-mail', async () => {
+    const w = mount(AuthPanel)
+    await w.find('[data-test=forgot]').trigger('click')
+    expect(w.find('h2').text()).toBe('Mot de passe oublié')
+    expect(w.find('[data-test=password]').exists()).toBe(false)
+    const calls = mockFetch({ status: 200 })
+    await w.find('[data-test=email]').setValue('a@b.fr')
+    await w.find('[data-test=auth-form]').trigger('submit')
+    await flushPromises()
+    expect(calls[0].url).toBe('/api/auth/forgot')
+    expect(w.find('[data-test=info]').text()).toContain('Si un compte existe')
+  })
+  it('arrivée par le lien : formulaire de nouveau mot de passe, sans e-mail', async () => {
+    resetToken.value = 'tok'
+    const w = mount(AuthPanel)
+    expect(w.find('h2').text()).toBe('Nouveau mot de passe')
+    expect(w.find('[data-test=email]').exists()).toBe(false)
+    expect(w.findComponent(PasswordMeter).exists()).toBe(true)
+    resetToken.value = ''
+  })
+})
+
+describe('suppression du compte', () => {
+  it('envoie le mot de passe, déconnecte et vide le compte', async () => {
+    user.value = { name: 'Rudy', email: 'r@x.fr', provider: 'local' }
+    const calls = mockFetch({ status: 200 })
+    expect(await deleteAccount('secret')).toMatchObject({ ok: true })
+    expect(calls[0].url).toBe('/api/auth/delete-account')
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ password: 'secret' })
+    expect(user.value).toBeNull()
+  })
+  it('mauvais mot de passe : le compte reste', async () => {
+    user.value = { name: 'Rudy', email: 'r@x.fr', provider: 'local' }
+    mockFetch({ status: 403 })
+    expect(await deleteAccount('faux')).toMatchObject({ ok: false, error: 'Mot de passe incorrect.' })
+    expect(user.value).not.toBeNull()
+  })
+  it('l\'écran Compte demande confirmation et mot de passe avant de supprimer', async () => {
+    user.value = { name: 'Rudy', email: 'r@x.fr', provider: 'local' }
+    const w = mount(AccountView)
+    expect(w.find('[data-test=delete-form]').exists()).toBe(false)
+    await w.find('[data-test=delete-open]').trigger('click')
+    expect(w.find('[data-test=delete-form]').text()).toContain('définitivement')
+    expect(w.find('[data-test=delete-confirm]').attributes('disabled')).toBeDefined() // pas de mot de passe : bouton inactif
+    await w.find('[data-test=delete-cancel]').trigger('click')
+    expect(w.find('[data-test=delete-form]').exists()).toBe(false)
+  })
+})
+
+describe('mentions légales', () => {
+  it('affiche l\'éditeur et le contact venus du serveur, et « à renseigner » sinon', async () => {
+    mockFetch({ status: 200, body: { name: 'Jeanne Dupont', contact: 'c@exemple.fr', host: 'l\'éditeur' } })
+    const w = mount(LegalView)
+    await flushPromises()
+    expect(w.find('[data-test=legal-name]').text()).toBe('Jeanne Dupont')
+    expect(w.find('[data-test=legal-contact]').text()).toBe('c@exemple.fr')
+    mockFetch({ status: 200, body: { name: '', contact: '', host: '' } })
+    const empty = mount(LegalView)
+    await flushPromises()
+    expect(empty.find('[data-test=legal-name]').text()).toBe('à renseigner')
+    expect(empty.text()).toContain('Supprimer mon compte')
   })
 })
