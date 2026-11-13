@@ -21,6 +21,10 @@ body {
 /* Évite le zoom involontaire / la sélection pendant le jeu sur mobile */
 #app {
   -webkit-tap-highlight-color: transparent;
+  /* Application installée sur iPhone : on laisse la place de l'encoche / de la barre d'état en haut, de la barre
+     d'accueil en bas et des bords en paysage (vaut 0 ailleurs). */
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 /* ---------- Direction artistique commune (même langage que l'accueil) ----------

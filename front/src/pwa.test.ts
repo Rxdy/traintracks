@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import manifestRaw from '../public/manifest.webmanifest?raw'
 import swRaw from '../public/sw.js?raw'
 import indexHtml from '../index.html?raw'
+import styleCss from './style.css?raw'
 
 // Liste des fichiers du dossier public (clés relatives, ex. « ../public/icon.svg »).
 const publicFiles = Object.keys(import.meta.glob('../public/**/*', { query: '?url', import: 'default' }))
@@ -70,5 +71,11 @@ describe('service worker : l\'API ne passe jamais par le cache', () => {
   })
   it('ignore aussi les autres origines', () => {
     expect(load()('http://autre.test/x.js')).toBe(false)
+  })
+
+  it('iPhone installé : le contenu laisse la place de l\'encoche et de la barre d\'état (zones sûres)', () => {
+    expect(indexHtml).toContain('viewport-fit=cover')
+    expect(styleCss).toContain('env(safe-area-inset-top)')
+    expect(styleCss).toContain('env(safe-area-inset-bottom)')
   })
 })
