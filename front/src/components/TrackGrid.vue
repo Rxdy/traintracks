@@ -457,10 +457,11 @@ onMounted(() => {
         <button type="button" class="btn btn--ghost tool" data-test="replay" @click="replayTrain" :disabled="!trainDone" aria-label="Relancer le train" title="Relancer le train">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z" /></svg>
         </button>
-        <button v-if="!compact" type="button" class="btn btn--ghost tool" :class="{ on: panelOpen }" data-test="reopen" @click="panelOpen = !panelOpen" :disabled="!trainDone" aria-label="Résultat" title="Résultat">
+        <button type="button" class="btn btn--ghost tool" :class="{ on: panelOpen, ghost: compact }" :tabindex="compact ? -1 : 0" data-test="reopen" @click="panelOpen = !panelOpen" :disabled="!trainDone" aria-label="Résultat" title="Résultat">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6" /></svg>
         </button>
       </template>
+      <span v-if="solved" class="tool ghost" aria-hidden="true"></span>
       <span class="timer" data-test="timer">⏱ {{ fmt(elapsed) }}</span>
     </div>
 
@@ -567,6 +568,9 @@ onMounted(() => {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.ghost {
+  visibility: hidden; /* garde la place : les boutons de la barre ne se décalent pas quand le jeu passe en fin de partie */
+}
 .tool.on {
   background: #dbeafe;
 }
@@ -579,12 +583,12 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
   color: #6b7280;
 }
-.win-zone--compact {
+.win-zone.win-zone--compact {
   display: grid;
   place-items: start center;
-  min-height: 6.2rem; /* récapitulatif complet : la place est prise dès le début, rien ne bouge à la victoire */
+  min-height: 5.4rem; /* récapitulatif complet : la place est prise dès le début, rien ne bouge à la victoire */
 }
-.win-zone--compact > * {
+.win-zone.win-zone--compact > * {
   grid-area: 1 / 1;
 }
 .win-zone {
@@ -651,17 +655,23 @@ onMounted(() => {
   font-size: 1rem;
 }
 .finish--inline :deep(.receipt) {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
   width: 100%;
   padding-top: 0;
 }
 .finish--inline :deep(.receipt .row) {
+  flex: none;
+  gap: 0.3rem;
   font-size: 0.8rem;
 }
 .finish--inline :deep(.receipt .total) {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 }
+.finish--inline :deep(.receipt .fill),
 .finish--inline :deep(.receipt .rule) {
-  margin: 0.15rem 0;
+  display: none;
 }
 .finish--inline :deep(.btn--big) {
   font-size: 1rem;

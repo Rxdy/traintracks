@@ -276,7 +276,7 @@ describe('TrackGrid : téléphone', () => {
       expect(w.find('.win-zone').classes()).toContain('win-zone--compact') // zone réservée
       expect(w.find('.board [data-test=finish]').exists()).toBe(false) // rien sur la grille
       expect(w.find('.win-zone [data-test=finish]').exists()).toBe(true) // sous la grille
-      expect(w.find('[data-test=reopen]').exists()).toBe(false) // inutile : le résultat reste affiché
+      expect(w.find('[data-test=reopen]').classes()).toContain('ghost') // inutile : le résultat reste affiché (place gardée)
       expect(w.find('[data-test=replay]').exists()).toBe(true)
       await w.find('[data-test=replay]').trigger('click') // le train repart : le récapitulatif reste
       await w.vm.$nextTick()
