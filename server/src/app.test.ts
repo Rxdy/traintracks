@@ -64,6 +64,67 @@ describe('API des comptes', () => {
   })
 })
 
+describe('plusieurs comptes sur un même appareil', () => {
+  const cookieOf = (r: { headers: Record<string, unknown> }, name: string) => [r.headers['set-cookie']].flat().map(String).find((c) => c.startsWith(name + '='))?.split(';')[0]
+
+  it('inscription → confirmation → connexion → déconnexion → un AUTRE compte : chacun garde sa progression et ses pièces', async () => {
+    const { app, tokenOf } = await setup()
+    const signup = async (pseudo: string, email: string) => {
+      expect((await post(app, '/api/auth/register', { pseudo, email, password: STRONG })).statusCode).toBe(201)
+      expect((await post(app, '/api/auth/confirm', { token: tokenOf() })).statusCode).toBe(200)
+    }
+    const signin = async (email: string) => {
+      const r = await post(app, '/api/auth/login', { email, password: STRONG })
+      expect(r.statusCode).toBe(200)
+      return cookieOf(r, 'tt_session')!
+    }
+    const get = (url: string, cookie: string) => app.inject({ method: 'GET', url, headers: { cookie } })
+
+    await signup('Alice', 'alice@x.fr')
+    await signup('Bob', 'bob@x.fr')
+
+    // Alice joue le niveau 1
+    const alice = await signin('alice@x.fr')
+    expect((await get('/api/me', alice)).json().user).toMatchObject({ pseudo: 'Alice', email: 'alice@x.fr' })
+    await post(app, '/api/journey/start', {}, alice)
+    const won = await post(app, '/api/journey/submit', { level: 1, edges: edgesOf(1) }, alice)
+    expect(won.json()).toMatchObject({ ok: true, next: { level: 2 } })
+    const aliceCoins = (await get('/api/aids', alice)).json().coins
+    expect(aliceCoins).toBeGreaterThan(100) // 100 de bienvenue + le gain du niveau
+
+    // elle se déconnecte : son cookie ne vaut plus rien
+    await post(app, '/api/auth/logout', {}, alice)
+    expect((await get('/api/me', alice)).statusCode).toBe(401)
+
+    // Bob se connecte sur le même appareil : il repart du niveau 1, avec ses propres pièces
+    const bob = await signin('bob@x.fr')
+    expect((await get('/api/me', bob)).json().user).toMatchObject({ pseudo: 'Bob', email: 'bob@x.fr' })
+    expect((await get('/api/journey', bob)).json().level).toBe(1)
+    expect((await get('/api/aids', bob)).json().coins).toBe(100)
+    // …et ce que Bob fait n'est pas à Alice
+    await post(app, '/api/journey/start', {}, bob)
+    await post(app, '/api/journey/submit', { level: 1, edges: edgesOf(1) }, bob)
+    await post(app, '/api/auth/logout', {}, bob)
+
+    // Alice revient : tout est là (niveau 2, ses pièces), rien n'a bougé à cause de Bob
+    const again = await signin('alice@x.fr')
+    expect((await get('/api/journey', again)).json().level).toBe(2)
+    expect((await get('/api/aids', again)).json().coins).toBe(aliceCoins)
+  })
+  it('une adresse = un compte : la 2e inscription est refusée (409 email_taken), même écrite autrement', async () => {
+    const { app } = await setup()
+    expect((await post(app, '/api/auth/register', { pseudo: 'Alice', email: 'alice@x.fr', password: STRONG })).statusCode).toBe(201)
+    for (const email of ['alice@x.fr', 'ALICE@X.FR', 'alice+2@x.fr']) {
+      const r = await post(app, '/api/auth/register', { pseudo: 'Autre' + email.length, email, password: STRONG })
+      expect(r.statusCode, email).toBe(409)
+      expect(r.json(), email).toEqual({ error: 'email_taken' })
+    }
+    // un pseudo déjà pris garde son propre message
+    const p = await post(app, '/api/auth/register', { pseudo: 'alice', email: 'neuf@x.fr', password: STRONG })
+    expect(p.json()).toEqual({ error: 'pseudo_taken' })
+  })
+})
+
 describe('API du Voyage', () => {
   const cookieOf = (r: { headers: Record<string, unknown> }, name: string) => [r.headers['set-cookie']].flat().map(String).find((c) => c.startsWith(name + '='))?.split(';')[0]
 

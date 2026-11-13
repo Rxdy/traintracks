@@ -67,7 +67,10 @@ export async function register(name: string, email: string, password: string): P
   const r = await api('POST', '/api/auth/register', { pseudo: name, email, password })
   if (!r) return { ok: false, error: OFFLINE }
   if (r.status === 201) return { ok: true, message: 'Vérifie ta boîte mail : un lien te permet de confirmer ton adresse (valable 24 h).' }
-  if (r.status === 409) return { ok: false, error: 'Ce pseudo est déjà pris.' }
+  if (r.status === 409) {
+    if (r.data.error === 'email_taken') return { ok: false, error: 'Cette adresse e-mail a déjà un compte. Connecte-toi, ou utilise « Mot de passe oublié ».' }
+    return { ok: false, error: 'Ce pseudo est déjà pris.' }
+  }
   if (r.status === 422) return { ok: false, error: `Mot de passe trop faible (${r.data.bits} bits, ${r.data.min} requis).` }
   if (r.data.field === 'pseudo') return { ok: false, error: 'Pseudo invalide : 2 à 24 caractères (lettres, chiffres, . _ -).' }
   if (r.data.field === 'email') return { ok: false, error: 'Adresse e-mail invalide.' }

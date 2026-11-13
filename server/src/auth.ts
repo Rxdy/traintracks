@@ -29,12 +29,20 @@ const SESSION_TTL_MS = 30 * 24 * 3600_000
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex')
 const newToken = () => randomBytes(32).toString('base64url')
 export const normEmail = (e: string) => e.trim().toLowerCase()
+// Clé d'unicité d'une adresse (même règle que la migration 007) : sans « +étiquette », et sans points chez Gmail.
+export function emailKeyOf(email: string): string {
+  const [local = '', domain = ''] = normEmail(email).split('@')
+  const base = local.split('+')[0]
+  if (domain === 'gmail.com' || domain === 'googlemail.com') return `${base.replace(/\./g, '')}@gmail.com`
+  return `${base}@${domain}`
+}
 
 export type RegisterResult =
   | { ok: true }
   | { ok: false; code: 'invalid'; field: 'pseudo' | 'email' | 'password' }
   | { ok: false; code: 'weak'; bits: number; min: number }
   | { ok: false; code: 'pseudo_taken' }
+  | { ok: false; code: 'email_taken' }
 
 export async function register(ctx: Ctx, input: { pseudo: string; email: string; password: string }): Promise<RegisterResult> {
   const pseudo = input.pseudo.trim()
@@ -50,12 +58,10 @@ export async function register(ctx: Ctx, input: { pseudo: string; email: string;
   const taken = await ctx.db.query('SELECT 1 FROM users WHERE pseudo_key = $1', [pseudoKey])
   if (taken.rows.length) return { ok: false, code: 'pseudo_taken' }
 
-  // E-mail déjà inscrit : réponse identique à un succès (ne révèle pas qui a un compte) ; le titulaire est prévenu.
-  const existing = await ctx.db.query('SELECT 1 FROM users WHERE email = $1', [email])
-  if (existing.rows.length) {
-    await ctx.mailer.send(email, 'Train Tracks : tu as déjà un compte', `Quelqu'un a tenté de s'inscrire avec cette adresse. Si c'est toi, connecte-toi sur ${ctx.appUrl}.`)
-    return { ok: true }
-  }
+  // Une adresse = un compte (voir emailKeyOf). On le dit clairement : la personne sait alors qu'elle a déjà un compte.
+  const emailKey = emailKeyOf(email)
+  const existing = await ctx.db.query('SELECT 1 FROM users WHERE email_key = $1', [emailKey])
+  if (existing.rows.length) return { ok: false, code: 'email_taken' }
 
   const id = randomUUID()
   const token = newToken()
@@ -63,7 +69,7 @@ export async function register(ctx: Ctx, input: { pseudo: string; email: string;
   try {
     await ctx.db.tx(async (t) => {
       await t.query(
-        'INSERT INTO users (id, pseudo, pseudo_key, email, password_hash, provider, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        'INSERT INTO users (id, pseudo, pseudo_key, email, password_hash, provider, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)', // email_key : calculée par la base (migration 008)
         [id, pseudo, pseudoKey, email, await hashPassword(input.password), 'local', now],
       )
       await t.query('INSERT INTO email_tokens (token_hash, user_id, expires_at) VALUES ($1,$2,$3)', [
@@ -73,7 +79,11 @@ export async function register(ctx: Ctx, input: { pseudo: string; email: string;
       ])
     })
   } catch (e) {
-    if ((e as { code?: string }).code === '23505' || /unique|duplicate/i.test(String(e))) return { ok: false, code: 'pseudo_taken' }
+    if ((e as { code?: string }).code === '23505' || /unique|duplicate/i.test(String(e))) {
+      // course entre deux inscriptions : on dit laquelle des deux clés est prise
+      const mail = await ctx.db.query('SELECT 1 FROM users WHERE email_key = $1', [emailKey])
+      return { ok: false, code: mail.rows.length ? 'email_taken' : 'pseudo_taken' }
+    }
     throw e
   }
   await ctx.mailer.send(

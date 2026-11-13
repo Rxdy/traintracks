@@ -94,8 +94,10 @@ describe('connexion et messages d\'erreur', () => {
     expect(user.value).toBeNull()
   })
   it('inscription : pseudo pris et mot de passe refusé par le serveur', async () => {
-    mockFetch({ status: 409 })
+    mockFetch({ status: 409, body: { error: 'pseudo_taken' } })
     expect(await register('a', 'a@b.fr', 'x')).toEqual({ ok: false, error: 'Ce pseudo est déjà pris.' })
+    mockFetch({ status: 409, body: { error: 'email_taken' } })
+    expect(await register('a', 'a@b.fr', 'x')).toMatchObject({ ok: false, error: expect.stringContaining('a déjà un compte') })
     mockFetch({ status: 422, body: { error: 'weak', bits: 20, min: 50 } })
     expect(await register('a', 'a@b.fr', 'x')).toMatchObject({ ok: false, error: expect.stringContaining('20 bits') })
   })
@@ -230,5 +232,51 @@ describe('mentions légales', () => {
     await flushPromises()
     expect(empty.find('[data-test=legal-name]').text()).toBe('à renseigner')
     expect(empty.text()).toContain('Supprimer mon compte')
+  })
+})
+
+describe('changer de compte sur le même appareil', () => {
+  it('Compte : se déconnecter, puis se connecter avec un autre compte', async () => {
+    user.value = { name: 'Alice', email: 'alice@x.fr', provider: 'local' }
+    const w = mount(AccountView)
+    expect(w.text()).toContain('Alice')
+    expect(w.text()).toContain('alice@x.fr')
+
+    // déconnexion : l'état est vidé tout de suite, l'écran propose la connexion
+    const calls = mockFetch({ status: 200 })
+    await w.find('[data-test=logout]').trigger('click')
+    await flushPromises()
+    expect(calls[0].url).toBe('/api/auth/logout')
+    expect(user.value).toBeNull()
+    expect(w.find('[data-test=auth]').exists()).toBe(true)
+    expect(w.find('h2').text()).toBe('Connexion')
+    expect(w.text()).not.toContain('Alice')
+
+    // connexion avec un autre compte
+    const calls2 = mockFetch({ status: 200, body: { user: { id: '2', pseudo: 'Bob', email: 'bob@x.fr', provider: 'local' } } })
+    await w.find('[data-test=email]').setValue('bob@x.fr')
+    await w.find('[data-test=password]').setValue('bleu-fenetre-cactus-moteur-zebre')
+    await w.find('[data-test=auth-form]').trigger('submit')
+    await flushPromises()
+    expect(calls2[0].url).toBe('/api/auth/login')
+    expect(JSON.parse(String(calls2[0].init?.body))).toMatchObject({ email: 'bob@x.fr' })
+    expect(user.value).toEqual({ name: 'Bob', email: 'bob@x.fr', provider: 'local' })
+    expect(w.text()).toContain('Bob')
+    expect(w.text()).toContain('bob@x.fr')
+    expect(w.text()).not.toContain('Alice')
+  })
+  it('inscription : l\'adresse déjà utilisée est signalée dans le formulaire', async () => {
+    const w = mount(AuthPanel)
+    await w.find('[data-test=switch]').trigger('click')
+    expect(w.find('h2').text()).toBe('Créer un compte')
+    await w.find('[data-test=name]').setValue('Alice2')
+    await w.find('[data-test=email]').setValue('alice@x.fr')
+    await w.find('[data-test=password]').setValue('bleu-fenetre-cactus-moteur-zebre')
+    await flushPromises()
+    await new Promise((r) => setTimeout(r, 50))
+    mockFetch({ status: 409, body: { error: 'email_taken' } })
+    await w.find('[data-test=auth-form]').trigger('submit')
+    await flushPromises()
+    expect(w.find('[data-test=error]').text()).toContain('a déjà un compte')
   })
 })

@@ -50,7 +50,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     if (r.ok) return reply.code(201).send({ ok: true })
     if (r.code === 'invalid') return reply.code(400).send({ error: 'invalid', field: r.field })
     if (r.code === 'weak') return reply.code(422).send({ error: 'weak', bits: r.bits, min: r.min })
-    return reply.code(409).send({ error: 'pseudo_taken' })
+    return reply.code(409).send({ error: r.code }) // 'pseudo_taken' ou 'email_taken'
   })
 
   app.post('/api/auth/confirm', async (req, reply) => {

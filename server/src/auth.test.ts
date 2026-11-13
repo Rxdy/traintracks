@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { confirmEmail, login, logout, register, userForSession } from './auth.js'
+import { confirmEmail, emailKeyOf, login, logout, register, userForSession } from './auth.js'
 import { makeCtx, STRONG } from './helpers.test-util.js'
 
 const sign = { pseudo: 'Rudy', email: 'Rudy@Example.fr', password: STRONG }
@@ -40,12 +40,23 @@ describe('inscription', () => {
     await register(ctx, sign)
     expect(await register(ctx, { ...sign, pseudo: 'RUDY', email: 'autre@x.fr' })).toEqual({ ok: false, code: 'pseudo_taken' })
   })
-  it('e-mail déjà inscrit : réponse identique à un succès, aucun doublon, le titulaire est prévenu', async () => {
-    const { ctx, db, mails } = await makeCtx()
-    await register(ctx, sign)
-    expect(await register(ctx, { ...sign, pseudo: 'Autre' })).toEqual({ ok: true })
+  it('une adresse = un compte : refus clair, aucun doublon', async () => {
+    const { ctx, db } = await makeCtx()
+    expect(await register(ctx, sign)).toEqual({ ok: true })
+    expect(await register(ctx, { ...sign, pseudo: 'Autre' })).toEqual({ ok: false, code: 'email_taken' })
     expect((await db.query('SELECT 1 FROM users')).rows).toHaveLength(1)
-    expect(mails.at(-1)!.subject).toContain('déjà un compte')
+  })
+  it('même boîte mail, écrite autrement : majuscules, +étiquette, points et googlemail chez Gmail', async () => {
+    const { ctx, db } = await makeCtx()
+    expect(await register(ctx, { pseudo: 'Alice', email: 'Alice.Dupont@Gmail.com', password: STRONG })).toEqual({ ok: true })
+    for (const [i, email] of ['alicedupont@gmail.com', 'alice.dupont+jeu@gmail.com', 'a.l.i.c.e.dupont@googlemail.com', 'ALICEDUPONT@GMAIL.COM'].entries()) {
+      expect(await register(ctx, { pseudo: `Autre${i}`, email, password: STRONG }), email).toEqual({ ok: false, code: 'email_taken' })
+    }
+    // hors Gmail les points comptent, mais pas les +étiquettes
+    expect(await register(ctx, { pseudo: 'Bob', email: 'b.ob@x.fr', password: STRONG })).toEqual({ ok: true })
+    expect(await register(ctx, { pseudo: 'Bob2', email: 'bob@x.fr', password: STRONG })).toEqual({ ok: true })
+    expect(await register(ctx, { pseudo: 'Bob3', email: 'bob+2@x.fr', password: STRONG })).toEqual({ ok: false, code: 'email_taken' })
+    expect((await db.query('SELECT 1 FROM users')).rows).toHaveLength(3)
   })
 })
 
@@ -155,5 +166,23 @@ describe('blocage des essais', () => {
     for (let i = 0; i < 20; i++) await login(ctx, { email: `u${i}@x.fr`, password: 'x', ip: '9.9.9.9' })
     expect(await login(ctx, { email: 'nouveau@x.fr', password: 'x', ip: '9.9.9.9' })).toMatchObject({ code: 'locked' })
     expect(await login(ctx, { email: 'nouveau@x.fr', password: 'x', ip: '8.8.8.8' })).toEqual({ ok: false, code: 'invalid' })
+  })
+})
+
+describe('clé d\'unicité des adresses', () => {
+  it('la fonction du serveur et celle de la base donnent la même clé', async () => {
+    const { db } = await makeCtx()
+    const sample = ['alice@x.fr', 'a.l+jeu@gmail.com', 'ab.c@googlemail.com', 'x+y@example.org', 'Zed@Mail.FR']
+    for (const e of sample) {
+      const lower = e.toLowerCase()
+      const sql = (await db.query<{ k: string }>('SELECT email_key_of($1) AS k', [lower])).rows[0].k
+      expect(emailKeyOf(e), e).toBe(sql)
+    }
+  })
+  it('la base calcule la clé toute seule, même pour une insertion directe, et refuse un doublon', async () => {
+    const { db } = await makeCtx()
+    await db.query("INSERT INTO users (id, pseudo, pseudo_key, email, provider, created_at) VALUES ('11111111-1111-1111-1111-111111111111','A','a','x.y+1@gmail.com','local',now())")
+    expect((await db.query<{ email_key: string }>('SELECT email_key FROM users')).rows[0].email_key).toBe('xy@gmail.com')
+    await expect(db.query("INSERT INTO users (id, pseudo, pseudo_key, email, provider, created_at) VALUES ('22222222-2222-2222-2222-222222222222','B','b','xy@googlemail.com','local',now())")).rejects.toThrow()
   })
 })
