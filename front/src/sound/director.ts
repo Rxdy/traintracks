@@ -15,7 +15,7 @@ import * as real from './engine'
 import { setBus, BUS_LEVEL, type LoopName, type SfxName } from './engine'
 
 export interface Engine {
-  play(name: SfxName): void
+  play(name: SfxName, k?: number): void
   startLoop(name: LoopName): () => void
   setBus(name: 'sfx' | 'train' | 'amb', level: number, seconds?: number): void
 }
@@ -45,6 +45,8 @@ export function createDirector(engine: Engine, now: () => number = () => perform
   let bedTimer = 0
   let bellOn = false
   let barrierClosed = false
+  let lastPose = -Infinity
+  let chain = 0
 
   const stopLoop = (n: LoopName) => { loops.get(n)?.(); loops.delete(n) }
   const startLoop = (n: LoopName) => { if (!loops.has(n)) loops.set(n, engine.startLoop(n)) }
@@ -58,7 +60,7 @@ export function createDirector(engine: Engine, now: () => number = () => perform
   }
   function bedFor(sc: Scenery): LoopName | null {
     // Règle : on n'entend que ce qu'on voit. Vent seulement là où la neige tombe ; rien sur un décor sans source.
-    if (sc.theme === 'hiver') return 'wind' // eau gelée : pas de ruisseau
+    if (sc.theme === 'hiver' || sc.theme === 'fusion') return 'wind' // eau gelée : pas de ruisseau
     if (sc.river || sc.pond.length) return 'water'
     if (sc.tiles.some((row) => row.some((t) => t.kind === 'windmill'))) return 'windmill'
     return null
@@ -67,6 +69,16 @@ export function createDirector(engine: Engine, now: () => number = () => perform
   return {
     get phase() { return phase },
     get loopsRunning() { return [...loops.keys()] },
+    // pose d'un rail : s'enchaîne sans agacer. Jamais plus d'un son toutes les 70 ms ; dans un même glissé la hauteur
+    // monte un peu (9 degrés au plus), puis repart de zéro après une pause. Seulement pendant la partie.
+    pose() {
+      if (!soundOn.value || phase !== 'idle') return
+      const t = now()
+      if (t - lastPose < 0.07) return
+      chain = t - lastPose > 0.45 ? 0 : Math.min(chain + 1, 8)
+      lastPose = t
+      engine.play('pose', (1 + chain * 0.035) * (0.97 + Math.random() * 0.06))
+    },
     // petit son d'action pendant la partie
     sfx(name: 'clear' | 'error') {
       if (!soundOn.value) return

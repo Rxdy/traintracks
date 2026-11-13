@@ -184,6 +184,7 @@ export interface LandFrame {
   birds: BirdState[]
   flakes: Particle[]
   leaves: Particle[]
+  embers: Particle[]
   events: ('owl' | 'squirrel' | 'bird' | 'car')[]
 }
 const CAR_COLORS = ['#ef4444', '#3b82f6', '#f59e0b', '#ffffff', '#22c55e', '#111827']
@@ -198,7 +199,7 @@ export function createLandSim(sc: Scenery) {
     sc.tiles.forEach((row, r) => row.forEach((t, c) => t.kind === kind && !sc.water.has(`${r},${c}`) && out.push([r, c])))
     return out
   }
-  const trees = cells('tree')
+  const trees = [...cells('tree'), ...cells('palm')]
   const pines = cells('pine')
   const grass = cells('grass')
   const anyTree = trees.length ? trees : pines
@@ -236,7 +237,7 @@ export function createLandSim(sc: Scenery) {
       s.t = t
     } })
   }
-  if ((th === 'foret' || th === 'automne') && trees.length > 1) {
+  if ((th === 'foret' || th === 'automne' || th === 'tropical') && trees.length > 1) {
     const s = mkAnimal('squirrel', centre(trees[0]))
     let idx = 0, nxt = 1, ph: 'sit' | 'hop' = 'sit', t0 = 0
     let from = centre(trees[0]), to = from
@@ -258,7 +259,7 @@ export function createLandSim(sc: Scenery) {
       s.t = t
     } })
   }
-  if ((th === 'foret' || th === 'montagne') && grass.length) {
+  if ((th === 'foret' || th === 'montagne' || th === 'canyon') && grass.length) {
     let cell = grass[0]
     const s = mkAnimal('deer', { x: cell[1] + 0.5, y: cell[0] + 0.55 })
     let tgt: Pt = { x: s.x, y: s.y }, nxt = 3
@@ -273,7 +274,7 @@ export function createLandSim(sc: Scenery) {
       s.t = t
     } })
   }
-  if ((th === 'plaine' || th === 'hiver') && grass.length) {
+  if ((th === 'plaine' || th === 'hiver' || th === 'desert' || th === 'canyon') && grass.length) {
     let cell = grass[0]
     const s = mkAnimal('rabbit', centre(cell))
     let a: Pt = { x: s.x, y: s.y }, b = a, t0 = 0, nxt = 1, mv = false
@@ -303,7 +304,7 @@ export function createLandSim(sc: Scenery) {
       s.t = t
     } })
   }
-  if (th === 'plaine' && grass.length) {
+  if ((th === 'plaine' || th === 'tropical' || th === 'bonbons' || th === 'neon') && grass.length) {
     for (let i = 0; i < 3; i++) {
       const c = grass[i % grass.length], ph = rand() * 10
       const s = mkAnimal('butterfly', centre(c))
@@ -317,13 +318,17 @@ export function createLandSim(sc: Scenery) {
   }
 
   // ---- oiseaux ----
-  const birdCount = th === 'plaine' || th === 'automne' ? 3 : th === 'montagne' ? 1 : 0
-  const birds = Array.from({ length: birdCount }, (_, i) => ({ id: i, off: i * 0.33, y0: 0.8 + i * (n / 4) + rand(), dark: th !== 'plaine', slow: th === 'montagne' }))
+  const BIRDS: Partial<Record<typeof th, number>> = { plaine: 3, automne: 3, montagne: 1, desert: 2, canyon: 1, tropical: 3, volcan: 2, enfer: 2 }
+  const birdCount = BIRDS[th] ?? 0
+  const lightBirds = th === 'plaine' || th === 'tropical' // blancs ; sombres ailleurs (vautours, chauves-souris)
+  const birds = Array.from({ length: birdCount }, (_, i) => ({ id: i, off: i * 0.33, y0: 0.8 + i * (n / 4) + rand(), dark: !lightBirds, slow: th === 'montagne' || th === 'canyon' }))
 
   // ---- météo ----
   const mkParticles = (count: number, vmin: number, vspan: number) => Array.from({ length: count }, () => ({ x: rand() * n, y: rand() * n, r: 0.02 + rand() * 0.025, spin: rand() * 6, v: vmin + rand() * vspan }))
-  const flakes = th === 'hiver' ? mkParticles(Math.round(n * n * 0.9), 0.4, 0.5) : []
-  const leaves = th === 'automne' ? mkParticles(Math.round(n * 2), 0.25, 0.25) : []
+  const flakes = th === 'hiver' || th === 'fusion' ? mkParticles(Math.round(n * n * 0.9), 0.4, 0.5) : []
+  const leaves = th === 'automne' || th === 'bonbons' ? mkParticles(Math.round(n * 2), 0.25, 0.25) : []
+  // braises qui montent (volcan, enfer, et le côté feu de la fusion)
+  const embers = th === 'volcan' || th === 'enfer' || th === 'fusion' ? mkParticles(Math.round(n * 2.5), 0.25, 0.3) : []
 
   const hasOwl = actors.some((a) => a.s.kind === 'owl')
   const birdPrev = birds.map(() => NaN)
@@ -371,6 +376,10 @@ export function createLandSim(sc: Scenery) {
       if (p.y > n + 0.1) { p.y = -0.1; p.x = rand() * n }
       if (p.x > n + 0.1) p.x = -0.1
     }
+    for (const p of embers) {
+      p.y -= p.v * dt; p.x += Math.sin(t + p.spin) * 0.05 * dt
+      if (p.y < -0.1) { p.y = n + 0.1; p.x = rand() * n }
+    }
     const bs: BirdState[] = birds.map((b, i) => {
       const k = ((t * (b.slow ? 0.07 : 0.11) + b.off) % 1.4) - 0.2
       const bx = k * (n + 1) - 0.5
@@ -386,6 +395,7 @@ export function createLandSim(sc: Scenery) {
       birds: bs,
       flakes: flakes.map((p) => ({ x: p.x + Math.sin(t * 1.5 + p.spin) * 0.08, y: p.y, r: p.r, spin: 0 })),
       leaves: leaves.map((p) => ({ x: p.x + Math.sin(t * 1.5 + p.spin) * 0.08, y: p.y, r: p.r, spin: p.spin })),
+      embers: embers.map((p) => ({ x: p.x + Math.sin(t * 2 + p.spin) * 0.05, y: p.y, r: p.r, spin: 0 })),
       events: [...events],
     }
   }

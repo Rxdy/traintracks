@@ -58,7 +58,8 @@ const crack = computed(() => {
   const q = at(poly, poly.length * 0.4)
   return `M${q.x - 0.1} ${q.y - 0.12} l0.12 0.16 l-0.08 0.12 l0.1 0.1`
 })
-const reedColor = computed(() => (frozen.value ? '#c9b98f' : '#4d8a3c'))
+// roseaux : à la couleur des touffes de l'environnement (verts en plaine, charbon au volcan, rose chez les bonbons)
+const reedColor = computed(() => (frozen.value ? '#c9b98f' : props.pal.tuft))
 </script>
 <template>
   <g>

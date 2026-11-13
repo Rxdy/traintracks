@@ -122,8 +122,10 @@ const cristal = (f: number, t: number, d: number, v: number, out: AudioNode) => 
 const phrase = (notes: [number, number, number][], out: AudioNode) => notes.forEach(([s, t, v]) => jouet(mtof(72 + s), t, v, out))
 
 // ---- sons ponctuels ----
-export type SfxName = 'clear' | 'error' | 'reveal' | 'coin' | 'barrier' | 'boat' | 'duck' | 'bird' | 'owl' | 'squirrel' | 'car'
-const SFX: Record<SfxName, { bus: BusName; play: (out: AudioNode) => void }> = {
+export type SfxName = 'pose' | 'clear' | 'error' | 'reveal' | 'coin' | 'barrier' | 'boat' | 'duck' | 'bird' | 'owl' | 'squirrel' | 'car'
+const SFX: Record<SfxName, { bus: BusName; play: (out: AudioNode, k: number) => void }> = {
+  // emboîtement : un petit clic sec, puis un « toc » grave et mat. k : hauteur (monte un peu le long d'un glissé)
+  pose: { bus: 'sfx', play: (o, k) => { nz({ d: 0.022, f: 2200 * k, q: 3, v: 0.3, out: o }); tone({ t: 0.014, f: 190 * k, f2: 115 * k, d: 0.1, v: 0.4, out: o }) } },
   clear: { bus: 'sfx', play: (o) => phrase([[7, 0, 0.5], [4, 0.08, 0.5], [0, 0.16, 0.5], [-5, 0.24, 0.5]], o) },
   error: { bus: 'sfx', play: (o) => phrase([[-3, 0, 0.7], [-8, 0.14, 0.7]], o) },
   reveal: { bus: 'sfx', play: (o) => phrase([[0, 0, 0.3], [7, 0.15, 0.3], [12, 0.3, 0.35], [16, 0.45, 0.35], [19, 0.6, 0.4], [24, 0.75, 0.4]], o) },
@@ -137,9 +139,9 @@ const SFX: Record<SfxName, { bus: BusName; play: (out: AudioNode) => void }> = {
   // moteur : surtout un ronronnement qui monte puis descend (un souffle seul se confondrait avec du vent)
   car: { bus: 'amb', play: (o) => { tone({ f: 85, f2: 150, d: 1.3, type: 'sawtooth', v: 0.11, hold: 0.5, a: 0.3, lp: 520, out: o }); tone({ f: 170, f2: 300, d: 1.3, type: 'square', v: 0.025, hold: 0.5, a: 0.3, lp: 700, out: o }); nz({ d: 1.3, type: 'lowpass', f: 300, f2: 600, v: 0.05, hold: 0.5, a: 0.3, out: o }) } },
 }
-export function play(name: SfxName): void {
+export function play(name: SfxName, k = 1): void {
   if (!ensure()) return
-  SFX[name].play(buses[SFX[name].bus])
+  SFX[name].play(buses[SFX[name].bus], k)
 }
 
 // ---- sons continus : le train, la cloche, et le fond du décor ----

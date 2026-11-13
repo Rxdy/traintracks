@@ -15,7 +15,7 @@ import { PARAMS, THEMES, type Theme } from './themes'
 export { THEMES, themeForLevel, LEVELS_PER_THEME, timing, type Theme } from './themes'
 
 
-export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'windmill'
+export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'windmill' | 'cactus' | 'palm' | 'crater' | 'flame'
 
 export interface Tile {
   kind: TileKind
@@ -297,6 +297,8 @@ export function buildScenery(puzzle: Puzzle, path: Cell[], theme?: Theme, seed =
     group.forEach(([r, c]) => (tiles[r][c] = { kind: 'field', v, dir }))
   }
 
+  const treeKind: TileKind = P.treeKind ?? 'tree'
+  const pineKind: TileKind = P.pineKind ?? 'pine'
   // --- Reste : montagnes d'arrière-plan, arbres, sapins, rochers, bonshommes de neige, herbe ---
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
@@ -306,9 +308,9 @@ export function buildScenery(puzzle: Puzzle, path: Cell[], theme?: Theme, seed =
       const roll = rand()
       const variant = Math.floor(rand() * 3)
       if ((!nearPath(r, c) || P.peaks >= 0.3) && roll < P.peaks) tiles[r][c] = { kind: 'mountain', v: variant }
-      else if (nearRock && roll < 0.8) tiles[r][c] = { kind: 'pine', v: variant }
+      else if (nearRock && roll < 0.8) tiles[r][c] = { kind: pineKind, v: variant }
       else if (nearHouse && rand() < P.snowmen) tiles[r][c] = { kind: 'snowman', v: variant }
-      else if (roll < P.peaks + P.tree) tiles[r][c] = { kind: rand() < P.pine ? 'pine' : 'tree', v: variant }
+      else if (roll < P.peaks + P.tree) tiles[r][c] = { kind: rand() < P.pine ? pineKind : treeKind, v: variant }
       else if (rand() < P.boulders) tiles[r][c] = { kind: 'boulder', v: variant }
       else tiles[r][c] = { kind: 'grass', v: variant }
     }

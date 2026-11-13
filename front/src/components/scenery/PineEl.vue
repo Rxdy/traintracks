@@ -6,7 +6,7 @@ defineProps<{ pal: Pal }>()
 <template>
   <g>
     <ellipse cx="50" cy="88" rx="22" ry="6" fill="#000" opacity="0.14" />
-    <rect x="46" y="72" width="8" height="16" fill="#6b4226" />
+    <rect x="46" y="72" width="8" height="16" :fill="pal.trunk ?? '#6b4226'" />
     <g><animateTransform attributeName="transform" type="rotate" values="-1.2 50 88;1.2 50 88;-1.2 50 88" dur="4.2s" repeatCount="indefinite" />
     <path d="M50 8 L74 42 H60 L80 70 H20 L40 42 H26 Z" :fill="pal.pine[0]" />
     <path d="M50 8 L64 42 H50 L66 70 H50 Z" :fill="pal.pine[1]" opacity="0.7" />

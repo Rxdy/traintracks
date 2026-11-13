@@ -1,14 +1,24 @@
 import { describe, it, expect } from 'vitest'
 import { levels } from '../testLevels'
-import { buildScenery, themeForLevel, THEMES } from './generate'
+import { buildScenery, themeForLevel, THEMES, LEVELS_PER_THEME } from './generate'
 
 describe('décor des niveaux gagnés', () => {
-  it('un environnement par chapitre de 10 niveaux, puis il change', () => {
+  it('un environnement par chapitre de 25 niveaux ; chaque tour les montre tous, dans un ordre différent', () => {
     expect(themeForLevel(1)).toBe('plaine')
-    expect(themeForLevel(10)).toBe('plaine')
-    expect(themeForLevel(11)).toBe('foret')
-    expect(new Set([1, 11, 21, 31, 41].map(themeForLevel)).size).toBe(THEMES.length)
-    expect(themeForLevel(51)).toBe('plaine') // la boucle recommence
+    expect(themeForLevel(25)).toBe('plaine')
+    expect(themeForLevel(26)).toBe('foret')
+    const n = THEMES.length
+    const pass = (p: number) => Array.from({ length: n }, (_, i) => themeForLevel(p * n * LEVELS_PER_THEME + i * LEVELS_PER_THEME + 1))
+    expect(pass(0)).toEqual(THEMES) // premier tour : du plus calme au plus loufoque
+    const seen: string[][] = [pass(0)]
+    for (let p = 1; p < 8; p++) {
+      const order = pass(p)
+      expect(new Set(order).size, `tour ${p}`).toBe(n) // tous les environnements, une fois chacun
+      expect(order, `tour ${p}`).not.toEqual(seen[p - 1]) // pas le même ordre que le tour d'avant
+      expect(order[0], `raccord ${p}`).not.toBe(seen[p - 1][n - 1]) // jamais deux fois de suite le même
+      seen.push(order)
+    }
+    expect(pass(3)).toEqual(pass(3)) // mêmes résultats à chaque appel : le tour est fixé par son numéro
   })
 
   it('est déterministe : le même niveau donne toujours le même tableau', () => {

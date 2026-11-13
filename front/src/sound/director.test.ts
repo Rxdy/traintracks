@@ -116,4 +116,22 @@ describe('chef d\'orchestre des sons', () => {
     expect(stopped).toEqual(expect.arrayContaining(['clack', 'chug']))
     expect(d.phase).toBe('idle')
   })
+
+  it('pose d\'un rail : jamais plus d\'un son toutes les 70 ms, pitch qui monte dans un glissé, seulement en partie', () => {
+    const pitches: number[] = []
+    const engine = { play: (n: string, k?: number) => { if (n === 'pose') pitches.push(k ?? 1) }, startLoop: () => () => {}, setBus: vi.fn() }
+    let clock = 0
+    const d = createDirector(engine as never, () => clock)
+    d.pose(); clock += 0.03; d.pose() // trop proche : ignoré
+    expect(pitches).toHaveLength(1)
+    for (let i = 0; i < 12; i++) { clock += 0.15; d.pose() }
+    expect(pitches).toHaveLength(13)
+    expect(pitches[9]).toBeGreaterThan(pitches[1] * 1.1) // monte le long du glissé…
+    expect(Math.max(...pitches)).toBeLessThan(1.5) // …mais reste sage
+    clock += 1; d.pose() // pause : repart de zéro
+    expect(pitches.at(-1)!).toBeLessThan(1.1)
+    d.reveal(buildScenery(levels[0].puzzle, levels[0].solution, 'plaine')) // victoire : plus de bruit de pose
+    clock += 1; d.pose()
+    expect(pitches).toHaveLength(14)
+  })
 })

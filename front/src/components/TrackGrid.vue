@@ -301,7 +301,9 @@ function step(r: number, c: number): void {
   if (lr === r && lc === c) return
   cancelLongPress()
   moved = true
+  const before = connections.value.size
   mode = dragStep(connections.value, mode, lr, lc, r, c, puz.value)
+  if (connections.value.size > before) sound.pose() // un rail s'emboîte
   last = [r, c]
 }
 
@@ -344,7 +346,9 @@ function onUp(): void {
       commit() // fin d'un glisser
     } else if (down) {
       // Tap sans glisser : bascule rail ⇄ vide (marquer / effacer une case).
+      const marks = rails.value.size + connections.value.size
       tapCell(rails.value, connections.value, crosses.value, puz.value, down[0], down[1])
+      if (rails.value.size + connections.value.size > marks) sound.pose()
       commit()
     }
   }

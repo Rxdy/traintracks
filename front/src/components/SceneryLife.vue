@@ -13,7 +13,7 @@ const props = defineProps<{ scenery: Scenery; trainNear: boolean }>()
 const n = computed(() => props.scenery.size)
 const pal = computed(() => PAL[props.scenery.theme])
 const sim = createLandSim(props.scenery)
-const empty: LandFrame = { cars: [], barrier: 0, lights: false, animals: [], birds: [], flakes: [], leaves: [], events: [] }
+const empty: LandFrame = { cars: [], barrier: 0, lights: false, animals: [], birds: [], flakes: [], leaves: [], embers: [], events: [] }
 const frame = shallowRef<LandFrame>(empty)
 useClock((dt, t) => {
   frame.value = sim.step(dt, t, props.trainNear)
@@ -145,6 +145,7 @@ const uc = computed(() => sim.uc ?? 0)
 
       <!-- météo -->
       <circle v-for="(f, i) in frame.flakes" :key="'f' + i" :cx="f.x" :cy="f.y" :r="f.r" fill="#fff" opacity="0.9" />
+      <circle v-for="(e, i) in frame.embers" :key="'e' + i" :cx="e.x" :cy="e.y" :r="e.r" fill="#fb923c" opacity="0.85" />
       <path v-for="(l, i) in frame.leaves" :key="'l' + i" d="M0 0 q0.03 -0.05 0.07 -0.02 q-0.03 0.05 -0.07 0.02 Z" :fill="pal.canopy[i % 3]" :transform="`translate(${l.x} ${l.y}) rotate(${l.spin})`" />
     </g>
   </svg>
