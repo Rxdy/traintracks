@@ -264,6 +264,7 @@ describe('TrackGrid : téléphone', () => {
     window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia
     try {
       const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
+      await w.vm.$nextTick()
       expect(w.find('.win-zone').classes()).toContain('win-zone--compact') // la place est prise avant la victoire
       const cell = (r: number, c: number) => w.find(`[data-r="${r}"][data-c="${c}"]`)
       await cell(sampleSolution[0][0], sampleSolution[0][1]).trigger('pointerdown')
