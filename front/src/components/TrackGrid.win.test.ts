@@ -251,3 +251,27 @@ describe('TrackGrid : récapitulatif de fin de partie', () => {
     w.unmount()
   })
 })
+
+describe('TrackGrid : rails posés à côté de la voie', () => {
+  it('une victoire ne garde que la voie : les marques d\'essai hors tracé disparaissent', async () => {
+    const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
+    const cell = (r: number, c: number) => w.find(`[data-r="${r}"][data-c="${c}"]`)
+    const onPath = new Set(sampleSolution.map(([r, c]) => `${r},${c}`))
+    // des marques d'essai sur des cases hors tracé : un tap (rail marqué) et un petit trait
+    const off: [number, number][] = []
+    for (let r = 0; r < samplePuzzle.size; r++) for (let c = 0; c < samplePuzzle.size; c++) if (!onPath.has(`${r},${c}`)) off.push([r, c])
+    expect(off.length).toBeGreaterThan(1)
+    await cell(off[0][0], off[0][1]).trigger('pointerdown')
+    window.dispatchEvent(new Event('pointerup'))
+    await w.vm.$nextTick()
+    expect(w.findAll('.cell--rail').length).toBeGreaterThan(0)
+    await cell(sampleSolution[0][0], sampleSolution[0][1]).trigger('pointerdown')
+    for (const [r, c] of sampleSolution.slice(1)) await cell(r, c).trigger('pointerenter')
+    window.dispatchEvent(new Event('pointerup'))
+    await w.vm.$nextTick()
+    await w.vm.$nextTick()
+    expect(w.find('[data-test=scenery]').exists()).toBe(true) // gagné
+    expect(w.findAll('.cell--rail')).toHaveLength(sampleSolution.length) // rien d'autre que la voie
+    w.unmount()
+  })
+})

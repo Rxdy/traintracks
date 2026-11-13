@@ -13,6 +13,7 @@ import {
   tracePath,
   lockedEdges,
   incidentEdges,
+  edgeKey,
   cellKey,
   type DragMode,
 } from '../track'
@@ -190,6 +191,16 @@ function revealScenery(): void {
     trainDone.value = true
     return
   }
+  // Une victoire ne garde que la voie : les rails ou liaisons posés à côté (marques d'essai) disparaissent, sinon
+  // ils resteraient visibles sur le décor.
+  const keep = new Set<string>(lockedEdges(puz.value))
+  for (let i = 1; i < path.length; i++) {
+    const k = edgeKey(path[i - 1][0], path[i - 1][1], path[i][0], path[i][1])
+    if (k) keep.add(k)
+  }
+  connections.value = keep
+  rails.value = new Set()
+  crosses.value = new Set()
   scenery.value = buildScenery(puz.value, path, props.theme)
   sound.reveal(scenery.value)
   sceneryRoute.value = buildRoute(path, puz.value, 1)
