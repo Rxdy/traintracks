@@ -23,22 +23,29 @@ const winterScene = () => buildScenery(levels[0].puzzle, levels[0].solution, 'hi
 beforeEach(() => { soundOn.value = true })
 
 describe('chef d\'orchestre des sons', () => {
-  it('victoire : la révélation joue seule, sans fond de décor', () => {
+  it('victoire : la révélation joue seule d\'abord ; le fond du décor n\'arrive que 1,5 s plus tard', () => {
+    vi.useFakeTimers()
     const { d, played, started } = setup()
     d.reveal(riverScene())
     expect(played).toEqual(['reveal'])
     expect(started).toEqual([])
+    vi.advanceTimersByTime(1600)
+    expect(started).toEqual(['water'])
     expect(d.phase).toBe('reveal')
+    vi.useRealTimers()
   })
 
-  it('train : rails et moteur seulement, et aucun son du décor', () => {
-    const { d, played, started, tick } = setup()
-    d.reveal(riverScene()); played.length = 0
+  it('train : il se mêle au décor au lieu de le couper (fond conservé, animaux permis)', () => {
+    vi.useFakeTimers()
+    const { d, played, started, stopped, tick } = setup()
+    d.reveal(riverScene()); vi.advanceTimersByTime(1600); played.length = 0; started.length = 0
     d.trainStart()
     expect(started.sort()).toEqual(['chug', 'clack'])
+    expect(stopped).not.toContain('water') // le ruisseau continue
     tick(100)
-    d.ambient('bird'); d.ambient('owl'); d.ambient('car')
-    expect(played).toEqual([])
+    d.ambient('bird')
+    expect(played).toEqual(['bird'])
+    vi.useRealTimers()
   })
 
   it('passage à niveau : cloche tant que la barrière est baissée, un cliquet à chaque mouvement', () => {
@@ -52,13 +59,15 @@ describe('chef d\'orchestre des sons', () => {
     expect(stopped).toContain('bell')
   })
 
-  it('après le train : le train se tait, UN seul fond continu démarre (eau)', () => {
+  it('après le train : le train se tait, il ne reste qu\'UN fond continu (eau)', () => {
+    vi.useFakeTimers()
     const { d, started, stopped } = setup()
-    d.reveal(riverScene()); d.trainStart(); started.length = 0
+    d.reveal(riverScene()); vi.advanceTimersByTime(1600); d.trainStart()
     d.trainEnd()
     expect(stopped).toEqual(expect.arrayContaining(['clack', 'chug']))
-    expect(started).toEqual(['water'])
+    expect(started.filter((n) => n === 'water')).toHaveLength(1)
     expect(d.phase).toBe('scene')
+    vi.useRealTimers()
   })
 
   it('hiver : le vent, jamais le ruisseau (l\'eau est gelée)', () => {
@@ -66,6 +75,7 @@ describe('chef d\'orchestre des sons', () => {
     d.reveal(winterScene()); d.trainStart(); started.length = 0
     d.trainEnd()
     expect(started).toEqual(['wind'])
+    expect(started).not.toContain('water')
   })
 
   it('animaux : jamais deux à moins de 3 s, et chacun respecte son délai', () => {

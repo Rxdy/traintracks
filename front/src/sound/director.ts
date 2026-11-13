@@ -3,8 +3,8 @@
 // Règles (les sons eux-mêmes sont dans engine.ts) :
 //  - une seule « scène » sonore à la fois :
 //      jeu (grille nue) : seulement les petits sons d'action ;
-//      victoire         : le son de révélation, seul ;
-//      train            : rails + moteur (+ cloche au passage à niveau), RIEN du décor ;
+//      victoire         : le son de révélation d'abord, seul ; le fond du décor n'arrive qu'après, en fondu lent ;
+//      train            : rails + moteur, JOUÉS BAS pour se fondre dans le décor qui continue (+ cloche au passage à niveau) ;
 //      décor            : un seul fond continu (eau, sinon moulin, sinon vent), plus de rares sons d'animaux ;
 //  - le décor se tait sous les sons importants (révélation, pièces) puis revient ;
 //  - un son d'animal ne joue pas plus souvent que son délai propre, et jamais deux à moins de 3 s ;
@@ -42,6 +42,7 @@ export function createDirector(engine: Engine, now: () => number = () => perform
   const last = new Map<string, number>()
   let lastAny = -Infinity
   let duckTimer = 0
+  let bedTimer = 0
   let bellOn = false
   let barrierClosed = false
 
@@ -71,16 +72,19 @@ export function createDirector(engine: Engine, now: () => number = () => perform
       if (!soundOn.value) return
       engine.play(name)
     },
-    // victoire : la révélation joue SEULE, le décor ne dit rien
+    // victoire : la révélation joue d'abord SEULE ; le fond du décor monte ensuite, doucement, sans la couvrir
     reveal(sc: Scenery) {
       scenery = sc
       phase = 'reveal'
       stopAmbience()
-      if (soundOn.value) engine.play('reveal')
+      clearTimeout(bedTimer)
+      if (!soundOn.value) return
+      engine.play('reveal')
+      bedTimer = window.setTimeout(() => { const b = bedFor(sc); if (b && phase !== 'idle') startLoop(b) }, 1500)
     },
+    // le train se mêle au décor (qui continue) : ses sons sont joués bas, voir le bus « train »
     trainStart() {
       phase = 'train'
-      stopAmbience()
       if (!soundOn.value) return
       startLoop('clack')
       startLoop('chug')
@@ -98,7 +102,7 @@ export function createDirector(engine: Engine, now: () => number = () => perform
       phase = 'scene'
       if (!soundOn.value) return
       const b = bedFor(scenery)
-      if (b) startLoop(b)
+      if (b) startLoop(b) // déjà lancé en général : sans effet
     },
     coin() {
       if (!soundOn.value) return
@@ -107,11 +111,11 @@ export function createDirector(engine: Engine, now: () => number = () => perform
     },
     // un son d'animal ou de véhicule : seulement quand le décor est seul à l'écran, et rarement
     ambient(name: Ambient) {
-      if (!soundOn.value || phase !== 'scene') return
+      if (!soundOn.value || (phase !== 'scene' && phase !== 'train')) return
       const t = now()
       if (t - lastAny < GLOBAL_GAP) return
       if (t - (last.get(name) ?? -Infinity) < COOLDOWN[name]) return
-      if (name === 'car' && bellOn) return
+      if (name === 'car' && bellOn) return // la cloche sonne : pas de moteur par-dessus
       last.set(name, t)
       lastAny = t
       engine.play(name)
@@ -119,13 +123,13 @@ export function createDirector(engine: Engine, now: () => number = () => perform
     setOn(v: boolean) {
       soundOn.value = v
       try { localStorage.setItem(KEY, v ? 'on' : 'off') } catch { /* stockage indisponible */ }
-      if (!v) { stopTrain(); stopAmbience() } else if (phase === 'scene' && scenery) { const b = bedFor(scenery); if (b) startLoop(b) }
+      if (!v) { stopTrain(); stopAmbience() } else if ((phase === 'scene' || phase === 'train') && scenery) { const b = bedFor(scenery); if (b) startLoop(b) }
     },
     // quitter le niveau, ou rejouer le train
     reset() {
       stopTrain(); stopAmbience()
       phase = 'idle'; scenery = null
-      clearTimeout(duckTimer)
+      clearTimeout(duckTimer); clearTimeout(bedTimer)
       engine.setBus('amb', BUS_LEVEL.amb, 0.05)
     },
   }

@@ -5,7 +5,7 @@ type Ctor = typeof AudioContext
 const Ctx: Ctor | undefined = typeof window === 'undefined' ? undefined : (window.AudioContext ?? (window as unknown as { webkitAudioContext?: Ctor }).webkitAudioContext)
 
 export type BusName = 'sfx' | 'train' | 'amb'
-export const BUS_LEVEL: Record<BusName, number> = { sfx: 1, train: 0.55, amb: 0.5 }
+export const BUS_LEVEL: Record<BusName, number> = { sfx: 1, train: 0.3, amb: 0.5 }
 const MASTER_LEVEL = 0.55
 
 let ctx: AudioContext | null = null
@@ -128,7 +128,7 @@ const SFX: Record<SfxName, { bus: BusName; play: (out: AudioNode) => void }> = {
   error: { bus: 'sfx', play: (o) => phrase([[-3, 0, 0.7], [-8, 0.14, 0.7]], o) },
   reveal: { bus: 'sfx', play: (o) => phrase([[0, 0, 0.3], [7, 0.15, 0.3], [12, 0.3, 0.35], [16, 0.45, 0.35], [19, 0.6, 0.4], [24, 0.75, 0.4]], o) },
   coin: { bus: 'sfx', play: (o) => { cristal(mtof(91), 0, 0.08, 0.6, o); cristal(mtof(96), 0.07, 0.35, 0.7, o) } },
-  barrier: { bus: 'train', play: (o) => { for (let i = 0; i < 14; i++) tone({ t: i * 0.1, f: 1500, d: 0.02, type: 'square', v: 0.07, out: o }) } },
+  barrier: { bus: 'sfx', play: (o) => { for (let i = 0; i < 14; i++) tone({ t: i * 0.1, f: 1500, d: 0.02, type: 'square', v: 0.05, out: o }) } },
   boat: { bus: 'amb', play: (o) => { tone({ f: 110, d: 1.3, type: 'sawtooth', v: 0.14, hold: 0.7, lp: 600, a: 0.08, out: o }); tone({ f: 165, d: 1.3, type: 'sawtooth', v: 0.1, hold: 0.7, lp: 600, a: 0.08, out: o }) } },
   duck: { bus: 'amb', play: (o) => [0, 0.18].forEach((t) => tone({ t, f: 420, f2: 250, d: 0.13, type: 'sawtooth', v: 0.12, lp: 1400, out: o })) },
   bird: { bus: 'amb', play: (o) => { for (let i = 0; i < 6; i++) { const f = rnd(2800, 3800); tone({ t: i * 0.13, f, f2: f * 1.35, d: 0.07, v: 0.1, out: o }) } } },
@@ -147,7 +147,7 @@ export type LoopName = 'clack' | 'chug' | 'bell' | 'water' | 'wind' | 'windmill'
 const LOOPS: Record<LoopName, { bus: BusName; start: (out: AudioNode) => () => void }> = {
   clack: { bus: 'train', start: (o) => looper(0.25, (dt, i) => tone({ t: dt, f: i % 2 ? 440 : 520, d: 0.06, v: 0.22, out: o })) },
   chug: { bus: 'train', start: (o) => looper(0.26, (dt, i) => { nz({ t: dt, d: 0.2, f: 1100, q: 0.6, v: i % 4 === 0 ? 0.5 : 0.32, a: 0.02, out: o }); tone({ t: dt, f: 75, f2: 55, d: 0.14, v: i % 4 === 0 ? 0.5 : 0.3, out: o }) }) },
-  bell: { bus: 'train', start: (o) => looper(0.46, (dt, i) => { const f = i % 2 ? 1000 : 1180; [[1, 1], [2.76, 0.4], [5.4, 0.15]].forEach(([m, k]) => tone({ t: dt, f: f * m, d: 0.9, v: 0.25 * k, a: 0.002, out: o })) }) },
+  bell: { bus: 'sfx', start: (o) => looper(0.46, (dt, i) => { const f = i % 2 ? 1000 : 1180; [[1, 1], [2.76, 0.4], [5.4, 0.15]].forEach(([m, k]) => tone({ t: dt, f: f * m, d: 0.9, v: 0.15 * k, a: 0.002, out: o })) }) },
   // courant lent + de petites bulles : sans elles, ce souffle grave se prend pour du vent
   water: { bus: 'amb', start: (o) => { const b = bed(o, { type: 'lowpass', f: 650, q: 0.5, v: 0.2, lfo: [[0.2, 140]] }); const s = looper(() => 0.35 + Math.random() * 0.9, (dt) => tone({ t: dt, f: rnd(380, 600), f2: rnd(800, 1300), d: 0.07, v: 0.07, out: o })); return () => { b(); s() } } },
   wind: { bus: 'amb', start: (o) => bed(o, { f: 950, q: 9, v: 0.18, lfo: [[0.18, 260], [0.09, 120]] }) },
