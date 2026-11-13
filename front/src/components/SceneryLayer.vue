@@ -13,6 +13,9 @@ import SnowmanEl from './scenery/SnowmanEl.vue'
 import GrassEl from './scenery/GrassEl.vue'
 import RiverEl from './scenery/RiverEl.vue'
 import BridgeEl from './scenery/BridgeEl.vue'
+import RoadEl from './scenery/RoadEl.vue'
+import WaterLife from './scenery/WaterLife.vue'
+import WindmillEl from './scenery/WindmillEl.vue'
 
 // Assemble le paysage d'un niveau gagné, SOUS les rails (qui restent des éléments de la grille).
 // Ordre de dessin : sol, champs, lit de la voie, eau, ponts, puis les éléments debout (arbres, maisons…).
@@ -26,7 +29,7 @@ const items = computed(() => {
   const out: { r: number; c: number; kind: string; v: number; dir?: 'h' | 'v'; d: number }[] = []
   props.scenery.tiles.forEach((row, r) =>
     row.forEach((t, c) => {
-      if (t.kind === 'rail' || props.scenery.water.has(`${r},${c}`)) return
+      if (t.kind === 'rail' || t.kind === 'road' || props.scenery.water.has(`${r},${c}`)) return
       out.push({ r, c, kind: t.kind, v: t.v, dir: t.dir, d: 500 + (r + c) * 120 })
     }),
   )
@@ -52,7 +55,10 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
     <path v-if="ballast" :d="ballast" fill="none" :stroke="pal.bedEdge" stroke-width="0.68" stroke-linejoin="round" />
     <path v-if="ballast" :d="ballast" fill="none" :stroke="pal.bed" stroke-width="0.58" stroke-linejoin="round" />
 
+    <RoadEl v-if="scenery.road" :road="scenery.road" :size="n" :pal="pal" />
+
     <RiverEl :scenery="scenery" :pal="pal" />
+    <WaterLife :scenery="scenery" />
     <BridgeEl v-for="b in bridges" :key="'b' + b.k" :r="b.rc[0]" :c="b.rc[1]" :axis="b.axis" />
 
     <g v-for="it in standing" :key="'s' + it.r + '-' + it.c" class="pop" :style="{ animationDelay: it.d + 'ms' }" :transform="`translate(${it.c} ${it.r}) scale(0.01)`">
@@ -63,6 +69,7 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
       <MountainEl v-else-if="it.kind === 'mountain'" :pal="pal" :v="it.v" />
       <BoulderEl v-else-if="it.kind === 'boulder'" :pal="pal" />
       <SnowmanEl v-else-if="it.kind === 'snowman'" />
+      <WindmillEl v-else-if="it.kind === 'windmill'" />
     </g>
   </svg>
 </template>

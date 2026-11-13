@@ -8,7 +8,7 @@ const props = withDefaults(
   defineProps<{ route: Route; size: number; speed?: number; wagons?: number }>(),
   { speed: 3.2, wagons: 3 },
 )
-const emit = defineEmits<{ (e: 'done'): void }>()
+const emit = defineEmits<{ (e: 'done'): void; (e: 'progress', s: number): void }>()
 
 const SPACING = 0.66
 const COLORS = ['#2563eb', '#f59e0b', '#16a34a', '#8b5cf6', '#ec4899']
@@ -33,6 +33,7 @@ onMounted(() => {
     const now = Date.now()
     s.value += ((now - last) / 1000) * props.speed
     last = now
+    emit('progress', s.value)
     // fini quand la locomotive atteint le bout du trajet, hors de l'écran :
     // les wagons la suivent encore sur la voie, rien ne s'écrase.
     if (s.value >= props.route.length) {

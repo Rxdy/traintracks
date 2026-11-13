@@ -67,4 +67,46 @@ describe('décor des niveaux gagnés', () => {
       )
     }
   })
+
+  it('une route ne croise la voie que par un passage à niveau droit, jamais sur l\'eau ni un rocher', () => {
+    let roads = 0
+    let crossings = 0
+    for (const lv of levels) {
+      for (const th of THEMES) {
+        const s = buildScenery(lv.puzzle, lv.solution, th)
+        if (!s.road) continue
+        roads++
+        const onPath = new Set(lv.solution.map(([r, c]) => `${r},${c}`))
+        let cross = 0
+        for (let i = 0; i < s.size; i++) {
+          const [r, c] = s.road.axis === 'v' ? [i, s.road.line] : [s.road.line, i]
+          const k = `${r},${c}`
+          expect(s.water.has(k), `niveau ${lv.id} ${th}`).toBe(false)
+          expect(s.bridges.has(k)).toBe(false)
+          expect((lv.puzzle.rocks ?? []).some((x) => x.row === r && x.col === c)).toBe(false)
+          if (onPath.has(k)) {
+            cross++
+            const j = lv.solution.findIndex(([a, b]) => a === r && b === c)
+            const [pr, pc] = lv.solution[j - 1]
+            const [nr, nc] = lv.solution[j + 1]
+            // route verticale : voie horizontale (même ligne avant et après), et inversement
+            expect(s.road.axis === 'v' ? pr === nr : pc === nc).toBe(true)
+            expect(s.road.crossing).toEqual([r, c])
+          } else expect(s.tiles[r][c].kind).toBe('road')
+        }
+        expect(cross).toBeLessThanOrEqual(1)
+        expect(s.road.crossing === null).toBe(cross === 0)
+        crossings += cross
+      }
+    }
+    expect(roads).toBeGreaterThan(50)
+    expect(crossings).toBeGreaterThan(20)
+  })
+
+  it('le moulin à vent n\'apparaît qu\'en plaine', () => {
+    const lv = levels[5]
+    const kinds = (th: (typeof THEMES)[number]) => buildScenery(lv.puzzle, lv.solution, th).tiles.flat().map((t) => t.kind)
+    expect(kinds('plaine')).toContain('windmill')
+    expect(kinds('foret')).not.toContain('windmill')
+  })
 })

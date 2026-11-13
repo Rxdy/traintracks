@@ -15,7 +15,7 @@ import { PARAMS, THEMES, type Theme } from './themes'
 export { THEMES, themeForLevel, LEVELS_PER_THEME, timing, type Theme } from './themes'
 
 
-export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman'
+export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'windmill'
 
 export interface Tile {
   kind: TileKind
@@ -26,7 +26,16 @@ export interface Pt {
   x: number
   y: number
 }
+// Route droite d'un bord à l'autre : `axis` 'v' = de haut en bas dans la colonne `line` ; 'h' = de gauche à droite
+// dans la ligne `line`. Si elle croise la voie, c'est par un passage à niveau (case `crossing`).
+export interface Road {
+  axis: 'h' | 'v'
+  line: number
+  crossing: [number, number] | null
+}
 export interface Scenery {
+  seed: number
+  road: Road | null
   size: number
   theme: Theme
   tiles: Tile[][]
@@ -50,7 +59,7 @@ function hash(s: string): number {
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
   return h >>> 0
 }
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let a = seed
   return () => {
     a = (a + 0x6d2b79f5) | 0
@@ -196,6 +205,40 @@ export function buildScenery(puzzle: Puzzle, path: Cell[], theme?: Theme, seed =
   const tiles: Tile[][] = Array.from({ length: n }, () => Array.from({ length: n }, () => ({ kind: 'grass' as TileKind, v: 0 })))
   path.forEach(([r, c]) => (tiles[r][c] = { kind: 'rail', v: 0 }))
   const taken = new Set<string>(water)
+
+  // --- Route : ligne droite sans rivière ni rocher ; croise la voie au plus une fois, à angle droit, là où elle
+  // est droite (passage à niveau). Tirée d'une graine à part : ajouter la route ne change pas le reste du hasard.
+  const rr = rng(seed ^ 0x51ed270b)
+  let road: Road | null = null
+  if (rr() < P.road) {
+    const cands: Road[] = []
+    for (const axis of ['v', 'h'] as const) {
+      for (let line = 0; line < n; line++) {
+        const crossings: Cell[] = []
+        let ok = true
+        for (let i = 0; i < n && ok; i++) {
+          const [r, c] = axis === 'v' ? [i, line] : [line, i]
+          const k = key(r, c)
+          if (onPath.has(k)) {
+            if (straight.get(k) === (axis === 'v' ? 'h' : 'v') && !bridges.has(k)) crossings.push([r, c])
+            else ok = false
+          } else if (!isFree(r, c) || water.has(k)) ok = false
+        }
+        if (ok && crossings.length <= 1) cands.push({ axis, line, crossing: crossings[0] ?? null })
+      }
+    }
+    const crossing = cands.filter((x) => x.crossing)
+    const pool = crossing.length ? crossing : cands.filter(() => rr() < 0.35)
+    if (pool.length) road = pool[Math.floor(rr() * pool.length)]
+  }
+  if (road) {
+    for (let i = 0; i < n; i++) {
+      const [r, c] = road.axis === 'v' ? [i, road.line] : [road.line, i]
+      if (onPath.has(key(r, c))) continue
+      tiles[r][c] = { kind: 'road', v: 0, dir: road.axis }
+      taken.add(key(r, c))
+    }
+  }
   const free = (r: number, c: number) => isFree(r, c) && !taken.has(key(r, c))
 
   // --- Montagnes : les rochers ---
@@ -219,6 +262,17 @@ export function buildScenery(puzzle: Puzzle, path: Cell[], theme?: Theme, seed =
     tiles[r][c] = { kind: 'house', v: Math.floor(rand() * 4) }
     taken.add(key(r, c))
     houses.push([r, c])
+  }
+
+  // --- Moulin à vent (plaine) : sur une case libre, loin de la voie si possible ---
+  for (let m = 0; m < P.windmills; m++) {
+    const cands = freeCells.filter(([r, c]) => free(r, c))
+    const far = cands.filter(([r, c]) => !nearPath(r, c))
+    const pool = far.length ? far : cands
+    if (!pool.length) break
+    const [r, c] = pool[Math.floor(rand() * pool.length)]
+    tiles[r][c] = { kind: 'windmill', v: 0 }
+    taken.add(key(r, c))
   }
 
   // --- Champs : groupes de 2 à 3 cases voisines, même sens, même culture ---
@@ -260,7 +314,7 @@ export function buildScenery(puzzle: Puzzle, path: Cell[], theme?: Theme, seed =
     }
   }
 
-  return { size: n, theme: th, tiles, water, river, pond, bridges }
+  return { seed, road, size: n, theme: th, tiles, water, river, pond, bridges }
 }
 
 function pathLen(prev: Map<string, { from: string }>, from: string, start: string): number {

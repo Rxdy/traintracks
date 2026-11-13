@@ -13,5 +13,11 @@ defineProps<{ pal: Pal; v: number }>()
     <rect x="66" y="54" width="12" height="12" fill="#bfe3fa" stroke="#a8977a" stroke-width="2" />
     <rect x="66" y="22" width="8" height="14" fill="#a8977a" />
     <path v-if="pal.snow" d="M66 22 h8 v-3 h-8 Z" fill="#fff" />
+    <circle v-for="i in 3" :key="i" cx="70" cy="20" r="3" :fill="pal.snow ? '#fff' : '#f5f5f5'" opacity="0">
+      <animate attributeName="cy" from="20" to="-14" dur="3s" :begin="`${-i}s`" repeatCount="indefinite" />
+      <animate attributeName="cx" from="70" to="82" dur="3s" :begin="`${-i}s`" repeatCount="indefinite" />
+      <animate attributeName="r" from="3" to="9" dur="3s" :begin="`${-i}s`" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="0.75;0" dur="3s" :begin="`${-i}s`" repeatCount="indefinite" />
+    </circle>
   </g>
 </template>

@@ -479,12 +479,14 @@ def decor():
     p.task("t", "Choisit l'environnement du chapitre (10 niveaux)", "A", 1)
     p.task("r", "Rivière d'un bord à l'autre, pont sur une voie droite à angle droit", "A", 2)
     p.task("h", "Hameau le long de la voie, champs groupés, montagnes sur les rochers", "A", 3)
-    p.task("f", "Fond la grille nue, dévoile le paysage, efface les compteurs", "A", 4)
-    p.task("c", "Rails aux couleurs de l'environnement", "A", 5)
-    p.task("w", "Attend la fin du fondu, puis lance le train (13)", "A", 6)
-    p.task("o", "Regarde, réduit ou rouvre le résultat, relance le train", "J", 7)
-    p.end("e", "Résultat et Niveau suivant (sous les aides sur téléphone)", "A", 8)
-    p.chain("s", "t", "r", "h", "f", "c", "w", "o", "e")
+    p.task("d", "Route droite, passage à niveau si elle croise la voie", "A", 4)
+    p.task("f", "Fond la grille nue, dévoile le paysage, efface les compteurs", "A", 5)
+    p.task("c", "Rails aux couleurs de l'environnement", "A", 6)
+    p.task("v", "Fait vivre le décor : eau, bateaux, voitures, animaux, météo", "A", 7)
+    p.task("w", "Lance le train (13) après le fondu : barrières baissées", "A", 8)
+    p.task("o", "Regarde, réduit ou rouvre le résultat, relance le train", "J", 9)
+    p.end("e", "Résultat et Niveau suivant (sous les aides sur téléphone)", "A", 10)
+    p.chain("s", "t", "r", "h", "d", "f", "c", "v", "w", "o", "e")
     return p
 
 

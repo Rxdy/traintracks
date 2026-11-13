@@ -18,10 +18,11 @@ import {
 } from '../track'
 import { lineStatuses } from '../lines'
 import { buildRoute, leadCells, type Route } from '../trainRoute'
-import { buildScenery, PAL, timing, type Scenery, type Theme } from '../scenery'
+import { buildScenery, distanceNear, PAL, timing, type Scenery, type Theme } from '../scenery'
 import { useCompact } from '../compact'
 import TrainRun from './TrainRun.vue'
 import SceneryLayer from './SceneryLayer.vue'
+import SceneryLife from './SceneryLife.vue'
 import TrackCell from './TrackCell.vue'
 import ClueNumber from './ClueNumber.vue'
 
@@ -114,6 +115,16 @@ const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
 const trainDone = ref(false)
+// Position de la locomotive sur son trajet : les barrières du passage à niveau se baissent quand elle approche.
+const trainS = ref(-1)
+const TRAIN_LENGTH = 2.4
+const trainNear = computed(() => {
+  const x = scenery.value?.road?.crossing
+  const rt = route.value
+  if (!x || !rt || trainDone.value) return false
+  const cross = distanceNear(rt, x[1] + 0.5, x[0] + 0.5)
+  return trainS.value > cross - 3.2 && trainS.value < cross + TRAIN_LENGTH + 0.6
+})
 // Le résultat peut être réduit pour regarder le décor ; le train se relance à la demande.
 const panelOpen = ref(true)
 // Téléphone : pas de fenêtre posée sur la grille ; le résultat s'affiche sous la grille, dans une zone dont la
@@ -195,6 +206,7 @@ function runTrain(): void {
   // La voie est prolongée jusqu'au bord de l'ÉCRAN, des deux côtés.
   const rect = boardEl.value?.getBoundingClientRect() ?? { left: 0, top: 0, width: 0 }
   const vp = { width: window.innerWidth, height: window.innerHeight }
+  trainS.value = -1
   route.value = buildRoute(path, puz.value, {
     entry: leadCells(puz.value.entry.dir, rect, puz.value.size, vp),
     exit: leadCells(puz.value.exit.dir, rect, puz.value.size, vp),
@@ -507,7 +519,9 @@ onMounted(() => {
 
       <div class="corner"></div>
 
-      <TrainRun v-if="route" :route="route" :size="puzzle.size" @done="trainDone = true" />
+      <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" />
+
+      <TrainRun v-if="route" :route="route" :size="puzzle.size" @progress="trainS = $event" @done="trainDone = true" />
 
       <!-- Victoire : le train passe d'abord ; une fois arrivé, le résultat s'affiche AU CENTRE de la grille
            (temps, gain, « Suivant »), ce qui laisse le bas de l'écran libre pour les aides. -->
