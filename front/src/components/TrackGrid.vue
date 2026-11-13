@@ -115,6 +115,11 @@ let trainTimer = 0
 const trainDone = ref(false)
 // Le résultat peut être réduit pour regarder le décor ; le train se relance à la demande.
 const panelOpen = ref(true)
+// Téléphone : pas de fenêtre posée sur la grille ; le résultat (temps, gain, « Suivant ») s'affiche sous la grille,
+// entre elle et les aides, et la grille reste entièrement visible.
+const compact = ref(false)
+let mq: MediaQueryList | null = null
+const onMq = () => (compact.value = !!mq?.matches)
 const boardEl = ref<HTMLElement | null>(null)
 let startedAt = 0
 let clock = 0
@@ -380,6 +385,7 @@ onMounted(() => {
   window.addEventListener('keydown', onKey)
 })
 onUnmounted(() => {
+  mq?.removeEventListener?.('change', onMq)
   clearTimeout(trainTimer)
   clearInterval(clock)
   window.removeEventListener('pointerup', onUp)
@@ -422,6 +428,11 @@ function snapshotForAid(): { edges: string[]; crosses: string[]; marks: number }
 }
 defineExpose({ reveal, snapshotForAid })
 onMounted(() => {
+  mq = window.matchMedia?.('(max-width: 640px)') ?? null
+  if (mq) {
+    onMq()
+    mq.addEventListener?.('change', onMq)
+  }
   if (props.initial && (props.initial.givens.length || props.initial.crosses.length)) reveal(props.initial.givens, props.initial.crosses)
 })
 </script>
@@ -445,7 +456,7 @@ onMounted(() => {
         <button type="button" class="btn btn--ghost tool" data-test="replay" @click="replayTrain" :disabled="!trainDone" aria-label="Relancer le train" title="Relancer le train">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z" /></svg>
         </button>
-        <button type="button" class="btn btn--ghost tool" :class="{ on: panelOpen }" data-test="reopen" @click="panelOpen = !panelOpen" :disabled="!trainDone" aria-label="Résultat" title="Résultat">
+        <button v-if="!compact" type="button" class="btn btn--ghost tool" :class="{ on: panelOpen }" data-test="reopen" @click="panelOpen = !panelOpen" :disabled="!trainDone" aria-label="Résultat" title="Résultat">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6" /></svg>
         </button>
       </template>
@@ -498,7 +509,7 @@ onMounted(() => {
 
       <!-- Victoire : le train passe d'abord ; une fois arrivé, le résultat s'affiche AU CENTRE de la grille
            (temps, gain, « Suivant »), ce qui laisse le bas de l'écran libre pour les aides. -->
-      <div v-if="solved && trainDone && panelOpen" class="finish" data-test="finish">
+      <div v-if="solved && trainDone && panelOpen && !compact" class="finish" data-test="finish">
         <button type="button" class="fold btn btn--ghost tool" data-test="fold" @click="panelOpen = false" aria-label="Réduire" title="Réduire pour voir le décor">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
         </button>
@@ -510,6 +521,11 @@ onMounted(() => {
 
     <!-- Zone réservée dès le début : la victoire s'y affiche sans pousser la page. -->
     <div class="win-zone" :class="{ on: solved }">
+      <div v-if="compact && solved && trainDone" class="finish finish--inline" data-test="finish">
+        <p class="win" data-test="win">Niveau terminé</p>
+        <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? elapsed) }}</p>
+        <slot name="win" :ready="true" />
+      </div>
       <p v-if="verifying" class="wait" data-test="verifying">Vérification par le serveur…</p>
       <template v-else-if="verifyError">
         <p class="wait err" data-test="verify-error">{{ verifyError }}</p>
@@ -597,6 +613,15 @@ onMounted(() => {
   width: 2rem;
   height: 2rem;
   margin: -0.4rem -0.7rem 0 0;
+}
+.finish--inline {
+  position: static;
+  transform: none;
+  z-index: auto;
+  max-width: 100%;
+  width: min(92vw, 420px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  animation: win-in 0.4s ease both;
 }
 .finish .time span {
   font-size: 0.85rem;
