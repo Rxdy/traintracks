@@ -107,7 +107,7 @@ describe('TrackGrid — effacer au tap', () => {
 
 describe('TrackGrid — annuler / rétablir', () => {
   function toolbarButton(wrapper: Wrapper, label: string) {
-    return wrapper.findAll('button').find((b) => b.text().includes(label))!
+    return wrapper.findAll('button').find((b) => b.attributes('aria-label') === label)!
   }
 
   it('annule le dernier tracé, puis le rétablit', async () => {

@@ -235,22 +235,22 @@ describe('TrackGrid : réduire le résultat pour voir le décor', () => {
     w.findComponent(TrainRun).vm.$emit('done')
     await w.vm.$nextTick()
     expect(w.find('[data-test=finish]').exists()).toBe(true)
-    expect(w.find('[data-test=dock]').exists()).toBe(false)
+    expect(w.find('[data-test=undo]').exists()).toBe(false) // fin de partie : les outils de tracé laissent la place
+    expect(w.find('[data-test=replay]').exists()).toBe(true)
 
     await w.find('[data-test=fold]').trigger('click') // réduit : le décor est libre
     expect(w.find('[data-test=finish]').exists()).toBe(false)
     expect(w.find('[data-test=scenery]').exists()).toBe(true)
-    expect(w.find('[data-test=dock]').exists()).toBe(true)
 
     await w.find('[data-test=replay]').trigger('click') // le train repart
     await w.vm.$nextTick()
     await w.vm.$nextTick()
     expect(w.find('[data-test=train]').exists()).toBe(true)
-    expect(w.find('[data-test=dock]').exists()).toBe(false) // pas de bouton pendant que le train roule
+    expect(w.find('[data-test=replay]').attributes('disabled')).toBeDefined() // pas de relance pendant que le train roule
     w.findComponent(TrainRun).vm.$emit('done')
     await w.vm.$nextTick()
     expect(w.find('[data-test=finish]').exists()).toBe(false) // reste réduit après le passage du train
-    expect(w.find('[data-test=dock]').exists()).toBe(true)
+    expect(w.find('[data-test=replay]').attributes('disabled')).toBeUndefined()
 
     await w.find('[data-test=reopen]').trigger('click')
     expect(w.find('[data-test=finish]').exists()).toBe(true)

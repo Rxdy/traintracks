@@ -429,13 +429,26 @@ onMounted(() => {
 <template>
   <div class="track">
     <div class="toolbar">
-      <button type="button" class="btn btn--ghost btn--small" data-test="undo" @click="undo" :disabled="!canUndo" title="Annuler (Ctrl+Z)">
-        ↶ Annuler
-      </button>
-      <button type="button" class="btn btn--ghost btn--small" @click="redo" :disabled="!canRedo" title="Rétablir (Ctrl+Maj+Z)">
-        ↷ Rétablir
-      </button>
-      <button type="button" class="btn btn--ghost btn--small clear" @click="clearAll">Effacer tout</button>
+      <template v-if="!solved">
+        <button type="button" class="btn btn--ghost tool" data-test="undo" @click="undo" :disabled="!canUndo" aria-label="Annuler" title="Annuler (Ctrl+Z)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" /></svg>
+        </button>
+        <button type="button" class="btn btn--ghost tool" data-test="redo" @click="redo" :disabled="!canRedo" aria-label="Rétablir" title="Rétablir (Ctrl+Maj+Z)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3" /></svg>
+        </button>
+        <button type="button" class="btn btn--ghost tool clear" @click="clearAll" aria-label="Effacer tout" title="Effacer tout">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
+        </button>
+      </template>
+      <!-- fin de partie : revoir le train, rouvrir le résultat -->
+      <template v-else>
+        <button type="button" class="btn btn--ghost tool" data-test="replay" @click="replayTrain" :disabled="!trainDone" aria-label="Relancer le train" title="Relancer le train">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z" /></svg>
+        </button>
+        <button type="button" class="btn btn--ghost tool" :class="{ on: panelOpen }" data-test="reopen" @click="panelOpen = !panelOpen" :disabled="!trainDone" aria-label="Résultat" title="Résultat">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6" /></svg>
+        </button>
+      </template>
       <span class="timer" data-test="timer">⏱ {{ fmt(elapsed) }}</span>
     </div>
 
@@ -486,14 +499,12 @@ onMounted(() => {
       <!-- Victoire : le train passe d'abord ; une fois arrivé, le résultat s'affiche AU CENTRE de la grille
            (temps, gain, « Suivant »), ce qui laisse le bas de l'écran libre pour les aides. -->
       <div v-if="solved && trainDone && panelOpen" class="finish" data-test="finish">
-        <button type="button" class="fold btn btn--ghost btn--small" data-test="fold" @click="panelOpen = false">Voir le décor</button>
+        <button type="button" class="fold btn btn--ghost tool" data-test="fold" @click="panelOpen = false" aria-label="Réduire" title="Réduire pour voir le décor">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
         <p class="win" data-test="win">Niveau terminé</p>
         <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? elapsed) }}</p>
         <slot name="win" :ready="true" />
-      </div>
-      <div v-else-if="solved && trainDone" class="dock" data-test="dock">
-        <button type="button" class="btn btn--small" data-test="replay" @click="replayTrain">Relancer le train</button>
-        <button type="button" class="btn btn--small" data-test="reopen" @click="panelOpen = true">Résultat</button>
       </div>
     </div>
 
@@ -523,6 +534,23 @@ onMounted(() => {
   justify-content: center;
 }
 
+.tool {
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+}
+.tool svg {
+  width: 1.3rem;
+  height: 1.3rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tool.on {
+  background: #dbeafe;
+}
 .toolbar .clear:hover:not(:disabled) {
   color: #dc2626;
 }
@@ -566,18 +594,9 @@ onMounted(() => {
 }
 .fold {
   align-self: flex-end;
-  margin: -0.3rem -0.6rem 0 0;
-}
-.dock {
-  position: absolute;
-  left: 50%;
-  top: 100%;
-  margin-top: 0.6rem;
-  transform: translateX(-50%);
-  z-index: 10;
-  display: flex;
-  gap: 0.5rem;
-  animation: win-in 0.4s ease both;
+  width: 2rem;
+  height: 2rem;
+  margin: -0.4rem -0.7rem 0 0;
 }
 .finish .time span {
   font-size: 0.85rem;

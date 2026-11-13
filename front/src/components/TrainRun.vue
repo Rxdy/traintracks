@@ -3,11 +3,10 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { pointAt, type Route } from '../trainRoute'
 
 // Locomotive + wagons qui roulent le long du trajet, entrée → sortie.
-// `speed` : cases/s quand le train est sur la grille (on le regarde) ;
-// `fastSpeed` : hors de la grille, pour ne pas attendre qu'il arrive / parte.
+// `speed` : cases/s, CONSTANTE de l'apparition à la disparition (pas d'accélération hors de la grille).
 const props = withDefaults(
-  defineProps<{ route: Route; size: number; speed?: number; fastSpeed?: number; wagons?: number }>(),
-  { speed: 2.2, fastSpeed: 9, wagons: 3 },
+  defineProps<{ route: Route; size: number; speed?: number; wagons?: number }>(),
+  { speed: 3.2, wagons: 3 },
 )
 const emit = defineEmits<{ (e: 'done'): void }>()
 
@@ -32,9 +31,7 @@ onMounted(() => {
   last = Date.now()
   timer = window.setInterval(() => {
     const now = Date.now()
-    // lent tant qu'une partie du train est sur la grille, rapide sinon
-    const onGrid = s.value >= props.route.gridStart && s.value - total.value <= props.route.gridEnd
-    s.value += ((now - last) / 1000) * (onGrid ? props.speed : props.fastSpeed)
+    s.value += ((now - last) / 1000) * props.speed
     last = now
     // fini quand la locomotive atteint le bout du trajet, hors de l'écran :
     // les wagons la suivent encore sur la voie, rien ne s'écrase.
