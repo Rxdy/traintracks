@@ -275,6 +275,11 @@ describe('TrackGrid : téléphone', () => {
       expect(w.find('.win-zone [data-test=finish]').exists()).toBe(true) // sous la grille
       expect(w.find('[data-test=reopen]').exists()).toBe(false) // inutile : le résultat reste affiché
       expect(w.find('[data-test=replay]').exists()).toBe(true)
+      await w.find('[data-test=replay]').trigger('click') // le train repart : le récapitulatif reste
+      await w.vm.$nextTick()
+      await w.vm.$nextTick()
+      expect(w.find('[data-test=train]').exists()).toBe(true)
+      expect(w.find('.win-zone [data-test=finish]').exists()).toBe(true)
       w.unmount()
     } finally {
       window.matchMedia = real

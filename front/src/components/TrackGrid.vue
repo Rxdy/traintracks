@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { range, railVariant, isLocked, isRock, type Given, type Puzzle } from '../puzzle'
 import type { CellMark } from '../cell'
 import {
@@ -118,6 +118,9 @@ const panelOpen = ref(true)
 // Téléphone : pas de fenêtre posée sur la grille ; le résultat (temps, gain, « Suivant ») s'affiche sous la grille,
 // entre elle et les aides, et la grille reste entièrement visible.
 const compact = ref(false)
+// Vrai dès que le train est passé une première fois : sur téléphone le récapitulatif reste affiché quand on le relance.
+const finished = ref(false)
+watch(trainDone, (v) => v && (finished.value = true))
 let mq: MediaQueryList | null = null
 const onMq = () => (compact.value = !!mq?.matches)
 const boardEl = ref<HTMLElement | null>(null)
@@ -521,9 +524,11 @@ onMounted(() => {
 
     <!-- Zone réservée dès le début : la victoire s'y affiche sans pousser la page. -->
     <div class="win-zone" :class="{ on: solved }">
-      <div v-if="compact && solved && trainDone" class="finish finish--inline" data-test="finish">
-        <p class="win" data-test="win">Niveau terminé</p>
-        <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? elapsed) }}</p>
+      <div v-if="compact && solved && finished" class="finish finish--inline" data-test="finish">
+        <div class="head">
+          <p class="win" data-test="win">Niveau terminé</p>
+          <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? elapsed) }}</p>
+        </div>
         <slot name="win" :ready="true" />
       </div>
       <p v-if="verifying" class="wait" data-test="verifying">Vérification par le serveur…</p>
@@ -620,8 +625,42 @@ onMounted(() => {
   z-index: auto;
   max-width: 100%;
   width: min(92vw, 420px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  gap: 0.2rem;
+  padding: 0.5rem 0.8rem 0.6rem;
+  border-radius: 16px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
   animation: win-in 0.4s ease both;
+}
+.finish--inline .head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  width: 100%;
+}
+.finish--inline .win {
+  font-size: 0.95rem;
+}
+.finish--inline .time {
+  font-size: 1rem;
+}
+.finish--inline :deep(.receipt) {
+  width: 100%;
+  padding-top: 0;
+}
+.finish--inline :deep(.receipt .row) {
+  font-size: 0.8rem;
+}
+.finish--inline :deep(.receipt .total) {
+  font-size: 0.95rem;
+}
+.finish--inline :deep(.receipt .rule) {
+  margin: 0.15rem 0;
+}
+.finish--inline :deep(.btn--big) {
+  font-size: 1rem;
+  padding: 0.45em 1.8em;
+  margin-top: 0.15rem;
 }
 .finish .time span {
   font-size: 0.85rem;
