@@ -126,8 +126,8 @@ const trainNear = computed(() => {
   const x = scenery.value?.road?.crossing
   const rt = route.value
   if (!x || !rt || trainDone.value) return false
-  const m = scenery.value?.margin ?? 0
-  const cross = distanceNear(rt, x[1] - m + 0.5, x[0] - m + 0.5) // le passage à niveau est donné dans le repère du grand décor
+  const mg = scenery.value?.margin ?? { x: 0, y: 0 }
+  const cross = distanceNear(rt, x[1] - mg.x + 0.5, x[0] - mg.y + 0.5) // le passage à niveau est donné dans le repère du grand décor
   return trainS.value > cross - 3.2 && trainS.value < cross + TRAIN_LENGTH + 0.6
 })
 watch(trainNear, (v) => sound.crossing(v))
@@ -186,6 +186,17 @@ async function checkWin(): Promise<void> {
 }
 // La voie prend l'allure de l'environnement : traverses grises sous la neige, acier plus sombre en forêt…
 const railStyle = computed(() => (scenery.value ? { '--won-rail': PAL[scenery.value.theme].rail.rail, '--won-tie': PAL[scenery.value.theme].rail.tie } : {}))
+// Marges de paysage autour de la grille : en hauteur, de quoi faire ~10 cases ; en largeur, de quoi couvrir tout l'écran
+// (sinon le train roulerait dans du blanc de part et d'autre du décor).
+function sceneryMargins(): { x: number; y: number } {
+  const n = puz.value.size
+  const y = sceneryMargin(n)
+  const rect = boardEl.value?.getBoundingClientRect()
+  if (!rect || !(rect.width > 0)) return { x: y, y }
+  const cell = rect.width / (n + 1) // taille d'une case à l'écran avant le rétrécissement (px)
+  const visible = window.innerWidth / (cell * (n / (n + 2 * y))) // cases de décor qu'il faut pour couvrir la largeur
+  return { x: Math.min(28, Math.max(y, Math.ceil((visible - n) / 2) + 1)), y }
+}
 function revealScenery(): void {
   const path = tracePath(connections.value, puz.value)
   if (!path) {
@@ -202,10 +213,11 @@ function revealScenery(): void {
   connections.value = keep
   rails.value = new Set()
   crosses.value = new Set()
-  const m = sceneryMargin(puz.value.size)
-  scenery.value = buildScenery(puz.value, path, props.theme, seedOf(puz.value), m)
+  const mg = sceneryMargins()
+  scenery.value = buildScenery(puz.value, path, props.theme, seedOf(puz.value), mg)
   sound.reveal(scenery.value)
-  sceneryRoute.value = buildRoute(path, puz.value, m)
+  const horiz = (d: string) => d === 'left' || d === 'right'
+  sceneryRoute.value = buildRoute(path, puz.value, { entry: horiz(puz.value.entry.dir) ? mg.x : mg.y, exit: horiz(puz.value.exit.dir) ? mg.x : mg.y })
   if (timing.revealMs > 0) trainTimer = window.setTimeout(runTrain, timing.revealMs)
   else runTrain()
 }
@@ -521,7 +533,7 @@ onMounted(() => {
       ref="boardEl"
       class="board"
       :class="{ picking, 'board--won': scenery }"
-      :style="{ '--size': puzzle.size, '--margin': scenery?.margin ?? 0, '--k': scenery ? puzzle.size / scenery.size : 1, ...railStyle }"
+      :style="{ '--size': puzzle.size, '--k': scenery ? puzzle.size / scenery.rows : 1, ...railStyle }"
       role="grid"
       aria-label="Grille de jeu"
       @pointermove="onMove"

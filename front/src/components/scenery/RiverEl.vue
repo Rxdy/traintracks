@@ -44,7 +44,7 @@ const bank = computed(() => {
     const x = b.x - Math.sin(ang) * 0.36 * side
     const y = b.y + Math.cos(ang) * 0.36 * side
     const reed = rand() < 0.5
-    if (x < 0 || y < 0 || x > props.scenery.size || y > props.scenery.size) continue
+    if (x < 0 || y < 0 || x > props.scenery.cols || y > props.scenery.rows) continue
     if (bridges.some(([br, bc]) => x > bc - 0.05 && x < bc + 1.05 && y > br - 0.05 && y < br + 1.05)) continue
     out.push({ x, y, reed })
   }

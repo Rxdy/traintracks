@@ -125,7 +125,7 @@ describe('décor des niveaux gagnés', () => {
       const m = sceneryMargin(lv.puzzle.size)
       const s = buildScenery(lv.puzzle, lv.solution, themeForLevel(lv.id), seedOf(lv.puzzle), m)
       expect(s.size).toBe(lv.puzzle.size + 2 * m)
-      expect(s.margin).toBe(m)
+      expect(s.margin).toEqual({ x: m, y: m })
       for (const [r, c] of lv.solution) expect(s.tiles[r + m][c + m].kind, `niveau ${lv.id}`).toBe('rail')
       const rails = s.tiles.flat().filter((t) => t.kind === 'rail').length
       expect(rails, `niveau ${lv.id}`).toBe(lv.solution.length + 2 * m)
@@ -140,5 +140,28 @@ describe('décor des niveaux gagnés', () => {
     }
     expect(sceneryMargin(4)).toBe(3)
     expect(sceneryMargin(12)).toBe(0)
+  })
+
+  it('décor plus LARGE que haut : la voie rejoint chaque bord, sur des écrans larges il n\'y a pas de blanc à traverser', () => {
+    for (const lv of levels.slice(0, 30)) {
+      const mg = { x: 9, y: sceneryMargin(lv.puzzle.size) }
+      const s = buildScenery(lv.puzzle, lv.solution, themeForLevel(lv.id), seedOf(lv.puzzle), mg)
+      expect(s.rows, `niveau ${lv.id}`).toBe(lv.puzzle.size + 2 * mg.y)
+      expect(s.cols, `niveau ${lv.id}`).toBe(lv.puzzle.size + 2 * mg.x)
+      expect(s.tiles).toHaveLength(s.rows)
+      expect(s.tiles.every((row) => row.length === s.cols)).toBe(true)
+      const horiz = (d: string) => d === 'left' || d === 'right'
+      const lead = (d: string) => (horiz(d) ? mg.x : mg.y)
+      const rails = s.tiles.flat().filter((t) => t.kind === 'rail').length
+      expect(rails, `niveau ${lv.id}`).toBe(lv.solution.length + lead(lv.puzzle.entry.dir) + lead(lv.puzzle.exit.dir))
+      for (const [r, c] of lv.solution) expect(s.tiles[r + mg.y][c + mg.x].kind).toBe('rail')
+      // les prolongements touchent bien le bord du grand décor
+      for (const e of s.ext) {
+        const end = e.find((p) => p.x < 1e-9 || p.y < 1e-9 || Math.abs(p.x - s.cols) < 1e-9 || Math.abs(p.y - s.rows) < 1e-9)
+        expect(end, `niveau ${lv.id}`).toBeTruthy()
+      }
+      // route et rivière tiennent dans la grande grille
+      if (s.road) expect(s.road.line).toBeLessThan(s.road.axis === 'v' ? s.cols : s.rows)
+    }
   })
 })

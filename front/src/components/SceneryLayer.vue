@@ -33,8 +33,17 @@ const props = defineProps<{ scenery: Scenery; route: Route | null }>()
 
 const pal = computed(() => PAL[props.scenery.theme])
 // Fusion : la glace en haut à gauche, le feu en bas à droite ; chaque case prend la palette de son côté.
-const palFor = (r: number, c: number) => (props.scenery.theme === 'fusion' ? (r + c > props.scenery.size - 1 ? PAL.volcan : PAL.hiver) : pal.value)
-const n = computed(() => props.scenery.size)
+const palFor = (r: number, c: number) => (props.scenery.theme === 'fusion' ? (r + c > (props.scenery.rows + props.scenery.cols) / 2 - 1 ? PAL.volcan : PAL.hiver) : pal.value)
+const rows = computed(() => props.scenery.rows)
+const cols = computed(() => props.scenery.cols)
+// Le décor est plus grand que la grille de jeu : il déborde de --margin cases de chaque côté (plus en largeur qu'en hauteur
+// sur un grand écran). Position et taille en % de la grille de jeu (qui fait (taille + 1) cases avec la colonne des indices).
+const box = computed(() => {
+  const s = props.scenery
+  const board = s.rows - 2 * s.margin.y
+  const u = 100 / (board + 1)
+  return { width: `${s.cols * u}%`, height: `${s.rows * u}%`, left: `${-s.margin.x * u}%`, top: `${-s.margin.y * u}%` }
+})
 
 const items = computed(() => {
   const out: { r: number; c: number; kind: string; v: number; dir?: 'h' | 'v'; d: number }[] = []
@@ -49,14 +58,14 @@ const items = computed(() => {
 const fields = computed(() => items.value.filter((i) => i.kind === 'field'))
 const standing = computed(() => items.value.filter((i) => i.kind !== 'field'))
 // la voie de la grille de jeu est donnée dans son propre repère : on la décale de la marge du décor
-const ballast = computed(() => (props.route ? 'M' + props.route.points.map((p) => `${p.x + props.scenery.margin} ${p.y + props.scenery.margin}`).join(' L') : ''))
+const ballast = computed(() => (props.route ? 'M' + props.route.points.map((p) => `${p.x + props.scenery.margin.x} ${p.y + props.scenery.margin.y}`).join(' L') : ''))
 const extPaths = computed(() => props.scenery.ext.map((e) => 'M' + e.map((p) => `${p.x} ${p.y}`).join(' L')))
 const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ k, axis, rc: k.split(',').map(Number) })))
 </script>
 
 <template>
-  <svg class="scenery" :viewBox="`0 0 ${n} ${n}`" preserveAspectRatio="none" data-test="scenery" aria-hidden="true">
-    <rect :width="n" :height="n" :fill="pal.a" />
+  <svg class="scenery" :style="box" :viewBox="`0 0 ${cols} ${rows}`" preserveAspectRatio="none" data-test="scenery" aria-hidden="true">
+    <rect :width="cols" :height="rows" :fill="pal.a" />
     <template v-for="(row, r) in scenery.tiles" :key="'g' + r">
       <template v-for="(_t, c) in row" :key="'g' + r + '-' + c">
         <rect v-if="scenery.theme === 'fusion'" :x="c" :y="r" width="1" height="1" :fill="(r + c) % 2 ? palFor(r, c).b : palFor(r, c).a" />
@@ -71,7 +80,7 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
     <path v-if="ballast" :d="ballast" fill="none" :stroke="pal.bedEdge" stroke-width="0.68" stroke-linejoin="round" />
     <path v-if="ballast" :d="ballast" fill="none" :stroke="pal.bed" stroke-width="0.58" stroke-linejoin="round" />
 
-    <RoadEl v-if="scenery.road" :road="scenery.road" :size="n" :pal="pal" />
+    <RoadEl v-if="scenery.road" :road="scenery.road" :rows="rows" :cols="cols" :pal="pal" />
 
     <RiverEl :scenery="scenery" :pal="pal" />
     <WaterLife :scenery="scenery" />
@@ -109,11 +118,6 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
 <style scoped>
 .scenery {
   position: absolute;
-  /* le décor est plus grand que la grille : sa marge déborde de chaque côté (--margin cases) */
-  width: calc(100% * (var(--size) + 2 * var(--margin, 0)) / (var(--size) + 1));
-  height: calc(100% * (var(--size) + 2 * var(--margin, 0)) / (var(--size) + 1));
-  left: calc(-100% * var(--margin, 0) / (var(--size) + 1));
-  top: calc(-100% * var(--margin, 0) / (var(--size) + 1));
   border-radius: calc(10px / var(--k, 1));
   pointer-events: none;
   overflow: hidden;

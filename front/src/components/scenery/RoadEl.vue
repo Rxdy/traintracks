@@ -4,11 +4,10 @@ import type { Road } from '../../scenery/generate'
 import type { Pal } from '../../scenery/themes'
 // Route d'un bord à l'autre (asphalte, bordures, pointillés blancs) ; au passage à niveau, des traverses en travers.
 // Unité : 1 case = 1×1.
-const props = defineProps<{ road: Road; size: number; pal: Pal }>()
+const props = defineProps<{ road: Road; rows: number; cols: number; pal: Pal }>()
 const d = computed(() => {
   const m = props.road.line + 0.5
-  const n = props.size
-  return props.road.axis === 'v' ? `M${m} -0.4 L${m} ${n + 0.4}` : `M-0.4 ${m} L${n + 0.4} ${m}`
+  return props.road.axis === 'v' ? `M${m} -0.4 L${m} ${props.rows + 0.4}` : `M-0.4 ${m} L${props.cols + 0.4} ${m}`
 })
 const planks = computed(() => {
   const x = props.road.crossing

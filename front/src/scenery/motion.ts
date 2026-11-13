@@ -195,7 +195,9 @@ const CAR_COLORS = ['#ef4444', '#3b82f6', '#f59e0b', '#ffffff', '#22c55e', '#111
 
 export function createLandSim(sc: Scenery) {
   const rand = rng(sc.seed ^ 0x7a3c91)
-  const n = sc.size
+  const W = sc.cols
+  const H = sc.rows
+  const roadLen = sc.road?.axis === 'h' ? W : H // longueur de la route
   const th = sc.theme
   const cells = (kind: string) => {
     const out: [number, number][] = []
@@ -329,14 +331,14 @@ export function createLandSim(sc: Scenery) {
   }
   const [birdKind, birdCount] = BIRDS[th] ?? (['gull', 0] as [BirdKind, number])
   const slowBirds = birdKind === 'eagle' || birdKind === 'vulture'
-  const birds = Array.from({ length: birdCount }, (_, i) => ({ id: i, off: i * 0.33, y0: 0.8 + i * (n / 4) + rand(), slow: slowBirds }))
+  const birds = Array.from({ length: birdCount }, (_, i) => ({ id: i, off: i * 0.33, y0: 0.8 + i * (H / 4) + rand(), slow: slowBirds }))
 
   // ---- météo ----
-  const mkParticles = (count: number, vmin: number, vspan: number) => Array.from({ length: count }, () => ({ x: rand() * n, y: rand() * n, r: 0.02 + rand() * 0.025, spin: rand() * 6, v: vmin + rand() * vspan }))
-  const flakes = th === 'hiver' || th === 'fusion' ? mkParticles(Math.round(n * n * 0.9), 0.4, 0.5) : []
-  const leaves = th === 'automne' || th === 'bonbons' ? mkParticles(Math.round(n * 2), 0.25, 0.25) : []
+  const mkParticles = (count: number, vmin: number, vspan: number) => Array.from({ length: count }, () => ({ x: rand() * W, y: rand() * H, r: 0.02 + rand() * 0.025, spin: rand() * 6, v: vmin + rand() * vspan }))
+  const flakes = th === 'hiver' || th === 'fusion' ? mkParticles(Math.round(W * H * 0.45), 0.4, 0.5) : []
+  const leaves = th === 'automne' || th === 'bonbons' ? mkParticles(Math.round((W + H)), 0.25, 0.25) : []
   // braises qui montent (volcan, enfer, et le côté feu de la fusion)
-  const embers = th === 'volcan' || th === 'enfer' || th === 'fusion' ? mkParticles(Math.round(n * 2.5), 0.25, 0.3) : []
+  const embers = th === 'volcan' || th === 'enfer' || th === 'fusion' ? mkParticles(Math.round((W + H) * 1.25), 0.25, 0.3) : []
 
   const hasOwl = actors.some((a) => a.s.kind === 'owl')
   const birdPrev = birds.map(() => NaN)
@@ -351,7 +353,7 @@ export function createLandSim(sc: Scenery) {
         spawn[dir] -= dt
         if (spawn[dir] > 0) continue
         spawn[dir] = 2.2 + rand() * 3.2
-        const u0 = dir > 0 ? -0.5 : n + 0.5
+        const u0 = dir > 0 ? -0.5 : roadLen + 0.5
         if (cars.some((c) => c.dir === dir && Math.abs(c.u - u0) < 0.9)) continue
         cars.push({ id: carId++, u: u0, lane: dir > 0 ? -0.135 : 0.135, dir, kind: rand() < 0.18 ? 1 : 0, color: pick(CAR_COLORS), v: 1, vmax: 1.1 + rand() * 0.5 })
       }
@@ -367,30 +369,30 @@ export function createLandSim(sc: Scenery) {
         c.v += (want - c.v) * Math.min(1, dt * 6)
         c.u += c.dir * c.v * dt
         // le bruit du moteur part quand la voiture passe au milieu de la grille : on l'entend quand on la voit
-        if (!c.heard && c.dir * (c.u - n / 2) >= 0) { c.heard = true; events.push('car') }
+        if (!c.heard && c.dir * (c.u - roadLen / 2) >= 0) { c.heard = true; events.push('car') }
       }
-      for (let i = cars.length - 1; i >= 0; i--) if (cars[i].u > n + 0.8 || cars[i].u < -0.8) cars.splice(i, 1)
+      for (let i = cars.length - 1; i >= 0; i--) if (cars[i].u > roadLen + 0.8 || cars[i].u < -0.8) cars.splice(i, 1)
     }
 
     for (const a of actors) a.step(dt, t)
 
     for (const p of flakes) {
       p.y += p.v * dt; p.x += 0.1 * dt
-      if (p.y > n + 0.1) { p.y = -0.1; p.x = rand() * n }
-      if (p.x > n + 0.1) p.x = -0.1
+      if (p.y > H + 0.1) { p.y = -0.1; p.x = rand() * W }
+      if (p.x > W + 0.1) p.x = -0.1
     }
     for (const p of leaves) {
       p.y += p.v * dt; p.x += 0.35 * dt; p.spin += dt * 80
-      if (p.y > n + 0.1) { p.y = -0.1; p.x = rand() * n }
-      if (p.x > n + 0.1) p.x = -0.1
+      if (p.y > H + 0.1) { p.y = -0.1; p.x = rand() * W }
+      if (p.x > W + 0.1) p.x = -0.1
     }
     for (const p of embers) {
       p.y -= p.v * dt; p.x += Math.sin(t + p.spin) * 0.05 * dt
-      if (p.y < -0.1) { p.y = n + 0.1; p.x = rand() * n }
+      if (p.y < -0.1) { p.y = H + 0.1; p.x = rand() * W }
     }
     const bs: BirdState[] = birds.map((b, i) => {
       const k = ((t * (b.slow ? 0.07 : 0.11) + b.off) % 1.4) - 0.2
-      const bx = k * (n + 1) - 0.5
+      const bx = k * (W + 1) - 0.5
       if (birdPrev[i] < 1 && bx >= 1 && !Number.isNaN(birdPrev[i])) events.push('bird') // le chant part quand l'oiseau entre dans la grille
       birdPrev[i] = bx
       return { id: i, x: bx, y: b.y0 + Math.sin(k * 6) * 0.2, flap: Math.sin(t * (b.slow ? 2 : 12) + i) * (b.slow ? 0.25 : 0.5), kind: birdKind }
