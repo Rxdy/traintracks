@@ -1,0 +1,41 @@
+# Vérifie chaque push et chaque demande de fusion : types puis tests, côté front et côté serveur.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  front:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: front
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      # le même build que l'image Docker du front : attrape les erreurs que les tests ne voient pas
+      - run: npm run build
+
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
