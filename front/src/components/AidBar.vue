@@ -232,19 +232,20 @@ defineExpose({ onPick })
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  padding: 0.55rem 0.8rem;
+  padding: 0.35rem 0.65rem;
   border-radius: 14px;
   background: #fffbeb;
   border: 2px solid #f59e0b;
   box-shadow: var(--shadow);
   color: #374151;
-  font-size: 0.92rem;
+  font-size: 0.82rem;
+  line-height: 1.3;
   text-align: left;
 }
 .fresh .icon {
   flex: none;
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 1.8rem;
+  height: 1.8rem;
   color: #1d4ed8;
 }
 .fresh .txt {

@@ -225,7 +225,7 @@ section {
 .next-zone {
   display: flex;
   justify-content: center;
-  min-height: 3.2rem; /* place réservée : le bouton apparaît sans rien décaler */
+  min-height: 2.9rem; /* place réservée : le bouton apparaît sans rien décaler */
 }
 .next-zone.off {
   visibility: hidden;

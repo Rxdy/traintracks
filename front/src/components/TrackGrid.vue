@@ -584,7 +584,8 @@ onMounted(() => {
 .win-zone.win-zone--compact {
   display: grid;
   place-items: start center;
-  min-height: 5.4rem; /* récapitulatif complet : la place est prise dès le début, rien ne bouge à la victoire */
+  min-height: 4.9rem; /* récapitulatif complet : la place est prise dès le début, rien ne bouge à la victoire */
+  margin-top: -0.4rem; /* remonté contre la grille : moins de hauteur perdue */
 }
 .win-zone.win-zone--compact > * {
   grid-area: 1 / 1;
@@ -720,7 +721,7 @@ onMounted(() => {
   grid-auto-rows: 1fr;
 
   /* Taille : limitée par la largeur ET la hauteur de l'écran. */
-  --w: min(80vw, 60vh, 560px);
+  --w: min(80vw, 54vh, 560px);
   width: var(--w);
   aspect-ratio: 1;
   /* La colonne des compteurs est à droite : on décale VERS LA DROITE d'une demi-colonne pour
