@@ -56,7 +56,8 @@ describe('mouvement du décor', () => {
     const start = sim.step(0.05, t, true)
     expect(start.barrier).toBeGreaterThan(0.9)
     const past = (c: { dir: number; u: number }) => c.dir * (uc - c.u) < 0
-    const alreadyPast = new Set(start.cars.filter(past).map((c) => c.id))
+    // une voiture déjà engagée (passée la ligne d'arrêt, à 0,62 case du centre) finit de traverser : c'est normal
+    const alreadyPast = new Set(start.cars.filter((c) => c.dir * (uc - c.u) < 0.7).map((c) => c.id))
     for (let i = 0; i < 200; i++) {
       const f = sim.step(0.05, (t += 0.05), true)
       for (const c of f.cars) if (past(c)) expect(alreadyPast.has(c.id), 'une voiture a franchi la barrière baissée').toBe(true)
@@ -83,5 +84,26 @@ describe('mouvement du décor', () => {
     const d = distanceNear(route, c + 0.5, r + 0.5)
     expect(d).toBeGreaterThan(route.gridStart)
     expect(d).toBeLessThan(route.gridEnd)
+  })
+
+  it('les animaux de terre ne vont jamais dans l\'eau, ni sur la route ni sur la voie', () => {
+    let seen = 0
+    for (const lv of levels.slice(0, 40)) {
+      for (const th of ['plaine', 'foret', 'automne', 'montagne', 'hiver'] as const) {
+        const s = buildScenery(lv.puzzle, lv.solution, th)
+        const sim = createLandSim(s)
+        for (let t = 0; t < 40; t += 0.1) {
+          for (const a of sim.step(0.1, t, false).animals) {
+            if (a.kind === 'butterfly' || a.kind === 'squirrel' || a.kind === 'owl') continue // ils volent ou sautent d'un arbre à l'autre
+            const r = Math.floor(a.y - 0.05), c = Math.floor(a.x)
+            if (a.y < 0 || r < 0 || r >= s.size || c < 0 || c >= s.size) continue
+            seen++
+            expect(s.water.has(`${r},${c}`), `${lv.id} ${th} ${a.kind} dans l'eau`).toBe(false)
+            expect(['grass', 'tree', 'pine', 'boulder', 'snowman', 'house'].includes(s.tiles[r][c].kind) || s.tiles[r][c].kind === 'field', `${lv.id} ${th} ${a.kind} sur ${s.tiles[r][c].kind}`).toBe(true)
+          }
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(1000)
   })
 })

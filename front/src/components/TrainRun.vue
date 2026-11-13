@@ -10,7 +10,7 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ (e: 'done'): void; (e: 'progress', s: number): void }>()
 
-const SPACING = 0.66
+const SPACING = 0.62
 const COLORS = ['#2563eb', '#f59e0b', '#16a34a', '#8b5cf6', '#ec4899']
 const total = computed(() => props.wagons * SPACING)
 
@@ -59,17 +59,24 @@ onUnmounted(() => clearInterval(timer))
       :transform="`translate(${car.x} ${car.y}) rotate(${car.angle})`"
     >
       <template v-if="car.i === 0">
-        <!-- locomotive (avance vers +x) -->
-        <rect x="-0.3" y="-0.17" width="0.6" height="0.34" rx="0.06" fill="#dc2626" stroke="#7f1d1d" stroke-width="0.025" />
-        <rect x="-0.3" y="-0.17" width="0.22" height="0.34" rx="0.05" fill="#991b1b" />
-        <rect x="0.12" y="-0.07" width="0.1" height="0.14" rx="0.02" fill="#111827" />
-        <circle cx="0.27" cy="0" r="0.045" fill="#fde68a" />
+        <!-- locomotive (avance vers +x) : capot rouge, cabine sombre, phare -->
+        <rect x="-0.2" y="-0.11" width="0.42" height="0.22" rx="0.05" fill="#dc2626" stroke="#00000044" stroke-width="0.012" />
+        <rect x="0.02" y="-0.085" width="0.12" height="0.17" rx="0.02" fill="#7f1d1d" />
+        <rect x="-0.18" y="-0.07" width="0.13" height="0.14" rx="0.02" fill="#fecaca" opacity="0.6" />
+        <circle cx="0.18" cy="0" r="0.05" fill="#fde68a" />
       </template>
       <template v-else>
-        <rect x="-0.25" y="-0.15" width="0.5" height="0.3" rx="0.05" :fill="COLORS[car.i % COLORS.length]" stroke="#111827" stroke-opacity="0.45" stroke-width="0.025" />
-        <line x1="-0.1" y1="-0.15" x2="-0.1" y2="0.15" stroke="#fff" stroke-opacity="0.5" stroke-width="0.02" />
-        <line x1="0.1" y1="-0.15" x2="0.1" y2="0.15" stroke="#fff" stroke-opacity="0.5" stroke-width="0.02" />
+        <rect x="-0.26" y="-0.1" width="0.52" height="0.2" rx="0.04" :fill="COLORS[car.i % COLORS.length]" stroke="#00000044" stroke-width="0.012" />
+        <rect x="-0.2" y="-0.07" width="0.4" height="0.14" rx="0.02" fill="#fff" opacity="0.28" />
       </template>
+    </g>
+    <g v-if="cars[0]" class="smoke" :style="{ transform: `translate(${cars[0].x}px, ${cars[0].y}px)` }">
+      <circle v-for="i in 3" :key="'s' + i" cx="0" cy="-0.1" r="0.03" fill="#f8fafc" opacity="0">
+        <animate attributeName="cy" from="-0.1" to="-0.36" dur="1.2s" :begin="`${-i * 0.4}s`" repeatCount="indefinite" />
+        <animate attributeName="cx" from="0" to="-0.08" dur="1.2s" :begin="`${-i * 0.4}s`" repeatCount="indefinite" />
+        <animate attributeName="r" from="0.03" to="0.1" dur="1.2s" :begin="`${-i * 0.4}s`" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.7;0" dur="1.2s" :begin="`${-i * 0.4}s`" repeatCount="indefinite" />
+      </circle>
     </g>
   </svg>
 </template>

@@ -7,7 +7,7 @@ import CoinIcon from './CoinIcon.vue'
 
 // Barre des aides : seules celles déjà débloquées apparaissent. Le joueur choisit toujours la cible, rien
 // n'est aléatoire ; le serveur calcule le résultat et débite le stock.
-const props = defineProps<{ size: number; snapshot: () => { edges: string[]; crosses: string[]; marks: number } }>()
+const props = defineProps<{ size: number; level?: number; snapshot: () => { edges: string[]; crosses: string[]; marks: number } }>()
 const emit = defineEmits<{
   (e: 'reveal', givens: Given[], crosses: { row: number; col: number }[]): void
   (e: 'picking', value: boolean): void
@@ -28,6 +28,9 @@ const count = (a: AidInfo): number => a.stock + (a.demoPending ? 1 : 0)
 // Tous les pouvoirs sont montrés dès le niveau 1 : ceux pas encore débloqués sont des emplacements vides, pour que le joueur
 // comprenne qu'il en existe d'autres et quand ils arrivent.
 const slots = computed(() => aids.value)
+// Le niveau où un pouvoir se débloque : on le présente (ce qu'il fait, et l'essai offert), une seule fois par niveau.
+const dismissed = ref(false)
+const fresh = computed(() => (props.level ? slots.value.find((a) => a.unlocked && a.unlockLevel === props.level) : undefined))
 const mode = ref<{ aid: AidInfo; step: 'buy' | 'pick' | 'line' } | null>(null)
 const message = ref('')
 const busy = ref(false)
@@ -127,7 +130,7 @@ defineExpose({ onPick })
         :key="a.id"
         type="button"
         class="aid"
-        :class="{ locked: !a.unlocked, demo: a.unlocked && a.demoPending && !a.usedThisLevel, empty: a.unlocked && count(a) === 0, used: a.usedThisLevel, active: mode?.aid.id === a.id }"
+        :class="{ locked: !a.unlocked, demo: a.unlocked && a.demoPending && !a.usedThisLevel, empty: a.unlocked && count(a) === 0, used: a.usedThisLevel, active: mode?.aid.id === a.id, fresh: a.unlocked && a.unlockLevel === props.level && !dismissed }"
         :data-test="'aid-' + a.id"
         :disabled="busy"
         :title="a.unlocked ? LABEL[a.id] + ' : ' + HELP[a.id] : 'Emplacement vide : se débloque au niveau ' + a.unlockLevel"
@@ -143,6 +146,15 @@ defineExpose({ onPick })
         </template>
         <span v-else class="icon slot" data-test="aid-slot"><AidIcon name="lock" /></span>
       </button>
+    </div>
+
+    <div v-if="fresh && !dismissed" class="fresh" data-test="aid-new" role="status">
+      <span class="icon"><AidIcon :name="fresh.id" /></span>
+      <div class="txt">
+        <strong>Nouveau pouvoir : {{ LABEL[fresh.id] }}</strong>
+        <span>{{ HELP[fresh.id] }} Tu en as {{ count(fresh) }} pour commencer (le rond au-dessus de la grille, avec son compteur) ; une fois épuisées, tu peux en racheter avec tes pièces.</span>
+      </div>
+      <button type="button" class="btn btn--ghost btn--small" data-test="aid-new-ok" @click="dismissed = true">OK</button>
     </div>
   </div>
 </template>
@@ -202,6 +214,42 @@ defineExpose({ onPick })
 .aid.demo {
   border-color: #f59e0b;
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35), var(--shadow);
+}
+.aid.fresh {
+  animation: aid-pulse 1.6s ease-in-out infinite;
+}
+@keyframes aid-pulse {
+  50% {
+    transform: scale(1.1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aid.fresh {
+    animation: none;
+  }
+}
+.fresh {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 14px;
+  background: #fffbeb;
+  border: 2px solid #f59e0b;
+  box-shadow: var(--shadow);
+  color: #374151;
+  font-size: 0.92rem;
+  text-align: left;
+}
+.fresh .icon {
+  flex: none;
+  width: 2.2rem;
+  height: 2.2rem;
+  color: #1d4ed8;
+}
+.fresh .txt {
+  display: grid;
+  gap: 0.15rem;
 }
 .aid.empty {
   color: #92400e;

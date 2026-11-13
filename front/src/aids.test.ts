@@ -46,6 +46,22 @@ describe('pièces affichées', () => {
   })
 })
 
+describe('présentation d\'un pouvoir qui vient de se débloquer', () => {
+  it('au niveau du déblocage, un encadré explique le pouvoir ; on peut le fermer ; ailleurs il n\'apparaît pas', async () => {
+    aids.value = [aid('colors', { unlockLevel: 20, demoPending: true }), aid('cell', { unlockLevel: 50, unlocked: false })]
+    const w = bar({ level: 20 })
+    const box = w.find('[data-test=aid-new]')
+    expect(box.exists()).toBe(true)
+    expect(box.text()).toContain('Nouveau pouvoir : Couleurs')
+    expect(box.text()).toContain('4 pour commencer')
+    expect(w.find('[data-test=aid-colors]').classes()).toContain('fresh')
+    await w.find('[data-test=aid-new-ok]').trigger('click')
+    expect(w.find('[data-test=aid-new]').exists()).toBe(false)
+    expect(bar({ level: 21 }).find('[data-test=aid-new]').exists()).toBe(false)
+    expect(bar().find('[data-test=aid-new]').exists()).toBe(false)
+  })
+})
+
 describe('barre des aides', () => {
   it('ne montre que les aides débloquées : un rond avec une image et un compteur (4 au déblocage, 3 après l\'essai offert)', () => {
     aids.value = [aid('colors', { demoPending: true }), aid('cell', { stock: 2 }), aid('cannon', { stock: 0 }), aid('line', { unlocked: false })]

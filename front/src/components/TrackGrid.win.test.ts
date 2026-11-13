@@ -224,9 +224,11 @@ describe('TrackGrid : compteurs à la victoire', () => {
   })
 })
 
-describe('TrackGrid : réduire le résultat pour voir le décor', () => {
-  it('on réduit la fenêtre, on relance le train, puis on la rouvre', async () => {
+describe('TrackGrid : récapitulatif de fin de partie', () => {
+  it('jamais de fenêtre sur la grille : le résultat est sous la grille, et reste pendant que le train repasse', async () => {
     const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
+    await w.vm.$nextTick()
+    expect(w.find('.win-zone').classes()).toContain('win-zone--compact') // la place est prise avant la victoire
     const cell = (r: number, c: number) => w.find(`[data-r="${r}"][data-c="${c}"]`)
     await cell(sampleSolution[0][0], sampleSolution[0][1]).trigger('pointerdown')
     for (const [r, c] of sampleSolution.slice(1)) await cell(r, c).trigger('pointerenter')
@@ -234,58 +236,18 @@ describe('TrackGrid : réduire le résultat pour voir le décor', () => {
     await w.vm.$nextTick()
     w.findComponent(TrainRun).vm.$emit('done')
     await w.vm.$nextTick()
-    expect(w.find('[data-test=finish]').exists()).toBe(true)
+    expect(w.find('.board [data-test=finish]').exists()).toBe(false) // rien sur la grille
+    expect(w.find('.win-zone [data-test=finish]').exists()).toBe(true) // sous la grille
+    expect(w.find('[data-test=fold]').exists()).toBe(false)
+    expect(w.find('[data-test=reopen]').exists()).toBe(false)
     expect(w.find('[data-test=undo]').exists()).toBe(false) // fin de partie : les outils de tracé laissent la place
     expect(w.find('[data-test=replay]').exists()).toBe(true)
-
-    await w.find('[data-test=fold]').trigger('click') // réduit : le décor est libre
-    expect(w.find('[data-test=finish]').exists()).toBe(false)
-    expect(w.find('[data-test=scenery]').exists()).toBe(true)
-
-    await w.find('[data-test=replay]').trigger('click') // le train repart
+    await w.find('[data-test=replay]').trigger('click') // le train repart : le récapitulatif reste
     await w.vm.$nextTick()
     await w.vm.$nextTick()
     expect(w.find('[data-test=train]').exists()).toBe(true)
     expect(w.find('[data-test=replay]').attributes('disabled')).toBeDefined() // pas de relance pendant que le train roule
-    w.findComponent(TrainRun).vm.$emit('done')
-    await w.vm.$nextTick()
-    expect(w.find('[data-test=finish]').exists()).toBe(false) // reste réduit après le passage du train
-    expect(w.find('[data-test=replay]').attributes('disabled')).toBeUndefined()
-
-    await w.find('[data-test=reopen]').trigger('click')
-    expect(w.find('[data-test=finish]').exists()).toBe(true)
+    expect(w.find('.win-zone [data-test=finish]').exists()).toBe(true)
     w.unmount()
-  })
-})
-
-describe('TrackGrid : téléphone', () => {
-  it('pas de fenêtre sur la grille : le résultat s\'affiche sous la grille, dans la zone de victoire', async () => {
-    const real = window.matchMedia
-    window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia
-    try {
-      const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
-      await w.vm.$nextTick()
-      expect(w.find('.win-zone').classes()).toContain('win-zone--compact') // la place est prise avant la victoire
-      const cell = (r: number, c: number) => w.find(`[data-r="${r}"][data-c="${c}"]`)
-      await cell(sampleSolution[0][0], sampleSolution[0][1]).trigger('pointerdown')
-      for (const [r, c] of sampleSolution.slice(1)) await cell(r, c).trigger('pointerenter')
-      window.dispatchEvent(new Event('pointerup'))
-      await w.vm.$nextTick()
-      w.findComponent(TrainRun).vm.$emit('done')
-      await w.vm.$nextTick()
-      expect(w.find('.win-zone').classes()).toContain('win-zone--compact') // zone réservée
-      expect(w.find('.board [data-test=finish]').exists()).toBe(false) // rien sur la grille
-      expect(w.find('.win-zone [data-test=finish]').exists()).toBe(true) // sous la grille
-      expect(w.find('[data-test=reopen]').classes()).toContain('ghost') // inutile : le résultat reste affiché (place gardée)
-      expect(w.find('[data-test=replay]').exists()).toBe(true)
-      await w.find('[data-test=replay]').trigger('click') // le train repart : le récapitulatif reste
-      await w.vm.$nextTick()
-      await w.vm.$nextTick()
-      expect(w.find('[data-test=train]').exists()).toBe(true)
-      expect(w.find('.win-zone [data-test=finish]').exists()).toBe(true)
-      w.unmount()
-    } finally {
-      window.matchMedia = real
-    }
   })
 })

@@ -187,7 +187,8 @@ export function createLandSim(sc: Scenery) {
   const th = sc.theme
   const cells = (kind: string) => {
     const out: [number, number][] = []
-    sc.tiles.forEach((row, r) => row.forEach((t, c) => t.kind === kind && out.push([r, c])))
+    // les cases d'eau restent « herbe » dans la grille : il faut les écarter, sinon les animaux iraient dans l'eau
+    sc.tiles.forEach((row, r) => row.forEach((t, c) => t.kind === kind && !sc.water.has(`${r},${c}`) && out.push([r, c])))
     return out
   }
   const trees = cells('tree')
@@ -332,7 +333,7 @@ export function createLandSim(sc: Scenery) {
         let want = c.vmax
         if (uc !== null && barrier > 0.35) {
           const ahead = c.dir * (uc - c.dir * 0.62 - c.u) // distance jusqu'à la ligne d'arrêt (positive : pas encore franchie)
-          if (ahead >= -0.02 && ahead < 0.9) want = Math.min(want, Math.max(0, ahead) * 3)
+          if (ahead >= -0.25 && ahead < 0.9) want = Math.min(want, Math.max(0, ahead) * 3)
         }
         let gap = Infinity
         for (const o of cars) if (o !== c && o.dir === c.dir) { const d = c.dir * (o.u - c.u); if (d > 0 && d < gap) gap = d }

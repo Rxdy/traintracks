@@ -204,7 +204,7 @@ describe('App', () => {
     await flushPromises()
     w.findComponent(TrainRun).vm.$emit('done')
     await flushPromises()
-    expect(w.find('[data-test=finish] [data-test=coming-soon]').text()).toContain('arrivent bientôt')
+    expect(w.find('[data-test=coming-soon]').text()).toContain('arrivent bientôt') // sous les bonus, à la place du bouton
     expect(w.find('[data-test=next]').exists()).toBe(false)
     await w.find('[data-test=quit]').trigger('click')
     await flushPromises()
@@ -232,7 +232,7 @@ describe('App', () => {
     await flushPromises() // le faux serveur vérifie le tracé
     // 1) le train passe ; le résultat n'existe pas encore
     expect(w.find('[data-test=train]').exists()).toBe(true)
-    expect(w.find('[data-test=next]').exists()).toBe(false)
+    expect(w.find('[data-test=next]').attributes('disabled')).toBeDefined() // place réservée sous les bonus, inactive tant que le train roule
     // 2) le train est arrivé : temps, gain et « Suivant » s'affichent au centre de la grille
     w.findComponent(TrainRun).vm.$emit('done')
     await flushPromises()

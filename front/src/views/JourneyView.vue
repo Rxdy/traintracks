@@ -10,7 +10,6 @@ import { beginLevel, fetchStatus, startLevel, submitLevel, type JourneyStatus, t
 import { refreshWallet, setCoins } from '../wallet'
 import { user } from '../auth'
 import { themeForLevel } from '../scenery'
-import { useCompact } from '../compact'
 
 // Le Voyage : page principale. On ne montre que le niveau en cours (pas de
 // liste, pas de taille de grille) et un gros bouton pour jouer.
@@ -56,7 +55,6 @@ const resume = ref<Pick<StartedLevel, 'reveals' | 'crosses'>>({ reveals: [], cro
 const grid = ref<InstanceType<typeof TrackGrid> | null>(null)
 const aidBar = ref<InstanceType<typeof AidBar> | null>(null)
 const picking = ref(false)
-const compact = useCompact()
 const levelFinished = ref(false) // le train est passé : « Niveau suivant » (sous les aides, sur téléphone) devient actif
 const colorHints = ref(false) // indicateurs de couleur : désactivés par défaut, l'aide « Couleurs » les active sur ce niveau
 watch(current, (c) => emit('playing', c !== null), { immediate: true })
@@ -173,7 +171,7 @@ function quit(): void {
           :initial="{ givens: resume.reveals, crosses: resume.crosses }"
           @pick="(r, c) => aidBar?.onPick(r, c)"
         >
-          <template #win="{ ready }">
+          <template #win>
             <WinReceipt
               v-if="earned"
               :lines="[
@@ -181,30 +179,20 @@ function quit(): void {
                 { label: 'Sans aide', amount: earned.bonus },
               ]"
             />
-            <button
-              v-if="hasNext && !compact"
-              type="button"
-              class="btn btn--big cta"
-              data-test="next"
-              :disabled="!ready || loading"
-              @click="play"
-            >
-              Niveau suivant
-            </button>
-            <p v-else-if="!hasNext && !compact" class="trophy" data-test="coming-soon">Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt.</p>
           </template>
         </TrackGrid>
         <AidBar
           ref="aidBar"
           :key="'aids-' + current.id"
           :size="current.puzzle.size"
+          :level="current.id"
           :snapshot="() => grid?.snapshotForAid() ?? { edges: [], crosses: [], marks: 0 }"
           @reveal="(g, c) => grid?.reveal(g, c)"
           @colors="colorHints = true"
           @picking="picking = $event"
         />
-        <!-- Téléphone : « Niveau suivant » sous les aides, à une place réservée (visible seulement en fin de partie). -->
-        <div v-if="compact" class="next-zone" :class="{ off: !levelFinished }">
+        <!-- « Niveau suivant » sous les aides, à une place réservée (visible seulement en fin de partie) : rien ne bouge. -->
+        <div class="next-zone" :class="{ off: !levelFinished }">
           <button v-if="hasNext" type="button" class="btn btn--big cta" data-test="next" :disabled="!levelFinished || loading" @click="play">
             Niveau suivant
           </button>

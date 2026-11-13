@@ -19,7 +19,6 @@ import {
 import { lineStatuses } from '../lines'
 import { buildRoute, leadCells, type Route } from '../trainRoute'
 import { buildScenery, distanceNear, PAL, timing, type Scenery, type Theme } from '../scenery'
-import { useCompact } from '../compact'
 import TrainRun from './TrainRun.vue'
 import SceneryLayer from './SceneryLayer.vue'
 import SceneryLife from './SceneryLife.vue'
@@ -126,10 +125,8 @@ const trainNear = computed(() => {
   return trainS.value > cross - 3.2 && trainS.value < cross + TRAIN_LENGTH + 0.6
 })
 // Le résultat peut être réduit pour regarder le décor ; le train se relance à la demande.
-const panelOpen = ref(true)
 // Téléphone : pas de fenêtre posée sur la grille ; le résultat s'affiche sous la grille, dans une zone dont la
 // place est RÉSERVÉE dès le début (rien ne bouge à la victoire), entre la grille et les aides.
-const compact = useCompact()
 // Vrai dès que le train est passé une première fois : sur téléphone le récapitulatif reste affiché quand on le relance.
 const finished = ref(false)
 watch(trainDone, (v) => {
@@ -464,14 +461,12 @@ onMounted(() => {
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
         </button>
       </template>
-      <!-- fin de partie : revoir le train, rouvrir le résultat -->
+      <!-- fin de partie : revoir le train (les deux autres places restent vides : rien ne bouge) -->
       <template v-else>
         <button type="button" class="btn btn--ghost tool" data-test="replay" @click="replayTrain" :disabled="!trainDone" aria-label="Relancer le train" title="Relancer le train">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z" /></svg>
         </button>
-        <button type="button" class="btn btn--ghost tool" :class="{ on: panelOpen, ghost: compact }" :tabindex="compact ? -1 : 0" data-test="reopen" @click="panelOpen = !panelOpen" :disabled="!trainDone" aria-label="Résultat" title="Résultat">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6" /></svg>
-        </button>
+        <span class="tool ghost" aria-hidden="true"></span>
       </template>
       <span v-if="solved" class="tool ghost" aria-hidden="true"></span>
       <span class="timer" data-test="timer">⏱ {{ fmt(elapsed) }}</span>
@@ -522,22 +517,11 @@ onMounted(() => {
       <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" />
 
       <TrainRun v-if="route" :route="route" :size="puzzle.size" @progress="trainS = $event" @done="trainDone = true" />
-
-      <!-- Victoire : le train passe d'abord ; une fois arrivé, le résultat s'affiche AU CENTRE de la grille
-           (temps, gain, « Suivant »), ce qui laisse le bas de l'écran libre pour les aides. -->
-      <div v-if="solved && trainDone && panelOpen && !compact" class="finish" data-test="finish">
-        <button type="button" class="fold btn btn--ghost tool" data-test="fold" @click="panelOpen = false" aria-label="Réduire" title="Réduire pour voir le décor">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
-        </button>
-        <p class="win" data-test="win">Niveau terminé</p>
-        <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? elapsed) }}</p>
-        <slot name="win" :ready="true" />
-      </div>
     </div>
 
     <!-- Zone réservée dès le début : la victoire s'y affiche sans pousser la page. -->
-    <div class="win-zone" :class="{ on: solved, 'win-zone--compact': compact }">
-      <div v-if="compact && solved && finished" class="finish finish--inline" data-test="finish">
+    <div class="win-zone win-zone--compact" :class="{ on: solved }">
+      <div v-if="solved && finished" class="finish finish--inline" data-test="finish">
         <div class="head">
           <p class="win" data-test="win">Niveau terminé</p>
           <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? elapsed) }}</p>
@@ -620,28 +604,11 @@ onMounted(() => {
   }
 }
 .finish {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.45rem;
-  max-width: 92%;
-  padding: 0.9rem 1.3rem;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
   text-align: center;
-  animation: finish-in 0.4s ease both;
-}
-.fold {
-  align-self: flex-end;
-  width: 2rem;
-  height: 2rem;
-  margin: -0.4rem -0.7rem 0 0;
+  background: rgba(255, 255, 255, 0.94);
 }
 .finish--inline {
   position: static;
@@ -703,12 +670,6 @@ onMounted(() => {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: #1f2937;
-}
-@keyframes finish-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -46%) scale(0.94);
-  }
 }
 .wait {
   font-weight: 700;
