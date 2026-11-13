@@ -3,12 +3,16 @@ import { shallowRef } from 'vue'
 import type { Scenery } from '../../scenery/generate'
 import { useClock } from '../../scenery/clock'
 import { createWaterSim, type WaterFrame } from '../../scenery/motion'
+import { sound } from '../../sound/director'
 // Vie sur l'eau : bateaux qui descendent la rivière (fondu à l'apparition et à la disparition), poissons qui
 // sautent, canards sur l'étang. Dessiné entre l'eau et les ponts : les bateaux passent SOUS les ponts.
 const props = defineProps<{ scenery: Scenery }>()
 const sim = createWaterSim(props.scenery)
-const frame = shallowRef<WaterFrame>({ boats: [], ring: null, fish: null, ducks: [] })
-useClock((dt, t) => (frame.value = sim.step(dt, t)))
+const frame = shallowRef<WaterFrame>({ boats: [], ring: null, fish: null, ducks: [], events: [] })
+useClock((dt, t) => {
+  frame.value = sim.step(dt, t)
+  frame.value.events.forEach((e) => sound.ambient(e))
+})
 </script>
 <template>
   <g data-test="water-life">

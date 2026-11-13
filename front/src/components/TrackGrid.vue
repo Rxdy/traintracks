@@ -22,6 +22,7 @@ import { buildScenery, distanceNear, PAL, timing, type Scenery, type Theme } fro
 import TrainRun from './TrainRun.vue'
 import SceneryLayer from './SceneryLayer.vue'
 import SceneryLife from './SceneryLife.vue'
+import { sound, soundOn } from '../sound/director'
 import TrackCell from './TrackCell.vue'
 import ClueNumber from './ClueNumber.vue'
 
@@ -114,6 +115,9 @@ const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
 const trainDone = ref(false)
+// Sons : la fin du trajet laisse la place au décor ; la barrière du passage à niveau a ses propres sons.
+watch(trainDone, (v) => v && sound.trainEnd())
+
 // Position de la locomotive sur son trajet : les barrières du passage à niveau se baissent quand elle approche.
 const trainS = ref(-1)
 const TRAIN_LENGTH = 2.4
@@ -124,6 +128,7 @@ const trainNear = computed(() => {
   const cross = distanceNear(rt, x[1] + 0.5, x[0] + 0.5)
   return trainS.value > cross - 3.2 && trainS.value < cross + TRAIN_LENGTH + 0.6
 })
+watch(trainNear, (v) => sound.crossing(v))
 // Le résultat peut être réduit pour regarder le décor ; le train se relance à la demande.
 // Téléphone : pas de fenêtre posée sur la grille ; le résultat s'affiche sous la grille, dans une zone dont la
 // place est RÉSERVÉE dès le début (rien ne bouge à la victoire), entre la grille et les aides.
@@ -166,6 +171,7 @@ async function checkWin(): Promise<void> {
     verifying.value = false
     if (!ok) {
       verifyError.value = "Le serveur n'a pas validé ce tracé. Vérifie ta connexion, puis réessaie."
+      sound.sfx('error')
       return
     }
     if (solved.value) return
@@ -185,6 +191,7 @@ function revealScenery(): void {
     return
   }
   scenery.value = buildScenery(puz.value, path, props.theme)
+  sound.reveal(scenery.value)
   sceneryRoute.value = buildRoute(path, puz.value, 1)
   if (timing.revealMs > 0) trainTimer = window.setTimeout(runTrain, timing.revealMs)
   else runTrain()
@@ -204,6 +211,7 @@ function runTrain(): void {
   const rect = boardEl.value?.getBoundingClientRect() ?? { left: 0, top: 0, width: 0 }
   const vp = { width: window.innerWidth, height: window.innerHeight }
   trainS.value = -1
+  sound.trainStart()
   route.value = buildRoute(path, puz.value, {
     entry: leadCells(puz.value.entry.dir, rect, puz.value.size, vp),
     exit: leadCells(puz.value.exit.dir, rect, puz.value.size, vp),
@@ -269,6 +277,7 @@ function redo(): void {
 }
 function clearAll(): void {
   if (solved.value) return
+  sound.sfx('clear')
   connections.value = new Set(lockedEdges(puz.value)) // les rails imposés restent
   crosses.value = new Set()
   rails.value = new Set()
@@ -401,6 +410,7 @@ onMounted(() => {
   window.addEventListener('keydown', onKey)
 })
 onUnmounted(() => {
+  sound.reset()
   clearTimeout(trainTimer)
   clearInterval(clock)
   window.removeEventListener('pointerup', onUp)
@@ -469,6 +479,13 @@ onMounted(() => {
         <span class="tool ghost" aria-hidden="true"></span>
       </template>
       <span v-if="solved" class="tool ghost" aria-hidden="true"></span>
+      <button type="button" class="btn btn--ghost tool sound" data-test="sound" :aria-pressed="soundOn" :aria-label="soundOn ? 'Couper le son' : 'Activer le son'" :title="soundOn ? 'Couper le son' : 'Activer le son'" @click="sound.setOn(!soundOn)">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 9v6h4l5 4V5L8 9z" />
+          <path v-if="soundOn" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" />
+          <path v-else d="m17 9 4 6M21 9l-4 6" />
+        </svg>
+      </button>
       <span class="timer" data-test="timer">⏱ {{ fmt(elapsed) }}</span>
     </div>
 

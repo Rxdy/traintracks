@@ -10,6 +10,7 @@ import { beginLevel, fetchStatus, startLevel, submitLevel, type JourneyStatus, t
 import { refreshWallet, setCoins } from '../wallet'
 import { user } from '../auth'
 import { themeForLevel } from '../scenery'
+import { sound } from '../sound/director'
 
 // Le Voyage : page principale. On ne montre que le niveau en cours (pas de
 // liste, pas de taille de grille) et un gros bouton pour jouer.
@@ -57,6 +58,12 @@ const aidBar = ref<InstanceType<typeof AidBar> | null>(null)
 const picking = ref(false)
 const levelFinished = ref(false) // le train est passé : « Niveau suivant » (sous les aides, sur téléphone) devient actif
 const colorHints = ref(false) // indicateurs de couleur : désactivés par défaut, l'aide « Couleurs » les active sur ce niveau
+// Une pièce sonne par ligne de gain, quand le récapitulatif apparaît (le décor se tait un instant).
+watch(levelFinished, (v) => {
+  if (!v || !earned.value) return
+  const lines = [earned.value.base, earned.value.bonus].filter((a) => a > 0).length
+  for (let i = 0; i < lines; i++) window.setTimeout(() => sound.coin(), i * 350)
+})
 watch(current, (c) => emit('playing', c !== null), { immediate: true })
 
 async function play(): Promise<void> {

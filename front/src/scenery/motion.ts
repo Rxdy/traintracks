@@ -65,6 +65,7 @@ export interface WaterFrame {
   ring: { x: number; y: number; k: number } | null // k : 0..1 de l'anneau qui s'étend ; null si pas de saut
   fish: { x: number; y: number; lift: number; angle: number; scale: number } | null
   ducks: { x: number; y: number; angle: number; white: boolean }[]
+  events: ('boat' | 'duck')[] // de quoi faire parler le décor : un bateau apparaît, un canard cancane
 }
 const BOAT_COLORS = ['#e11d48', '#f59e0b', '#7c3aed', '#0ea5e9']
 
@@ -86,12 +87,16 @@ export function createWaterSim(sc: Scenery) {
   let nextFish = 1.5
   let fishAt = -9
   let spot: Pt = { x: 0, y: 0 }
+  let nextDuck = 6
 
   function step(dt: number, t: number): WaterFrame {
     const out: BoatState[] = []
+    const events: WaterFrame['events'] = []
     if (poly) {
       boats.forEach((b, i) => {
+        const before = b.s
         b.s += b.speed * dt
+        if (before < 0 && b.s >= 0) events.push('boat')
         if (b.s > poly.length + 0.6) boats[i] = Object.assign(b, mk(-0.4))
         const s = clamp(b.s, 0, poly.length)
         const q = at(poly, s)
@@ -131,7 +136,8 @@ export function createWaterSim(sc: Scenery) {
         ducks.push({ x: pondBox.cx + Math.cos(a) * rx, y: pondBox.cy + Math.sin(a) * ry, angle: (Math.atan2(Math.cos(a) * ry, -Math.sin(a) * rx) * 180) / Math.PI, white: i === 1 })
       }
     }
-    return { boats: out, ring, fish, ducks }
+    if (ducks.length && t > nextDuck) { events.push('duck'); nextDuck = t + 14 + rand() * 8 }
+    return { boats: out, ring, fish, ducks, events }
   }
   return { step, frozen, hasRiver: !!poly, hasBoats: count > 0 }
 }
@@ -178,6 +184,7 @@ export interface LandFrame {
   birds: BirdState[]
   flakes: Particle[]
   leaves: Particle[]
+  events: ('owl' | 'squirrel' | 'bird' | 'car')[]
 }
 const CAR_COLORS = ['#ef4444', '#3b82f6', '#f59e0b', '#ffffff', '#22c55e', '#111827']
 
@@ -209,6 +216,8 @@ export function createLandSim(sc: Scenery) {
   const cars: (CarState & { v: number; vmax: number })[] = []
   const spawn = { 1: 0.4, [-1]: 1.6 } as Record<number, number>
   let carId = 0
+  const events: LandFrame['events'] = []
+  let nextOwl = 8
   let barrier = 0
 
   // ---- animaux ----
@@ -235,7 +244,7 @@ export function createLandSim(sc: Scenery) {
       if (ph === 'sit' && t > nxt) {
         let j = idx
         while (j === idx) j = Math.floor(rand() * trees.length)
-        from = centre(trees[idx]); to = centre(trees[j]); idx = j; ph = 'hop'; t0 = t
+        from = centre(trees[idx]); to = centre(trees[j]); idx = j; ph = 'hop'; t0 = t; events.push('squirrel')
       }
       if (ph === 'hop') {
         const dur = Math.max(0.6, Math.hypot(to.x - from.x, to.y - from.y) * 0.55)
@@ -316,7 +325,11 @@ export function createLandSim(sc: Scenery) {
   const flakes = th === 'hiver' ? mkParticles(Math.round(n * n * 0.9), 0.4, 0.5) : []
   const leaves = th === 'automne' ? mkParticles(Math.round(n * 2), 0.25, 0.25) : []
 
+  const hasOwl = actors.some((a) => a.s.kind === 'owl')
+  const birdPrev = birds.map(() => 0)
   function step(dt: number, t: number, trainNear: boolean): LandFrame {
+    events.length = 0
+    if (hasOwl && t > nextOwl) { events.push('owl'); nextOwl = t + 12 + rand() * 8 }
     // barrière : se baisse quand le train approche, se relève quand il est passé
     barrier += ((trainNear && uc !== null ? 1 : 0) - barrier) * Math.min(1, dt * 4)
 
@@ -327,6 +340,7 @@ export function createLandSim(sc: Scenery) {
         spawn[dir] = 2.2 + rand() * 3.2
         const u0 = dir > 0 ? -0.5 : n + 0.5
         if (cars.some((c) => c.dir === dir && Math.abs(c.u - u0) < 0.9)) continue
+        events.push('car')
         cars.push({ id: carId++, u: u0, lane: dir > 0 ? -0.135 : 0.135, dir, kind: rand() < 0.18 ? 1 : 0, color: pick(CAR_COLORS), v: 1, vmax: 1.1 + rand() * 0.5 })
       }
       for (const c of cars) {
@@ -358,6 +372,8 @@ export function createLandSim(sc: Scenery) {
     }
     const bs: BirdState[] = birds.map((b, i) => {
       const k = ((t * (b.slow ? 0.07 : 0.11) + b.off) % 1.4) - 0.2
+      if (birdPrev[i] < 0.05 && k >= 0.05) events.push('bird')
+      birdPrev[i] = k
       return { id: i, x: k * (n + 1) - 0.5, y: b.y0 + Math.sin(k * 6) * 0.2, flap: Math.sin(t * (b.slow ? 3 : 12) + i) * 0.5, dark: b.dark }
     })
     return {
@@ -368,6 +384,7 @@ export function createLandSim(sc: Scenery) {
       birds: bs,
       flakes: flakes.map((p) => ({ x: p.x + Math.sin(t * 1.5 + p.spin) * 0.08, y: p.y, r: p.r, spin: 0 })),
       leaves: leaves.map((p) => ({ x: p.x + Math.sin(t * 1.5 + p.spin) * 0.08, y: p.y, r: p.r, spin: p.spin })),
+      events: [...events],
     }
   }
   return { step, road, uc }

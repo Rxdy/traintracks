@@ -4,6 +4,7 @@ import type { Scenery } from '../scenery/generate'
 import { useClock } from '../scenery/clock'
 import { createLandSim, type LandFrame } from '../scenery/motion'
 import { PAL } from '../scenery/themes'
+import { sound } from '../sound/director'
 
 // Le décor qui vit AU-DESSUS des rails : voitures et barrières du passage à niveau, animaux, oiseaux, feuilles ou
 // neige qui tombent. Les voitures s'arrêtent quand le train approche (`trainNear`) et repartent après son passage.
@@ -12,9 +13,12 @@ const props = defineProps<{ scenery: Scenery; trainNear: boolean }>()
 const n = computed(() => props.scenery.size)
 const pal = computed(() => PAL[props.scenery.theme])
 const sim = createLandSim(props.scenery)
-const empty: LandFrame = { cars: [], barrier: 0, lights: false, animals: [], birds: [], flakes: [], leaves: [], }
+const empty: LandFrame = { cars: [], barrier: 0, lights: false, animals: [], birds: [], flakes: [], leaves: [], events: [] }
 const frame = shallowRef<LandFrame>(empty)
-useClock((dt, t) => (frame.value = sim.step(dt, t, props.trainNear)))
+useClock((dt, t) => {
+  frame.value = sim.step(dt, t, props.trainNear)
+  frame.value.events.forEach((e) => sound.ambient(e))
+})
 
 // Repère de la route : x = en travers, y = le long (u). Une route horizontale est le même dessin « couché ».
 const roadFrame = computed(() => {

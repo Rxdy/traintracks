@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, provide, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import TutorialView from './views/TutorialView.vue'
 import DailyView from './views/DailyView.vue'
 import JourneyView from './views/JourneyView.vue'
@@ -10,6 +10,7 @@ import LandscapeBg from './components/LandscapeBg.vue'
 import InstallButton from './components/InstallButton.vue'
 import CoinBadge from './components/CoinBadge.vue'
 import { notice, resetToken } from './auth'
+import { suspend, unlock } from './sound/director'
 
 // Accueil = le Voyage (mode principal). Les autres écrans s'ouvrent depuis
 // les petits cubes de l'accueil.
@@ -22,6 +23,18 @@ const TITLES: Record<View, string> = {
   account: 'Compte',
   legal: 'Mentions légales',
 }
+
+// Le navigateur n'autorise le son qu'après un geste : on prépare l'audio au premier toucher, et on le met en pause
+// quand l'application passe en arrière-plan.
+const onHidden = () => suspend(document.hidden)
+onMounted(() => {
+  window.addEventListener('pointerdown', unlock, { once: true, capture: true })
+  document.addEventListener('visibilitychange', onHidden)
+})
+onUnmounted(() => {
+  window.removeEventListener('pointerdown', unlock, { capture: true })
+  document.removeEventListener('visibilitychange', onHidden)
+})
 
 const view = ref<View>('home')
 // Vrai pendant une partie : on cache alors tout le reste.
