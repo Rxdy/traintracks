@@ -10,6 +10,7 @@ import { beginLevel, fetchStatus, startLevel, submitLevel, type JourneyStatus, t
 import { refreshWallet, setCoins } from '../wallet'
 import { user } from '../auth'
 import { themeForLevel } from '../scenery'
+import { useCompact } from '../compact'
 
 // Le Voyage : page principale. On ne montre que le niveau en cours (pas de
 // liste, pas de taille de grille) et un gros bouton pour jouer.
@@ -55,6 +56,8 @@ const resume = ref<Pick<StartedLevel, 'reveals' | 'crosses'>>({ reveals: [], cro
 const grid = ref<InstanceType<typeof TrackGrid> | null>(null)
 const aidBar = ref<InstanceType<typeof AidBar> | null>(null)
 const picking = ref(false)
+const compact = useCompact()
+const levelFinished = ref(false) // le train est passé : « Niveau suivant » (sous les aides, sur téléphone) devient actif
 const colorHints = ref(false) // indicateurs de couleur : désactivés par défaut, l'aide « Couleurs » les active sur ce niveau
 watch(current, (c) => emit('playing', c !== null), { immediate: true })
 
@@ -75,6 +78,7 @@ async function play(): Promise<void> {
   resume.value = { reveals: r.reveals ?? [], crosses: r.crosses ?? [] }
   colorHints.value = (r.usedAids ?? []).includes('colors') // reprise : les couleurs déjà payées restent actives
   picking.value = false
+  levelFinished.value = false
   earned.value = null
   officialMs.value = null
   current.value = r.level
@@ -165,6 +169,7 @@ function quit(): void {
           :picking="picking"
           :color-hints="colorHints"
           @begin="beginLevel()"
+          @finish="levelFinished = true"
           :initial="{ givens: resume.reveals, crosses: resume.crosses }"
           @pick="(r, c) => aidBar?.onPick(r, c)"
         >
@@ -177,7 +182,7 @@ function quit(): void {
               ]"
             />
             <button
-              v-if="hasNext"
+              v-if="hasNext && !compact"
               type="button"
               class="btn btn--big cta"
               data-test="next"
@@ -186,7 +191,7 @@ function quit(): void {
             >
               Niveau suivant
             </button>
-            <p v-else class="trophy" data-test="coming-soon">Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt.</p>
+            <p v-else-if="!hasNext && !compact" class="trophy" data-test="coming-soon">Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt.</p>
           </template>
         </TrackGrid>
         <AidBar
@@ -198,6 +203,13 @@ function quit(): void {
           @colors="colorHints = true"
           @picking="picking = $event"
         />
+        <!-- Téléphone : « Niveau suivant » sous les aides, à une place réservée (visible seulement en fin de partie). -->
+        <div v-if="compact" class="next-zone" :class="{ off: !levelFinished }">
+          <button v-if="hasNext" type="button" class="btn btn--big cta" data-test="next" :disabled="!levelFinished || loading" @click="play">
+            Niveau suivant
+          </button>
+          <p v-else class="trophy" data-test="coming-soon">Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt.</p>
+        </div>
       </div>
     </template>
   </section>
@@ -221,6 +233,14 @@ section {
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
+}
+.next-zone {
+  display: flex;
+  justify-content: center;
+  min-height: 3.2rem; /* place réservée : le bouton apparaît sans rien décaler */
+}
+.next-zone.off {
+  visibility: hidden;
 }
 .intro {
   display: flex;

@@ -19,6 +19,7 @@ import {
 import { lineStatuses } from '../lines'
 import { buildRoute, leadCells, type Route } from '../trainRoute'
 import { buildScenery, PAL, timing, type Scenery, type Theme } from '../scenery'
+import { useCompact } from '../compact'
 import TrainRun from './TrainRun.vue'
 import SceneryLayer from './SceneryLayer.vue'
 import TrackCell from './TrackCell.vue'
@@ -39,7 +40,7 @@ const props = defineProps<{
   // Si fournie, la victoire n'est acquise que quand elle répond vrai (le serveur a vérifié le tracé).
   validate?: (ms: number, edges: string[]) => Promise<boolean>
 }>()
-const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void }>()
+const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void }>()
 
 // Puzzle « effectif » : le puzzle + les rails révélés par les aides, qui se comportent comme des rails imposés
 // (verrouillés, dans le bon sens).
@@ -115,14 +116,17 @@ let trainTimer = 0
 const trainDone = ref(false)
 // Le résultat peut être réduit pour regarder le décor ; le train se relance à la demande.
 const panelOpen = ref(true)
-// Téléphone : pas de fenêtre posée sur la grille ; le résultat (temps, gain, « Suivant ») s'affiche sous la grille,
-// entre elle et les aides, et la grille reste entièrement visible.
-const compact = ref(false)
+// Téléphone : pas de fenêtre posée sur la grille ; le résultat s'affiche sous la grille, dans une zone dont la
+// place est RÉSERVÉE dès le début (rien ne bouge à la victoire), entre la grille et les aides.
+const compact = useCompact()
 // Vrai dès que le train est passé une première fois : sur téléphone le récapitulatif reste affiché quand on le relance.
 const finished = ref(false)
-watch(trainDone, (v) => v && (finished.value = true))
-let mq: MediaQueryList | null = null
-const onMq = () => (compact.value = !!mq?.matches)
+watch(trainDone, (v) => {
+  if (v && !finished.value) {
+    finished.value = true
+    emit('finish')
+  }
+})
 const boardEl = ref<HTMLElement | null>(null)
 let startedAt = 0
 let clock = 0
@@ -388,7 +392,6 @@ onMounted(() => {
   window.addEventListener('keydown', onKey)
 })
 onUnmounted(() => {
-  mq?.removeEventListener?.('change', onMq)
   clearTimeout(trainTimer)
   clearInterval(clock)
   window.removeEventListener('pointerup', onUp)
@@ -431,11 +434,6 @@ function snapshotForAid(): { edges: string[]; crosses: string[]; marks: number }
 }
 defineExpose({ reveal, snapshotForAid })
 onMounted(() => {
-  mq = window.matchMedia?.('(max-width: 640px)') ?? null
-  if (mq) {
-    onMq()
-    mq.addEventListener?.('change', onMq)
-  }
   if (props.initial && (props.initial.givens.length || props.initial.crosses.length)) reveal(props.initial.givens, props.initial.crosses)
 })
 </script>
@@ -523,7 +521,7 @@ onMounted(() => {
     </div>
 
     <!-- Zone réservée dès le début : la victoire s'y affiche sans pousser la page. -->
-    <div class="win-zone" :class="{ on: solved }">
+    <div class="win-zone" :class="{ on: solved, 'win-zone--compact': compact }">
       <div v-if="compact && solved && finished" class="finish finish--inline" data-test="finish">
         <div class="head">
           <p class="win" data-test="win">Niveau terminé</p>
@@ -580,6 +578,14 @@ onMounted(() => {
   align-self: center;
   font-variant-numeric: tabular-nums;
   color: #6b7280;
+}
+.win-zone--compact {
+  display: grid;
+  place-items: start center;
+  min-height: 6.2rem; /* récapitulatif complet : la place est prise dès le début, rien ne bouge à la victoire */
+}
+.win-zone--compact > * {
+  grid-area: 1 / 1;
 }
 .win-zone {
   min-height: 2.6rem; /* message de vérification : place réservée pour ne pas faire sauter la page */
