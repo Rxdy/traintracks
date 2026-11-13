@@ -81,7 +81,7 @@ describe('chef d\'orchestre des sons', () => {
     expect(played).toEqual(['bird', 'owl', 'bird'])
   })
 
-  it('voiture : elle ne se fait entendre qu'une fois le train et sa cloche arrêtés', () => {
+  it('voiture : elle ne se fait entendre qu\'une fois le train et sa cloche arrêtés', () => {
     const { d, played } = setup()
     d.reveal(riverScene()); d.trainStart(); d.crossing(true); d.trainEnd(); played.length = 0
     d.ambient('car')
