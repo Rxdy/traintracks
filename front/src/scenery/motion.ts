@@ -213,7 +213,7 @@ export function createLandSim(sc: Scenery) {
   // ---- route ----
   const road = sc.road
   const uc = road?.crossing ? (road.axis === 'v' ? road.crossing[0] : road.crossing[1]) + 0.5 : null
-  const cars: (CarState & { v: number; vmax: number })[] = []
+  const cars: (CarState & { v: number; vmax: number; heard?: boolean })[] = []
   const spawn = { 1: 0.4, [-1]: 1.6 } as Record<number, number>
   let carId = 0
   const events: LandFrame['events'] = []
@@ -326,7 +326,7 @@ export function createLandSim(sc: Scenery) {
   const leaves = th === 'automne' ? mkParticles(Math.round(n * 2), 0.25, 0.25) : []
 
   const hasOwl = actors.some((a) => a.s.kind === 'owl')
-  const birdPrev = birds.map(() => 0)
+  const birdPrev = birds.map(() => NaN)
   function step(dt: number, t: number, trainNear: boolean): LandFrame {
     events.length = 0
     if (hasOwl && t > nextOwl) { events.push('owl'); nextOwl = t + 12 + rand() * 8 }
@@ -340,7 +340,6 @@ export function createLandSim(sc: Scenery) {
         spawn[dir] = 2.2 + rand() * 3.2
         const u0 = dir > 0 ? -0.5 : n + 0.5
         if (cars.some((c) => c.dir === dir && Math.abs(c.u - u0) < 0.9)) continue
-        events.push('car')
         cars.push({ id: carId++, u: u0, lane: dir > 0 ? -0.135 : 0.135, dir, kind: rand() < 0.18 ? 1 : 0, color: pick(CAR_COLORS), v: 1, vmax: 1.1 + rand() * 0.5 })
       }
       for (const c of cars) {
@@ -354,6 +353,8 @@ export function createLandSim(sc: Scenery) {
         if (gap < 0.9) want = Math.min(want, Math.max(0, gap - 0.5) * 3)
         c.v += (want - c.v) * Math.min(1, dt * 6)
         c.u += c.dir * c.v * dt
+        // le bruit du moteur part quand la voiture passe au milieu de la grille : on l'entend quand on la voit
+        if (!c.heard && c.dir * (c.u - n / 2) >= 0) { c.heard = true; events.push('car') }
       }
       for (let i = cars.length - 1; i >= 0; i--) if (cars[i].u > n + 0.8 || cars[i].u < -0.8) cars.splice(i, 1)
     }
@@ -372,9 +373,10 @@ export function createLandSim(sc: Scenery) {
     }
     const bs: BirdState[] = birds.map((b, i) => {
       const k = ((t * (b.slow ? 0.07 : 0.11) + b.off) % 1.4) - 0.2
-      if (birdPrev[i] < 0.05 && k >= 0.05) events.push('bird')
-      birdPrev[i] = k
-      return { id: i, x: k * (n + 1) - 0.5, y: b.y0 + Math.sin(k * 6) * 0.2, flap: Math.sin(t * (b.slow ? 3 : 12) + i) * 0.5, dark: b.dark }
+      const bx = k * (n + 1) - 0.5
+      if (birdPrev[i] < 1 && bx >= 1 && !Number.isNaN(birdPrev[i])) events.push('bird') // le chant part quand l'oiseau entre dans la grille
+      birdPrev[i] = bx
+      return { id: i, x: bx, y: b.y0 + Math.sin(k * 6) * 0.2, flap: Math.sin(t * (b.slow ? 3 : 12) + i) * 0.5, dark: b.dark }
     })
     return {
       cars: cars.map((c) => ({ id: c.id, u: c.u, lane: c.lane, dir: c.dir, kind: c.kind, color: c.color })),

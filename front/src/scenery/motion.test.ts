@@ -106,4 +106,25 @@ describe('mouvement du décor', () => {
     }
     expect(seen).toBeGreaterThan(1000)
   })
+
+  it('on entend ce qu\'on voit : le moteur part au milieu de la grille, le chant quand l\'oiseau entre', () => {
+    const { s } = find((x) => !!x.road)
+    const sim = createLandSim(s)
+    let heard = 0
+    for (let t = 0; t < 40; t += 0.05) {
+      const f = sim.step(0.05, t, false)
+      for (const e of f.events) {
+        if (e !== 'car') continue
+        heard++
+        expect(f.cars.some((c) => Math.abs(c.u - s.size / 2) < 0.3), 'moteur sans voiture au milieu').toBe(true)
+      }
+    }
+    expect(heard).toBeGreaterThan(2)
+    const b = find((x) => !!x.river, 'plaine').s
+    const bsim = createLandSim(b)
+    for (let t = 0; t < 60; t += 0.05) {
+      const f = bsim.step(0.05, t, false)
+      if (f.events.includes('bird')) expect(f.birds.some((x) => x.x >= 0.9 && x.x < 1.6)).toBe(true)
+    }
+  })
 })

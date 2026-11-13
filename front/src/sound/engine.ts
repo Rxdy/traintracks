@@ -134,7 +134,8 @@ const SFX: Record<SfxName, { bus: BusName; play: (out: AudioNode) => void }> = {
   bird: { bus: 'amb', play: (o) => { for (let i = 0; i < 6; i++) { const f = rnd(2800, 3800); tone({ t: i * 0.13, f, f2: f * 1.35, d: 0.07, v: 0.1, out: o }) } } },
   owl: { bus: 'amb', play: (o) => [0, 0.55].forEach((t, i) => { tone({ t, f: 330, f2: i ? 280 : 310, d: 0.45, v: 0.25, hold: 0.5, a: 0.06, out: o }); nz({ t, d: 0.4, type: 'lowpass', f: 700, v: 0.05, out: o }) }) },
   squirrel: { bus: 'amb', play: (o) => { for (let i = 0; i < 9; i++) nz({ t: i * 0.055, d: 0.018, f: 3500, q: 6, v: 0.28 * (1 - i * 0.07), out: o }) } },
-  car: { bus: 'amb', play: (o) => { nz({ d: 1.6, type: 'lowpass', f: 250, f2: 700, v: 0.3, hold: 0.5, a: 0.5, out: o }); tone({ f: 80, f2: 130, d: 1.6, type: 'sawtooth', v: 0.05, hold: 0.5, a: 0.4, lp: 400, out: o }) } },
+  // moteur : surtout un ronronnement qui monte puis descend (un souffle seul se confondrait avec du vent)
+  car: { bus: 'amb', play: (o) => { tone({ f: 85, f2: 150, d: 1.3, type: 'sawtooth', v: 0.11, hold: 0.5, a: 0.3, lp: 520, out: o }); tone({ f: 170, f2: 300, d: 1.3, type: 'square', v: 0.025, hold: 0.5, a: 0.3, lp: 700, out: o }); nz({ d: 1.3, type: 'lowpass', f: 300, f2: 600, v: 0.05, hold: 0.5, a: 0.3, out: o }) } },
 }
 export function play(name: SfxName): void {
   if (!ensure()) return
@@ -147,7 +148,8 @@ const LOOPS: Record<LoopName, { bus: BusName; start: (out: AudioNode) => () => v
   clack: { bus: 'train', start: (o) => looper(0.25, (dt, i) => tone({ t: dt, f: i % 2 ? 440 : 520, d: 0.06, v: 0.22, out: o })) },
   chug: { bus: 'train', start: (o) => looper(0.26, (dt, i) => { nz({ t: dt, d: 0.2, f: 1100, q: 0.6, v: i % 4 === 0 ? 0.5 : 0.32, a: 0.02, out: o }); tone({ t: dt, f: 75, f2: 55, d: 0.14, v: i % 4 === 0 ? 0.5 : 0.3, out: o }) }) },
   bell: { bus: 'train', start: (o) => looper(0.46, (dt, i) => { const f = i % 2 ? 1000 : 1180; [[1, 1], [2.76, 0.4], [5.4, 0.15]].forEach(([m, k]) => tone({ t: dt, f: f * m, d: 0.9, v: 0.25 * k, a: 0.002, out: o })) }) },
-  water: { bus: 'amb', start: (o) => bed(o, { type: 'lowpass', f: 600, q: 0.5, v: 0.25, lfo: [[0.2, 140]] }) },
+  // courant lent + de petites bulles : sans elles, ce souffle grave se prend pour du vent
+  water: { bus: 'amb', start: (o) => { const b = bed(o, { type: 'lowpass', f: 650, q: 0.5, v: 0.2, lfo: [[0.2, 140]] }); const s = looper(() => 0.35 + Math.random() * 0.9, (dt) => tone({ t: dt, f: rnd(380, 600), f2: rnd(800, 1300), d: 0.07, v: 0.07, out: o })); return () => { b(); s() } } },
   wind: { bus: 'amb', start: (o) => bed(o, { f: 950, q: 9, v: 0.18, lfo: [[0.18, 260], [0.09, 120]] }) },
   windmill: { bus: 'amb', start: (o) => looper(0.5, (dt) => nz({ t: dt, d: 0.4, type: 'lowpass', f: 700, f2: 200, v: 0.2, a: 0.08, out: o })) },
 }

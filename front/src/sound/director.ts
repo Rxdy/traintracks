@@ -56,10 +56,10 @@ export function createDirector(engine: Engine, now: () => number = () => perform
     duckTimer = window.setTimeout(() => engine.setBus('amb', BUS_LEVEL.amb, 0.8), seconds * 1000)
   }
   function bedFor(sc: Scenery): LoopName | null {
+    // Règle : on n'entend que ce qu'on voit. Vent seulement là où la neige tombe ; rien sur un décor sans source.
     if (sc.theme === 'hiver') return 'wind' // eau gelée : pas de ruisseau
     if (sc.river || sc.pond.length) return 'water'
     if (sc.tiles.some((row) => row.some((t) => t.kind === 'windmill'))) return 'windmill'
-    if (sc.theme === 'montagne') return 'wind'
     return null
   }
 
