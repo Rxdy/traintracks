@@ -208,3 +208,18 @@ describe('TrackGrid : décor à la victoire', () => {
     }
   })
 })
+
+describe('TrackGrid : compteurs à la victoire', () => {
+  it('les chiffres indicateurs s\'effacent quand le décor apparaît (la mise en page reste)', async () => {
+    const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
+    expect(w.find('.board').classes()).not.toContain('board--won')
+    const cell = (r: number, c: number) => w.find(`[data-r="${r}"][data-c="${c}"]`)
+    await cell(sampleSolution[0][0], sampleSolution[0][1]).trigger('pointerdown')
+    for (const [r, c] of sampleSolution.slice(1)) await cell(r, c).trigger('pointerenter')
+    window.dispatchEvent(new Event('pointerup'))
+    await w.vm.$nextTick()
+    expect(w.find('.board').classes()).toContain('board--won') // la règle CSS .board--won .clue les masque
+    expect(w.findAll('[data-test=clue]').length).toBe(samplePuzzle.size * 2) // toujours dans le DOM : rien ne bouge
+    w.unmount()
+  })
+})

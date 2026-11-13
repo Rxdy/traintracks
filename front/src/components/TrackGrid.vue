@@ -592,6 +592,10 @@ onMounted(() => {
   border-color: transparent;
   cursor: default;
 }
+.board--won :deep(.clue) {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
 .board--won :deep(.cell--cross > *),
 .board--won :deep(.rock) {
   opacity: 0;
