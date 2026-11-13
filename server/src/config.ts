@@ -1,0 +1,27 @@
+export interface Config {
+  port: number
+  databaseUrl: string
+  appUrl: string // adresse publique du site (liens des e-mails)
+  smtpUrl?: string
+  mailFrom: string
+  secureCookies: boolean
+  trustProxy: boolean
+  dailyTz: string
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const databaseUrl = env.DATABASE_URL
+  if (!databaseUrl) throw new Error('DATABASE_URL est obligatoire')
+  const appUrl = (env.APP_URL ?? 'http://localhost:8090').replace(/\/$/, '')
+  return {
+    port: Number(env.PORT ?? 3000),
+    databaseUrl,
+    appUrl,
+    smtpUrl: env.SMTP_URL,
+    mailFrom: env.MAIL_FROM ?? 'Train Tracks <no-reply@traintracks.local>',
+    // Cookie « Secure » seulement si le site est en https (sinon le navigateur le refuse et la connexion échoue).
+    secureCookies: appUrl.startsWith('https://'),
+    trustProxy: env.TRUST_PROXY === '1',
+    dailyTz: env.DAILY_TZ ?? 'Europe/Paris',
+  }
+}

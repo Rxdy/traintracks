@@ -79,3 +79,19 @@ describe('samplePuzzle', () => {
     expect(samplePuzzle.colClues).toHaveLength(STANDARD_SIZE)
   })
 })
+
+describe('sampleSolution', () => {
+  it('respecte les compteurs et relie l\'entrée à la sortie', async () => {
+    const { sampleSolution } = await import('./puzzle')
+    const rows = Array(8).fill(0), cols = Array(8).fill(0)
+    for (const [r, c] of sampleSolution) { rows[r]++; cols[c]++ }
+    expect(rows).toEqual(samplePuzzle.rowClues)
+    expect(cols).toEqual(samplePuzzle.colClues)
+    expect(sampleSolution[0]).toEqual([samplePuzzle.entry.row, samplePuzzle.entry.col])
+    expect(sampleSolution.at(-1)).toEqual([samplePuzzle.exit.row, samplePuzzle.exit.col])
+    sampleSolution.slice(1).forEach(([r, c], i) => {
+      const [pr, pc] = sampleSolution[i]
+      expect(Math.abs(r - pr) + Math.abs(c - pc)).toBe(1)
+    })
+  })
+})

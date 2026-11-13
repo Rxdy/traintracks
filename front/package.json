@@ -12,9 +12,11 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
+    "@types/zxcvbn": "^4.4.5",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/test-utils": "^2.4.6",
     "jsdom": "^25.0.1",

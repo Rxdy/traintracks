@@ -1,31 +1,89 @@
 <script setup lang="ts">
-import TrackGrid from './components/TrackGrid.vue'
-import { samplePuzzle } from './puzzle'
+import { computed, ref } from 'vue'
+import TutorialView from './views/TutorialView.vue'
+import DailyView from './views/DailyView.vue'
+import JourneyView from './views/JourneyView.vue'
+import StatsView from './views/StatsView.vue'
+import AccountView from './views/AccountView.vue'
+import LandscapeBg from './components/LandscapeBg.vue'
+import InstallButton from './components/InstallButton.vue'
+import CoinBadge from './components/CoinBadge.vue'
+import { notice } from './auth'
+
+// Accueil = le Voyage (mode principal). Les autres écrans s'ouvrent depuis
+// les petits cubes de l'accueil.
+type View = 'home' | 'daily' | 'tuto' | 'stats' | 'account'
+const TITLES: Record<View, string> = {
+  home: '',
+  daily: 'Puzzle du jour',
+  tuto: 'Tutoriel',
+  stats: 'Statistiques',
+  account: 'Compte',
+}
+
+const view = ref<View>('home')
+// Vrai pendant une partie : on cache alors tout le reste.
+const playing = ref(false)
+// Le paysage suit tous les écrans de menu ; seule une partie en cours reste blanche.
+const scenery = computed(() => !playing.value)
+const panel = computed(() => view.value !== 'home' && !playing.value)
+
+function go(v: string): void {
+  view.value = v as View
+  playing.value = false
+}
 </script>
 
 <template>
-  <div class="app">
-    <header class="header">
-      <h1 class="title">Train Tracks <span aria-hidden="true">🚂</span></h1>
-      <p class="subtitle">Puzzle du jour</p>
+  <div class="app" :class="{ immersive: playing, landscape: scenery }">
+    <LandscapeBg v-if="scenery" />
+
+    <header v-if="!playing" class="header">
+      <div class="left">
+        <button v-if="view !== 'home'" type="button" class="btn btn--ghost btn--small" data-test="home" @click="go('home')">
+          <span aria-hidden="true">🏠</span> Accueil
+        </button>
+      </div>
+      <h1 class="title">
+        {{ TITLES[view] || 'Train Tracks' }}
+      </h1>
+      <div class="right">
+        <CoinBadge />
+        <InstallButton v-if="view === 'home'" />
+      </div>
     </header>
 
-    <main class="board-area">
-      <TrackGrid :puzzle="samplePuzzle" />
-    </main>
+    <p v-if="notice" class="notice" data-test="notice" role="status" @click="notice = ''">{{ notice }}</p>
 
-    <footer class="hint">
-      Glisse pour tracer la voie (bleu) &nbsp;•&nbsp; repasse dessus, ou tape une
-      case, pour effacer<br />
-      Clic droit / appui long : marquer ✕ &nbsp;•&nbsp; Ctrl+Z pour annuler
-      &nbsp;•&nbsp; départ en <span class="c-green">vert</span>, sortie en
-      <span class="c-red">rouge</span>.
-    </footer>
+    <main class="board-area" :class="{ top: panel }">
+      <div class="content" :class="{ panel }" data-test="content">
+        <JourneyView v-if="view === 'home'" @playing="playing = $event" @navigate="go" />
+        <DailyView v-else-if="view === 'daily'" @playing="playing = $event" />
+        <TutorialView v-else-if="view === 'tuto'" />
+        <StatsView v-else-if="view === 'stats'" />
+        <AccountView v-else />
+      </div>
+    </main>
   </div>
 </template>
 
 <style scoped>
+.notice {
+  position: relative;
+  z-index: 5;
+  margin: 0.5rem auto 0;
+  max-width: 24rem;
+  padding: 0.5rem 1rem;
+  border-radius: 12px;
+  background: #fff;
+  color: #1f2937;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
 .app {
+  position: relative;
+  overflow-x: clip; /* le train sort de la page sans créer de défilement */
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
@@ -35,23 +93,63 @@ import { samplePuzzle } from './puzzle'
   padding: clamp(1rem, 4vmin, 2rem);
   background: #ffffff;
 }
-
-.header {
-  text-align: center;
+.app.landscape {
+  background: transparent;
+}
+/* En partie : fond blanc, avec un léger voile de ciel pour garder l'ambiance. */
+.app.immersive {
+  background: linear-gradient(#dbeefe, #ffffff 45%);
 }
 
+.header,
+.board-area {
+  position: relative;
+  z-index: 1;
+}
+
+.header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 0.75rem;
+  width: 100%;
+  max-width: 48rem;
+}
+.left {
+  justify-self: start;
+}
+.right {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 .title {
   margin: 0;
-  font-size: clamp(1.5rem, 6vmin, 2.4rem);
+  font-size: clamp(1.15rem, 5vmin, 2rem);
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #111827;
 }
+.content:not(.panel) {
+  /* accueil et parties : occupent toute la hauteur (barre de jeu tout en haut) */
+  align-self: stretch;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
 
-.subtitle {
-  margin: 0.25rem 0 0;
-  font-size: clamp(0.85rem, 3vmin, 1rem);
-  color: #6b7280;
+.panel {
+  /* Plus de grand carré blanc : chaque élément est son propre cube sur le décor. */
+  width: min(100%, 36rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.board-area.top {
+  align-items: flex-start; /* les pages de menu se posent en haut, sur le ciel */
 }
 
 .board-area {
@@ -60,23 +158,5 @@ import { samplePuzzle } from './puzzle'
   align-items: center;
   justify-content: center;
   width: 100%;
-}
-
-.hint {
-  text-align: center;
-  font-size: clamp(0.75rem, 2.6vmin, 0.9rem);
-  color: #9ca3af;
-  max-width: 32rem;
-  line-height: 1.6;
-}
-
-.c-green {
-  color: #16a34a;
-  font-weight: 600;
-}
-
-.c-red {
-  color: #dc2626;
-  font-weight: 600;
 }
 </style>

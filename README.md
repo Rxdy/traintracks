@@ -1,7 +1,7 @@
 # Train Tracks 🚂
 
-Une implémentation web du jeu de logique **Train Tracks** (aussi connu sous le
-nom de *Tracks* / *Train Tracks Puzzle*).
+Une implémentation web du jeu de logique **Train Tracks** (aussi connu sous le nom de *Tracks* /
+*Train Tracks Puzzle*).
 
 ## Le jeu
 
@@ -41,6 +41,19 @@ traintracks/
         └── style.css
 ```
 
+## Serveur (comptes) — `server/`
+
+API Fastify (TypeScript) + PostgreSQL. Comptes avec confirmation d'e-mail, mots de passe argon2id d'au
+moins 50 bits (estimés par zxcvbn), blocage des essais de connexion (5 échecs : 15 min, puis le double),
+sessions par cookie HttpOnly. Les niveaux (grilles et solutions) vivent côté serveur : le navigateur ne reçoit
+que la grille du niveau en cours et le serveur vérifie le tracé. Les règles du jeu partagées sont dans `shared/`.
+Le puzzle du jour est généré par le serveur (graine = date, solution unique garantie par le solveur).
+Sauvegarde de la base : `make backup`.
+
+Outils : `make plan` (paliers, tailles, règles et durée de jeu estimée), `make build-levels` (fabrique les niveaux du plan),
+`make audit` (compare les niveaux au plan), `make freeze` (gèle les niveaux avant de publier : ensuite on ne peut plus
+qu'en ajouter), `make dev-player LEVEL=60` (compte d'essai à ce niveau), `make pace` (temps de jeu réels). Tests sur un vrai PostgreSQL en mémoire (PGlite) : `make test-server`.
+
 ## Démarrage
 
 Prérequis : **Docker** et **Docker Compose**.
@@ -49,7 +62,9 @@ Prérequis : **Docker** et **Docker Compose**.
 make up
 ```
 
-Le front est ensuite disponible sur <http://localhost:8090>.
+Le site est ensuite disponible sur <http://localhost:8090> (`FRONT_PORT` pour changer le port), les
+e-mails de confirmation de développement arrivent dans Mailpit, <http://localhost:8026>.
+Variables dans `.env.example` (copier en `.env`).
 
 ## Commandes utiles
 

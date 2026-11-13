@@ -28,3 +28,38 @@ re: down up
 ## Down + supprime volumes et images orphelines
 clean:
 	$(COMPOSE) down --rmi local --volumes --remove-orphans
+
+.PHONY: bpmn
+bpmn: ## Génère les diagrammes BPMN (bpmn/out)
+	python3 bpmn/generate.py
+
+.PHONY: test-server
+test-server: ## Tests du serveur (PostgreSQL en mémoire)
+	cd server && npm test
+
+.PHONY: backup
+backup: ## Sauvegarde la base dans backups/ (fichier .sql.gz horodaté)
+	@mkdir -p backups
+	$(COMPOSE) exec -T db pg_dump -U traintracks traintracks | gzip > backups/traintracks-$$(date +%F-%H%M).sql.gz
+	@ls -1t backups | head -1
+
+.PHONY: plan
+plan: ## Affiche le plan du Voyage (tailles, règles, alternance) ; TO=300 pour changer la fin
+	cd server && npx tsx src/plan.cli.ts $(or $(TO),300)
+
+.PHONY: build-levels audit freeze pace
+build-levels: ## Fabrique les niveaux du plan (server/data/levels.json) ; les niveaux gelés sont conservés
+	cd server && npx tsx src/build.cli.ts $(TO)
+
+audit: ## Compare les niveaux au plan, vérifie l'unicité et la montée de difficulté
+	cd server && npx tsx src/audit.cli.ts
+
+freeze: ## Gèle les niveaux actuels : à lancer AVANT de publier (ensuite on ne peut plus que en ajouter)
+	cd server && npx tsx src/freeze.cli.ts
+
+pace: ## Temps de jeu RÉELS par niveau (base en cours), à comparer aux durées estimées du plan
+	$(COMPOSE) exec -T api npx tsx src/pace.cli.ts
+
+.PHONY: dev-player
+dev-player: ## Compte d'essai arrivé à un niveau : make dev-player LEVEL=60 [COINS=200] (développement seulement)
+	$(COMPOSE) exec -T -e DEV_TOOLS=1 api npx tsx src/devPlayer.cli.ts $(or $(LEVEL),1) $(COINS)

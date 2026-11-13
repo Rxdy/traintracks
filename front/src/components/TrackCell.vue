@@ -4,6 +4,7 @@ import type { RailVariant } from '../puzzle'
 import RailPiece from './RailPiece.vue'
 import RailDot from './RailDot.vue'
 import BlockedMark from './BlockedMark.vue'
+import RockMark from './RockMark.vue'
 
 // Une case jouable. Son rendu dépend de la marque choisie par le joueur.
 //   - `sides`   : côtés connectés du rail (calculés en amont par le plateau)
@@ -25,7 +26,8 @@ withDefaults(
     data-test="cell"
     role="gridcell"
   >
-    <BlockedMark v-if="mark === 'cross'" />
+    <RockMark v-if="mark === 'rock'" />
+    <BlockedMark v-else-if="mark === 'cross'" />
     <template v-else-if="mark === 'rail'">
       <RailPiece v-if="sides" :sides="sides" :variant="variant" />
       <RailDot v-else :variant="variant" />
@@ -48,7 +50,9 @@ withDefaults(
 
 /* Les cases de départ / sortie sont verrouillées : pas de curseur "cliquable". */
 .cell--entry,
-.cell--exit {
+.cell--exit,
+.cell--given,
+.cell--rock {
   cursor: default;
 }
 </style>

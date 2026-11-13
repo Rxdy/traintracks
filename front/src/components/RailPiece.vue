@@ -55,6 +55,11 @@ const shape = computed(() => railShapeForSides(props.sides))
   --tie-color: #86efac;
 }
 
+.rail--given {
+  --rail-color: #475569; /* gris ardoise : rail imposé */
+  --tie-color: #cbd5e1;
+}
+
 .rail--exit {
   --rail-color: #dc2626; /* rouge : sortie */
   --tie-color: #fca5a5;

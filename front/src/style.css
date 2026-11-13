@@ -22,3 +22,90 @@ body {
 #app {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* ---------- Direction artistique commune (même langage que l'accueil) ----------
+   cubes arrondis à bordure blanche, ombres bleutées, boutons en pilule. */
+:root {
+  --blue: #2563eb;
+  --blue-dark: #1d4ed8;
+  --ink: #111827;
+  --muted: #6b7280;
+  --shadow: 0 6px 18px rgba(30, 64, 175, 0.2);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  white-space: nowrap;
+  font: inherit;
+  font-weight: 800;
+  padding: 0.7em 1.7em;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--blue);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.btn:hover:not(:disabled) {
+  background: var(--blue-dark);
+  transform: translateY(-2px);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn--big {
+  font-size: 1.25rem;
+  padding: 0.8em 2.4em;
+}
+.btn--ghost {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #fff;
+  color: #1f2937;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+}
+.btn--ghost:hover:not(:disabled) {
+  background: #fff;
+}
+.btn--small {
+  padding: 0.4em 1em;
+  font-size: 0.9rem;
+}
+
+.field {
+  font: inherit;
+  padding: 0.7em 1em;
+  border: 2px solid #dbeafe;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+}
+.field:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.link-btn {
+  font: inherit;
+  background: none;
+  border: none;
+  color: var(--blue);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Texte posé sur le paysage : une étiquette blanche franche, comme les autres cubes, sans halo. */
+.halo {
+  color: #1f2937;
+  background: #fff;
+  padding: 0.25rem 0.8rem;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}

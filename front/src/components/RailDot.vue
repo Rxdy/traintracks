@@ -31,6 +31,9 @@ withDefaults(defineProps<{ variant?: RailVariant }>(), { variant: 'user' })
 .dot--entry {
   --dot-color: #16a34a;
 }
+.dot--given {
+  --dot-color: #475569;
+}
 .dot--exit {
   --dot-color: #dc2626;
 }

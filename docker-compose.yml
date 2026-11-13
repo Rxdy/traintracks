@@ -1,10 +1,57 @@
 services:
   front:
     build:
-      context: ./front
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: front/Dockerfile
     image: traintracks-front:latest
     container_name: traintracks-front
     ports:
-      - "8090:80"
+      - "${FRONT_PORT:-8090}:80"
+    depends_on:
+      - api
     restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    image: traintracks-api:latest
+    container_name: traintracks-api
+    environment:
+      DATABASE_URL: postgres://traintracks:${POSTGRES_PASSWORD:-traintracks_dev}@db:5432/traintracks
+      APP_URL: ${APP_URL:-http://localhost:8090}
+      # Sans SMTP_URL fournie, les e-mails vont dans Mailpit (http://localhost:8026).
+      SMTP_URL: ${SMTP_URL:-smtp://mail:1025}
+      MAIL_FROM: ${MAIL_FROM:-Train Tracks <no-reply@traintracks.local>}
+      TRUST_PROXY: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    container_name: traintracks-db
+    environment:
+      POSTGRES_USER: traintracks
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-traintracks_dev}
+      POSTGRES_DB: traintracks
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U traintracks"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Boîte mail de développement : reçoit les e-mails de confirmation (http://localhost:8026).
+  mail:
+    image: axllent/mailpit:latest
+    container_name: traintracks-mail
+    ports:
+      - "${MAIL_UI_PORT:-8026}:8025"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

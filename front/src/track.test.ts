@@ -3,15 +3,12 @@ import {
   edgeKey,
   connectedSides,
   isCrossed,
-  isRail,
   toggleCross,
-  tapCell,
   clearCell,
   incidentEdges,
   dragStep,
   type Connections,
   type Crosses,
-  type Rails,
 } from './track'
 import type { Puzzle } from './puzzle'
 
@@ -81,16 +78,16 @@ describe('toggleCross', () => {
     const conn: Connections = new Set()
     const crosses: Crosses = new Set()
     const p = makePuzzle()
-    toggleCross(crosses, conn, p, 1, 1)
+    toggleCross(crosses, conn, new Set(), p, 1, 1)
     expect(isCrossed(crosses, 1, 1)).toBe(true)
-    toggleCross(crosses, conn, p, 1, 1)
+    toggleCross(crosses, conn, new Set(), p, 1, 1)
     expect(isCrossed(crosses, 1, 1)).toBe(false)
   })
 
   it('refuse la croix sur une case qui porte un rail', () => {
     const conn: Connections = new Set(['h:1:1'])
     const crosses: Crosses = new Set()
-    toggleCross(crosses, conn, makePuzzle(), 1, 1)
+    toggleCross(crosses, conn, new Set(), makePuzzle(), 1, 1)
     expect(isCrossed(crosses, 1, 1)).toBe(false)
   })
 })
@@ -152,5 +149,23 @@ describe('dragStep', () => {
     const mode = dragStep(conn, null, 0, 0, 2, 2)
     expect(mode).toBeNull()
     expect(conn.size).toBe(0)
+  })
+})
+
+describe('tracePath / isSolved', () => {
+  it('reconnaît la solution du puzzle d\'exemple', async () => {
+    const { samplePuzzle, sampleSolution } = await import('./puzzle')
+    const { tracePath, isSolved, edgeKey } = await import('./track')
+    const conn = new Set<string>()
+    for (let i = 1; i < sampleSolution.length; i++) {
+      const [a, b] = sampleSolution[i - 1]
+      const [c, d] = sampleSolution[i]
+      conn.add(edgeKey(a, b, c, d)!)
+    }
+    expect(tracePath(conn, samplePuzzle)).toEqual(sampleSolution)
+    expect(isSolved(conn, samplePuzzle)).toBe(true)
+    const broken = new Set(conn)
+    broken.delete([...conn][5])
+    expect(isSolved(broken, samplePuzzle)).toBe(false)
   })
 })

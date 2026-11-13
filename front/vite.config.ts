@@ -6,5 +6,6 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    fs: { allow: ['..'] }, // le dossier shared/ (règles du jeu) est hors de front/
   },
 })

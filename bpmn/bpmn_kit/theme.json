@@ -1,0 +1,23 @@
+{
+  "_doc": "Convention de fait BPMN (Camunda/Signavio/Trisotech) : la norme BPMN 2.0 ne fixe aucune couleur. Début=vert, fin=rouge, décision=jaune, tâche=bleu. Seul ce fichier est à changer pour une autre charte.",
+  "font": "DejaVu Sans, Verdana, sans-serif",
+  "background": "#ffffff",
+  "text": "#1f2933",
+  "line": "#3e4c59",
+  "lane_border": "#9aa5b1",
+  "kinds": {
+    "start":   {"label": "Événement de début",  "fill": "#d9f2d0", "stroke": "#2e7d32"},
+    "end":     {"label": "Événement de fin",    "fill": "#ffd9d9", "stroke": "#c62828"},
+    "error":   {"label": "Fin en erreur",       "fill": "#f4a6a6", "stroke": "#8e0000"},
+    "gateway": {"label": "Passerelle (décision)","fill": "#fff1b8", "stroke": "#f9a825"},
+    "task":    {"label": "Tâche",               "fill": "#dbeafe", "stroke": "#1e6fb5"}
+  },
+  "lane_roles": {
+    "joueur":      {"label": "Acteur humain",       "fill": "#eef2f7"},
+    "application": {"label": "Application",         "fill": "#f1f7ee"},
+    "stockage":    {"label": "Stockage local",      "fill": "#fbf5e6"},
+    "externe":     {"label": "Service externe",     "fill": "#f3eefa"},
+    "technique":   {"label": "Mécanisme technique", "fill": "#ecf6fb"},
+    "neutre":      {"label": "Cas sans suite",      "fill": "#f5f6f8"}
+  }
+}
