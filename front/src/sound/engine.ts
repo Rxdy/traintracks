@@ -145,8 +145,22 @@ export function play(name: SfxName, k = 1): void {
 }
 
 // ---- sons continus : le train, la cloche, et le fond du décor ----
-export type LoopName = 'clack' | 'chug' | 'bell' | 'water' | 'wind' | 'windmill'
+export type LoopName = 'think' | 'clack' | 'chug' | 'bell' | 'water' | 'wind' | 'windmill'
 const LOOPS: Record<LoopName, { bus: BusName; start: (out: AudioNode) => () => void }> = {
+  // réflexion : UNE note longue et chaude (pas de mélodie), qui monte doucement, reste, puis s'éteint (9 s)
+  think: { bus: 'sfx', start: (o) => {
+    const c = ctx!
+    const g = c.createGain()
+    g.gain.setValueAtTime(0.0001, c.currentTime)
+    g.gain.linearRampToValueAtTime(1, c.currentTime + 2.5)
+    g.gain.setValueAtTime(1, c.currentTime + 5.5)
+    g.gain.linearRampToValueAtTime(0.0001, c.currentTime + 9)
+    g.connect(o)
+    tone({ f: 196, d: 9.2, v: 0.08, a: 0.01, hold: 0.99, vib: [0.35, 0.8], out: g })
+    tone({ f: 294, d: 9.2, v: 0.035, a: 0.01, hold: 0.99, vib: [0.3, 1.2], out: g })
+    tone({ f: 392, d: 9.2, type: 'triangle', v: 0.012, a: 0.01, hold: 0.99, out: g })
+    return () => { try { g.gain.cancelScheduledValues(c.currentTime); g.gain.setValueAtTime(g.gain.value, c.currentTime); g.gain.linearRampToValueAtTime(0.0001, c.currentTime + 0.5) } catch { /* déjà éteint */ } }
+  } },
   clack: { bus: 'train', start: (o) => looper(0.25, (dt, i) => tone({ t: dt, f: i % 2 ? 440 : 520, d: 0.06, v: 0.22, out: o })) },
   chug: { bus: 'train', start: (o) => looper(0.26, (dt, i) => { nz({ t: dt, d: 0.2, f: 1100, q: 0.6, v: i % 4 === 0 ? 0.5 : 0.32, a: 0.02, out: o }); tone({ t: dt, f: 75, f2: 55, d: 0.14, v: i % 4 === 0 ? 0.5 : 0.3, out: o }) }) },
   bell: { bus: 'sfx', start: (o) => looper(0.46, (dt, i) => { const f = i % 2 ? 1000 : 1180; [[1, 1], [2.76, 0.4], [5.4, 0.15]].forEach(([m, k]) => tone({ t: dt, f: f * m, d: 0.9, v: 0.15 * k, a: 0.002, out: o })) }) },

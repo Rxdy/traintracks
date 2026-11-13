@@ -134,4 +134,19 @@ describe('chef d\'orchestre des sons', () => {
     clock += 1; d.pose()
     expect(pitches).toHaveLength(14)
   })
+
+  it('réflexion : une seule note, au plus 3 fois par niveau, 45 s d\'écart, coupée dès qu\'on touche la grille', () => {
+    const { d, started, stopped, tick } = setup()
+    d.think()
+    expect(started).toEqual(['think'])
+    tick(10); d.think() // trop tôt
+    expect(started).toEqual(['think'])
+    d.activity()
+    expect(stopped).toContain('think')
+    tick(50); d.think(); tick(50); d.think(); tick(50); d.think() // 4e : refusée
+    expect(started.filter((n) => n === 'think')).toHaveLength(3)
+    d.reveal(riverScene()) // victoire : plus de réflexion
+    tick(100); d.think()
+    expect(started.filter((n) => n === 'think')).toHaveLength(3)
+  })
 })

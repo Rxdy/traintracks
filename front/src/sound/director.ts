@@ -46,6 +46,8 @@ export function createDirector(engine: Engine, now: () => number = () => perform
   let bellOn = false
   let barrierClosed = false
   let lastPose = -Infinity
+  let thinks = 0
+  let lastThink = -Infinity
   let chain = 0
 
   const stopLoop = (n: LoopName) => { loops.get(n)?.(); loops.delete(n) }
@@ -79,6 +81,18 @@ export function createDirector(engine: Engine, now: () => number = () => perform
       lastPose = t
       engine.play('pose', (1 + chain * 0.035) * (0.97 + Math.random() * 0.06))
     },
+    // réflexion : une note longue et douce quand le joueur reste immobile. Au plus 3 fois par niveau, 45 s d'écart,
+    // jamais hors partie ; elle s'éteint dès qu'on touche la grille (activity).
+    think() {
+      if (!soundOn.value || phase !== 'idle' || thinks >= 3) return
+      const t = now()
+      if (t - lastThink < 45) return
+      thinks++
+      lastThink = t
+      stopLoop('think')
+      loops.set('think', engine.startLoop('think'))
+    },
+    activity() { stopLoop('think') },
     // petit son d'action pendant la partie
     sfx(name: 'clear' | 'error') {
       if (!soundOn.value) return
@@ -139,6 +153,7 @@ export function createDirector(engine: Engine, now: () => number = () => perform
     },
     // quitter le niveau, ou rejouer le train
     reset() {
+      stopLoop('think'); thinks = 0; lastThink = -Infinity
       stopTrain(); stopAmbience()
       phase = 'idle'; scenery = null
       clearTimeout(duckTimer); clearTimeout(bedTimer)

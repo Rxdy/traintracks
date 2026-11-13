@@ -56,8 +56,8 @@ export interface Params {
   snowmen: number
   road: number // probabilité d'une route (avec passage à niveau quand elle croise la voie)
   windmills: number
-  treeKind?: 'tree' | 'cactus' | 'palm' | 'crater' // ce que « arbre » devient dans cet environnement
-  pineKind?: 'pine' | 'cactus' | 'palm' | 'flame' | 'boulder'
+  treeKind?: 'tree' | 'cactus' | 'palm' | 'crater' | 'deadtree' // ce que « arbre » devient dans cet environnement
+  pineKind?: 'pine' | 'cactus' | 'palm' | 'vent' | 'skull' | 'boulder'
 }
 export const PARAMS: Record<Theme, Params> = {
   plaine: { river: 1, tree: 0.4, pine: 0.1, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0, road: 0.85, windmills: 1 },
@@ -68,8 +68,8 @@ export const PARAMS: Record<Theme, Params> = {
   desert: { river: 0.4, tree: 0.3, pine: 0.5, houseBase: 1, houseRatio: 0.08, fields: 0, peaks: 0.12, boulders: 0.25, snowmen: 0, road: 0.7, windmills: 0, treeKind: 'cactus', pineKind: 'cactus' },
   tropical: { river: 1, tree: 0.75, pine: 0.7, houseBase: 1, houseRatio: 0.06, fields: 0, peaks: 0, boulders: 0.1, snowmen: 0, road: 0.35, windmills: 0, pineKind: 'palm', treeKind: 'palm' },
   canyon: { river: 0.8, tree: 0.2, pine: 0.4, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.5, boulders: 0.3, snowmen: 0, road: 0.7, windmills: 0, treeKind: 'cactus', pineKind: 'cactus' },
-  volcan: { river: 0.9, tree: 0.2, pine: 0.5, houseBase: 1, houseRatio: 0.04, fields: 0, peaks: 0.45, boulders: 0.3, snowmen: 0, road: 0.4, windmills: 0, pineKind: 'flame' },
-  enfer: { river: 1, tree: 0.25, pine: 0.75, houseBase: 1, houseRatio: 0.06, fields: 0, peaks: 0.3, boulders: 0.15, snowmen: 0, road: 0.3, windmills: 0, pineKind: 'flame' },
+  volcan: { river: 0.9, tree: 0.2, pine: 0.5, houseBase: 1, houseRatio: 0.04, fields: 0, peaks: 0.45, boulders: 0.3, snowmen: 0, road: 0.4, windmills: 0, pineKind: 'vent' },
+  enfer: { river: 1, tree: 0.4, pine: 0.6, houseBase: 1, houseRatio: 0.06, fields: 0, peaks: 0, boulders: 0.15, snowmen: 0, road: 0.3, windmills: 0, treeKind: 'deadtree', pineKind: 'skull' },
   bonbons: { river: 1, tree: 0.6, pine: 0.5, houseBase: 2, houseRatio: 0.1, fields: 2, peaks: 0, boulders: 0.1, snowmen: 0, road: 0.8, windmills: 0 },
   lune: { river: 0.25, tree: 0.5, pine: 0.4, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.15, boulders: 0.2, snowmen: 0, road: 0.5, windmills: 0, treeKind: 'crater', pineKind: 'boulder' },
   neon: { river: 1, tree: 0.55, pine: 0.5, houseBase: 2, houseRatio: 0.1, fields: 0, peaks: 0.1, boulders: 0.1, snowmen: 0, road: 0.9, windmills: 0 },
@@ -99,6 +99,7 @@ export interface Pal {
   rail: { rail: string; tie: string } // la voie elle-même : acier et traverses selon le sol
   cap?: string // sommet des montagnes (neige par défaut ; lave au volcan)
   trunk?: string // tronc des arbres
+  life?: boolean // false : le liquide n'est pas de l'eau (lave, chocolat, néon…) : ni bateaux, ni poissons, ni canards
 }
 export const PAL: Record<Theme, Pal> = {
   plaine: {
@@ -174,6 +175,7 @@ export const PAL: Record<Theme, Pal> = {
     walls: ['#6b5750', '#5a4640', '#7a6258', '#4d3b35'], roofs: ['#2a1d1b', '#3b2a26', '#7f1d1d', '#1f1514'],
     dots: ['#fb923c', '#f97316', '#fde047'], tuft: '#2e2220', rock: ['#6a5d5d', '#3a3030'],
     rail: { rail: '#9ca3af', tie: '#3a2a26' },
+    life: false,
     cap: '#ff7a1a',
     trunk: '#1f1514',
   },
@@ -184,6 +186,7 @@ export const PAL: Record<Theme, Pal> = {
     walls: ['#2a1218', '#3a1a22', '#1f0d12', '#4a2029'], roofs: ['#c1121f', '#9d0208', '#e63946', '#7f0d14'],
     dots: ['#fb923c', '#ef4444', '#fde047'], tuft: '#7a1f2e', rock: ['#44272e', '#26121a'],
     rail: { rail: '#d1d5db', tie: '#2a0e14' },
+    life: false,
     cap: '#ff5a1f',
     trunk: '#240c12',
   },
@@ -194,6 +197,7 @@ export const PAL: Record<Theme, Pal> = {
     walls: ['#b9794a', '#c98a5a', '#a86a3c', '#d9a06c'], roofs: ['#ffffff', '#fecdd3', '#a7f3d0', '#fde68a'],
     dots: ['#ffffff', '#a7f3d0', '#fde047'], tuft: '#f06ea9', rock: ['#f9a8d4', '#e879b0'],
     rail: { rail: '#8b5e83', tie: '#ffffff' },
+    life: false,
     cap: '#ffffff',
     trunk: '#fff7ed',
   },
@@ -204,6 +208,7 @@ export const PAL: Record<Theme, Pal> = {
     walls: ['#e5e7eb', '#d1d5db', '#f3f4f6', '#cbd5e1'], roofs: ['#94a3b8', '#64748b', '#38bdf8', '#e2e8f0'],
     dots: ['#e5e7eb', '#9ca3af', '#d1d5db'], tuft: '#8f93a3', rock: ['#a0a4b2', '#6f7384'],
     rail: { rail: '#334155', tie: '#94a3b8' },
+    life: false,
     cap: '#f1f5f9',
   },
   neon: {
@@ -213,6 +218,7 @@ export const PAL: Record<Theme, Pal> = {
     walls: ['#1e293b', '#273449', '#0f172a', '#312e81'], roofs: ['#ff2bd6', '#00e5ff', '#a3e635', '#f59e0b'],
     dots: ['#00e5ff', '#ff2bd6', '#a3e635'], tuft: '#7c3aed', rock: ['#3b3f7a', '#23265a'],
     rail: { rail: '#00e5ff', tie: '#ff2bd6' },
+    life: false,
     cap: '#00e5ff',
     trunk: '#6d28d9',
   },
@@ -223,5 +229,6 @@ export const PAL: Record<Theme, Pal> = {
     walls: ['#f6e3c0', '#f3d1b0', '#efe0a6', '#fff4e0'], roofs: ['#f8fbff', '#eef4fa', '#7f1d1d', '#e6eef7'],
     dots: ['#dbe7f3', '#fb923c', '#ffffff'], tuft: '#b4c4d6', rock: ['#8a96a5', '#4a3f3f'],
     rail: { rail: '#9ca3af', tie: '#6b7280' },
+    life: false,
   },
 }

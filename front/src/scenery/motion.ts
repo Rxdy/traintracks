@@ -2,6 +2,7 @@
 // barrières, animaux, oiseaux, météo). Ce fichier ne dessine rien : il fait avancer des petits simulateurs,
 // et les composants (WaterLife.vue, SceneryLife.vue) dessinent leur état. Pas de DOM ici, donc testable.
 import { rng, type Pt, type Scenery } from './generate'
+import { PAL } from './themes'
 
 // ---------- géométrie ----------
 // Même lissage que celui du dessin de la rivière : `riverD` en fait un tracé SVG, `sample` le même tracé en points.
@@ -72,6 +73,8 @@ const BOAT_COLORS = ['#e11d48', '#f59e0b', '#7c3aed', '#0ea5e9']
 export function createWaterSim(sc: Scenery) {
   const rand = rng(sc.seed ^ 0x2f6b1a)
   const frozen = sc.theme === 'hiver'
+  // lave, chocolat, néon… : ni bateaux, ni poissons, ni canards (seule une bulle éclate de temps en temps)
+  const alive = PAL[sc.theme].life !== false
   const poly = sc.river && sc.river.length >= 2 ? sample(sc.river) : null
   const pondBox = (() => {
     if (!sc.pond.length) return null
@@ -80,7 +83,7 @@ export function createWaterSim(sc: Scenery) {
     return { cx: (Math.min(...cs) + Math.max(...cs) + 1) / 2, cy: (Math.min(...rs) + Math.max(...rs) + 1) / 2, w: Math.max(...cs) - Math.min(...cs) + 1, h: Math.max(...rs) - Math.min(...rs) + 1 }
   })()
   // Un bateau tous les ~3 cases de rivière, 3 au plus. Ils naissent hors grille, avant le 1er point de la rivière.
-  const count = poly && !frozen ? clamp(Math.floor(poly.length / 3), 1, 3) : 0
+  const count = poly && !frozen && alive ? clamp(Math.floor(poly.length / 3), 1, 3) : 0
   let nextId = 0
   const mk = (s: number) => ({ id: nextId++, s, speed: 0.34 + rand() * 0.12, off: (rand() - 0.5) * 0.08, kind: (nextId % 2) as 0 | 1, color: BOAT_COLORS[Math.floor(rand() * BOAT_COLORS.length)] })
   const boats = Array.from({ length: count }, (_, i) => mk(-i * ((poly?.length ?? 0) / count + 0.3) - 0.2))
@@ -121,14 +124,14 @@ export function createWaterSim(sc: Scenery) {
       }
       const k = t - fishAt
       if (k >= 0 && k < 1.2) ring = { x: spot.x, y: spot.y, k: k / 1.2 }
-      if (k >= 0 && k < 0.45) {
+      if (alive && k >= 0 && k < 0.45) {
         const u = k / 0.45
         fish = { x: spot.x, y: spot.y, lift: Math.sin(u * Math.PI) * 0.16, angle: -70 + u * 140, scale: 0.6 + Math.sin(u * Math.PI) * 0.5 }
       }
     }
     // canards sur l'étang (ou patineur, s'il est gelé)
     const ducks: WaterFrame['ducks'] = []
-    if (pondBox && !frozen) {
+    if (pondBox && !frozen && alive) {
       for (let i = 0; i < 2; i++) {
         const a = t * 0.35 + i * 3.1
         const rx = pondBox.w * 0.28

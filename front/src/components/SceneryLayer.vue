@@ -19,7 +19,9 @@ import WindmillEl from './scenery/WindmillEl.vue'
 import CactusEl from './scenery/CactusEl.vue'
 import PalmEl from './scenery/PalmEl.vue'
 import CraterEl from './scenery/CraterEl.vue'
-import FlameEl from './scenery/FlameEl.vue'
+import VentEl from './scenery/VentEl.vue'
+import DeadTreeEl from './scenery/DeadTreeEl.vue'
+import SkullEl from './scenery/SkullEl.vue'
 
 // Assemble le paysage d'un niveau gagné, SOUS les rails (qui restent des éléments de la grille).
 // Ordre de dessin : sol, champs, lit de la voie, eau, ponts, puis les éléments debout (arbres, maisons…).
@@ -82,7 +84,9 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
       <CactusEl v-else-if="it.kind === 'cactus'" :pal="palFor(it.r, it.c)" :v="it.v" />
       <PalmEl v-else-if="it.kind === 'palm'" :pal="palFor(it.r, it.c)" :v="it.v" />
       <CraterEl v-else-if="it.kind === 'crater'" :pal="palFor(it.r, it.c)" :v="it.v" />
-      <FlameEl v-else-if="it.kind === 'flame'" :pal="palFor(it.r, it.c)" :v="it.v" />
+      <VentEl v-else-if="it.kind === 'vent'" :pal="palFor(it.r, it.c)" :v="it.v" />
+      <DeadTreeEl v-else-if="it.kind === 'deadtree'" :pal="palFor(it.r, it.c)" :v="it.v" />
+      <SkullEl v-else-if="it.kind === 'skull'" :pal="palFor(it.r, it.c)" :v="it.v" />
     </g>
   </svg>
 </template>

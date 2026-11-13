@@ -273,6 +273,7 @@ function restore(snap: Snap): void {
   rails.value = new Set(snap.rls)
 }
 function undo(): void {
+  touch()
   if (!solved.value && hIndex > 0) {
     hIndex--
     restore(history[hIndex])
@@ -280,6 +281,7 @@ function undo(): void {
   }
 }
 function redo(): void {
+  touch()
   if (!solved.value && hIndex < history.length - 1) {
     hIndex++
     restore(history[hIndex])
@@ -288,6 +290,7 @@ function redo(): void {
 }
 function clearAll(): void {
   if (solved.value) return
+  touch()
   sound.sfx('clear')
   connections.value = new Set(lockedEdges(puz.value)) // les rails imposés restent
   crosses.value = new Set()
@@ -318,7 +321,12 @@ function step(r: number, c: number): void {
   last = [r, c]
 }
 
+// Réflexion : si rien ne bouge sur la grille pendant 20 s, une note douce accompagne le joueur (director.think).
+let lastActivity = Date.now()
+let thinkTimer = 0
+const touch = () => { lastActivity = Date.now(); sound.activity() }
 function onDown(ev: PointerEvent, r: number, c: number): void {
+  touch()
   if (props.picking) {
     // Une aide attend une case : on la renvoie, sans rien tracer.
     if (!(ev.button > 0) && !solved.value && !verifying.value) emit('pick', r, c)
@@ -339,6 +347,7 @@ function onDown(ev: PointerEvent, r: number, c: number): void {
 }
 
 function onEnter(r: number, c: number): void {
+  touch()
   step(r, c)
 }
 
@@ -420,11 +429,13 @@ function onKey(ev: KeyboardEvent): void {
 }
 
 onMounted(() => {
+  thinkTimer = window.setInterval(() => { if (!solved.value && !verifying.value && Date.now() - lastActivity > 20000) sound.think() }, 1000)
   window.addEventListener('pointerup', onUp)
   window.addEventListener('pointercancel', onCancel)
   window.addEventListener('keydown', onKey)
 })
 onUnmounted(() => {
+  clearInterval(thinkTimer)
   sound.reset()
   clearTimeout(trainTimer)
   clearInterval(clock)

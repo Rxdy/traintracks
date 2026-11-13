@@ -127,4 +127,24 @@ describe('mouvement du décor', () => {
       if (f.events.includes('bird')) expect(f.birds.some((x) => x.x >= 0.9 && x.x < 1.6)).toBe(true)
     }
   })
+
+  it('cohérence : pas de bateaux, de poissons ni de canards dans la lave, le chocolat ou le néon', () => {
+    for (const th of ['volcan', 'enfer', 'bonbons', 'neon', 'lune', 'fusion'] as const) {
+      for (const lv of levels.slice(0, 12)) {
+        const s = buildScenery(lv.puzzle, lv.solution, th)
+        const sim = createWaterSim(s)
+        expect(sim.hasBoats, th).toBe(false)
+        for (let t = 0; t < 20; t += 0.5) {
+          const f = sim.step(0.5, t)
+          expect(f.boats, th).toHaveLength(0)
+          expect(f.ducks, th).toHaveLength(0)
+          expect(f.fish, th).toBeNull()
+          expect(f.events, th).toEqual([])
+        }
+      }
+    }
+    // et sur de l'eau, ils sont là
+    const eau = find((x) => !!x.river && x.theme === 'plaine').s
+    expect(createWaterSim(eau).hasBoats).toBe(true)
+  })
 })
