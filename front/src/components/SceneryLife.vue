@@ -10,9 +10,8 @@ import { sound } from '../sound/director'
 // neige qui tombent. Les voitures s'arrêtent quand le train approche (`trainNear`) et repartent après son passage.
 // Même repère que le train : 1 case = 1×1, la grille occupe 0..size (le reste, c'est la colonne des indices).
 const props = defineProps<{ scenery: Scenery; trainNear: boolean }>()
-const rows = computed(() => props.scenery.rows) // taille du décor
 const cols = computed(() => props.scenery.cols)
-const board = computed(() => props.scenery.rows - 2 * props.scenery.margin.y) // taille de la grille de jeu : le repère de la page
+const board = computed(() => props.scenery.rows - props.scenery.margin.y - props.scenery.margin.b) // taille de la grille de jeu : le repère de la page
 const pal = computed(() => PAL[props.scenery.theme])
 const sim = createLandSim(props.scenery)
 const empty: LandFrame = { cars: [], barrier: 0, lights: false, animals: [], birds: [], flakes: [], leaves: [], embers: [], events: [] }
@@ -38,7 +37,7 @@ const uc = computed(() => sim.uc ?? 0)
 <template>
   <svg class="life" :viewBox="`0 0 ${board + 1} ${board + 1}`" data-test="scenery-life" aria-hidden="true">
     <defs>
-      <clipPath id="life-clip"><rect x="0" y="0" :width="cols" :height="rows" rx="0.18" /></clipPath>
+      <clipPath id="life-clip"><rect x="0" y="0" :width="cols" :height="scenery.frame.visibleRows" rx="0.18" /></clipPath>
     </defs>
     <g :transform="`translate(${-scenery.margin.x} ${-scenery.margin.y})`">
     <g clip-path="url(#life-clip)">

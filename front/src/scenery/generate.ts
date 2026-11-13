@@ -35,7 +35,8 @@ export interface Road {
 }
 export interface Scenery {
   seed: number
-  margin: { x: number; y: number } // cases de paysage autour de la grille de jeu (en largeur et en hauteur)
+  margin: { x: number; y: number; b: number } // cases de paysage autour de la grille : à gauche/droite (x), en haut (y), en bas (b)
+  frame: { k: number; visibleRows: number } // échelle de la grille à la victoire, et hauteur (en cases du décor) réellement visible
   rows: number // hauteur du décor en cases
   cols: number // largeur du décor en cases (≥ hauteur quand l'écran est large)
   ext: Pt[][] // prolongements de la voie hors de la grille (entrée, sortie), en unités de case du décor
@@ -94,17 +95,26 @@ export function sceneryMargin(size: number): number {
 // `margin` : cases de paysage AJOUTÉES autour de la grille de jeu, en hauteur (y) et en largeur (x) : le décor est plus
 // grand que la grille, et plus LARGE que haut sur un grand écran (pour que le train ne roule pas dans du blanc).
 // La voie se prolonge en ligne droite jusqu'au bord. Tout se calcule alors sur la grande grille, chemin décalé.
-export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, seed = seedOf(puzzle), margin: number | { x: number; y: number } = 0): Scenery {
-  const mg = typeof margin === 'number' ? { x: margin, y: margin } : margin
-  const rows = puzzle.size + 2 * mg.y
-  const cols = puzzle.size + 2 * mg.x
+export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, seed = seedOf(puzzle), margin: number | { x: number; y: number; b?: number } = 0): Scenery {
+  const mx0 = typeof margin === 'number' ? margin : margin.x
+  const my0 = typeof margin === 'number' ? margin : margin.y
+  const N0 = puzzle.size
+  // À la victoire la grille rétrécit (échelle k) et le décor doit couvrir TOUTE la zone d'origine, du haut de la grille
+  // jusqu'en bas de la colonne des indices : d'où des cases en plus sous la grille (b), pas de blanc avant le récapitulatif.
+  const k = my0 > 0 ? N0 / (N0 + 2 * my0) : 1
+  const bottom = N0 / 2 + (N0 / 2 + 1) / k // bas visible, en cases du décor, depuis le haut de la grille
+  const b0 = typeof margin === 'number' || margin.b === undefined ? (my0 > 0 ? Math.ceil(bottom) - N0 : 0) : margin.b
+  const mg = { x: mx0, y: my0, b: b0 }
+  const rows = N0 + mg.y + mg.b
+  const cols = N0 + 2 * mg.x
+  const frame = { k, visibleRows: my0 > 0 ? bottom + my0 : rows }
   const n = Math.min(rows, cols)
   const shifted: Cell[] = smallPath.map(([r, c]) => [r + mg.y, c + mg.x])
   const OUTV: Record<string, Cell> = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] }
-  const lead = (dir: string) => (dir === 'left' || dir === 'right' ? mg.x : mg.y) // cases de paysage dans le sens de la voie
+  const lead = (dir: string) => (dir === 'left' || dir === 'right' ? mg.x : dir === 'up' ? mg.y : mg.b) // cases de paysage dans le sens de la voie
   let path = shifted
   const ext: Pt[][] = []
-  if ((mg.x > 0 || mg.y > 0) && shifted.length) {
+  if ((mg.x > 0 || mg.y > 0 || mg.b > 0) && shifted.length) {
     const [er, ec] = shifted[0]
     const [xr, xc] = shifted[shifted.length - 1]
     const eo = OUTV[puzzle.entry.dir]
@@ -281,20 +291,29 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
     taken.add(k)
   })
 
-  // --- Hameau le long de la voie ---
+  // --- Hameaux : de petits groupes de maisons un peu partout (ni alignées le long de la voie, ni toutes collées à elle) ---
   const freeCells: Cell[] = []
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (free(r, c)) freeCells.push([r, c])
   const nearPath = (r: number, c: number) => DIRS.some(([dr, dc]) => onPath.has(key(r + dr, c + dc)))
-  const houseCount = Math.min(P.houseBase + Math.floor(freeCells.length * P.houseRatio), freeCells.length)
+  const dense = P.houseKind === 'building' // la ville : de vrais quartiers
+  const houseCount = Math.min(P.houseBase + Math.floor(freeCells.length * P.houseRatio * (dense ? 1 : 0.3)), freeCells.length)
+  const perHamlet = dense ? 9 : 3
   const houses: Cell[] = []
-  for (let i = 0; i < houseCount; i++) {
-    const cands = freeCells.filter(([r, c]) => free(r, c) && (houses.length ? DIRS.some(([dr, dc]) => houses.some(([hr, hc]) => hr === r + dr && hc === c + dc)) : nearPath(r, c)) && nearPath(r, c))
-    const pool = cands.length ? cands : freeCells.filter(([r, c]) => free(r, c) && nearPath(r, c))
-    if (!pool.length) break
-    const [r, c] = pool[Math.floor(rand() * pool.length)]
-    tiles[r][c] = { kind: P.houseKind ?? 'house', v: Math.floor(rand() * 4) }
-    taken.add(key(r, c))
-    houses.push([r, c])
+  for (let guard = 0; houses.length < houseCount && guard < 60; guard++) {
+    const seeds = freeCells.filter(([r, c]) => free(r, c))
+    if (!seeds.length) break
+    const cluster: Cell[] = [seeds[Math.floor(rand() * seeds.length)]]
+    const want = Math.min(perHamlet, houseCount - houses.length)
+    while (cluster.length < want) {
+      const around = cluster.flatMap(([r, c]) => DIRS.map(([dr, dc]) => [r + dr, c + dc] as Cell)).filter(([r, c]) => free(r, c) && !cluster.some(([a, b]) => a === r && b === c))
+      if (!around.length) break
+      cluster.push(around[Math.floor(rand() * around.length)])
+    }
+    for (const [r, c] of cluster) {
+      tiles[r][c] = { kind: P.houseKind ?? 'house', v: Math.floor(rand() * 4) }
+      taken.add(key(r, c))
+      houses.push([r, c])
+    }
   }
 
   // --- Moulin à vent (plaine) : sur une case libre, loin de la voie si possible ---
@@ -375,7 +394,7 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
     }
   }
 
-  return { seed, road, margin: mg, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges }
+  return { seed, road, margin: mg, frame, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges }
 }
 
 function pathLen(prev: Map<string, { from: string }>, from: string, start: string): number {

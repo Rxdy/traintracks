@@ -124,15 +124,19 @@ describe('décor des niveaux gagnés', () => {
     for (const lv of levels.slice(0, 40)) {
       const m = sceneryMargin(lv.puzzle.size)
       const s = buildScenery(lv.puzzle, lv.solution, themeForLevel(lv.id), seedOf(lv.puzzle), m)
-      expect(s.size).toBe(lv.puzzle.size + 2 * m)
-      expect(s.margin).toEqual({ x: m, y: m })
+      expect(s.size).toBe(lv.puzzle.size + m + s.margin.b)
+      expect(s.margin).toMatchObject({ x: m, y: m })
+      // le bas du décor couvre jusqu'en bas de la zone d'origine (pas de blanc avant le récapitulatif)
+      expect(s.frame.visibleRows).toBeLessThanOrEqual(s.rows)
+      expect(s.frame.visibleRows).toBeGreaterThan(lv.puzzle.size + m + 1)
       for (const [r, c] of lv.solution) expect(s.tiles[r + m][c + m].kind, `niveau ${lv.id}`).toBe('rail')
       const rails = s.tiles.flat().filter((t) => t.kind === 'rail').length
-      expect(rails, `niveau ${lv.id}`).toBe(lv.solution.length + 2 * m)
+      const lead = (d: string) => (d === 'left' || d === 'right' ? m : d === 'up' ? m : s.margin.b)
+      expect(rails, `niveau ${lv.id}`).toBe(lv.solution.length + lead(lv.puzzle.entry.dir) + lead(lv.puzzle.exit.dir))
       expect(s.ext).toHaveLength(m > 0 ? 2 : 0)
       // les deux bouts de la voie touchent le bord du grand décor
       for (const e of s.ext) {
-        const far = [e[0], e[1]].some((p) => Math.abs(p.x) < 1e-9 || Math.abs(p.y) < 1e-9 || Math.abs(p.x - s.size) < 1e-9 || Math.abs(p.y - s.size) < 1e-9)
+        const far = [e[0], e[1]].some((p) => Math.abs(p.x) < 1e-9 || Math.abs(p.y) < 1e-9 || Math.abs(p.x - s.cols) < 1e-9 || Math.abs(p.y - s.rows) < 1e-9)
         expect(far, `niveau ${lv.id}`).toBe(true)
       }
       // les rochers de la grille restent des montagnes, décalés de la marge
@@ -146,15 +150,17 @@ describe('décor des niveaux gagnés', () => {
     for (const lv of levels.slice(0, 30)) {
       const mg = { x: 9, y: sceneryMargin(lv.puzzle.size) }
       const s = buildScenery(lv.puzzle, lv.solution, themeForLevel(lv.id), seedOf(lv.puzzle), mg)
-      expect(s.rows, `niveau ${lv.id}`).toBe(lv.puzzle.size + 2 * mg.y)
+      expect(s.rows, `niveau ${lv.id}`).toBe(lv.puzzle.size + mg.y + s.margin.b)
       expect(s.cols, `niveau ${lv.id}`).toBe(lv.puzzle.size + 2 * mg.x)
       expect(s.tiles).toHaveLength(s.rows)
       expect(s.tiles.every((row) => row.length === s.cols)).toBe(true)
       const horiz = (d: string) => d === 'left' || d === 'right'
-      const lead = (d: string) => (horiz(d) ? mg.x : mg.y)
+      const lead = (d: string) => (horiz(d) ? mg.x : d === 'up' ? mg.y : s.margin.b)
       const rails = s.tiles.flat().filter((t) => t.kind === 'rail').length
       expect(rails, `niveau ${lv.id}`).toBe(lv.solution.length + lead(lv.puzzle.entry.dir) + lead(lv.puzzle.exit.dir))
       for (const [r, c] of lv.solution) expect(s.tiles[r + mg.y][c + mg.x].kind).toBe('rail')
+      // le décor ne s'arrête pas sur du blanc : l'échelle de la victoire est celle qui fait coïncider le haut du décor avec le haut de la grille
+      expect(s.frame.k).toBeCloseTo(lv.puzzle.size / (lv.puzzle.size + 2 * mg.y), 6)
       // les prolongements touchent bien le bord du grand décor
       for (const e of s.ext) {
         const end = e.find((p) => p.x < 1e-9 || p.y < 1e-9 || Math.abs(p.x - s.cols) < 1e-9 || Math.abs(p.y - s.rows) < 1e-9)

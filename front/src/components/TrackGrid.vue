@@ -122,7 +122,7 @@ watch(trainDone, (v) => v && sound.trainEnd())
 // Zone où le train est visible : exactement celle du décor (en cases de la grille de jeu).
 const trainClip = computed(() => {
   const sc = scenery.value
-  return sc ? { x: -sc.margin.x, y: -sc.margin.y, w: sc.cols, h: sc.rows } : undefined
+  return sc ? { x: -sc.margin.x, y: -sc.margin.y, w: sc.cols, h: sc.frame.visibleRows } : undefined
 })
 
 // Position de la locomotive sur son trajet : les barrières du passage à niveau se baissent quand elle approche.
@@ -244,7 +244,8 @@ function runTrain(): void {
   if (sc) {
     // Le train vit DANS le décor : il y entre et en sort par ses bords, où il disparaît (voir `trainClip`). Il ne roule
     // donc jamais sur le récapitulatif, les pouvoirs ni le bouton Suivant. La voie dépasse le bord de la longueur du train.
-    const lead = (dir: string) => (dir === 'left' || dir === 'right' ? sc.margin.x : sc.margin.y) + TRAIN_LENGTH + 1
+    const below = sc.frame.visibleRows - sc.margin.y - puz.value.size // cases de décor visibles sous la grille
+    const lead = (dir: string) => (dir === 'left' || dir === 'right' ? sc.margin.x : dir === 'up' ? sc.margin.y : below) + TRAIN_LENGTH + 1
     route.value = buildRoute(path, puz.value, { entry: lead(puz.value.entry.dir), exit: lead(puz.value.exit.dir) })
     return
   }
@@ -547,7 +548,7 @@ onMounted(() => {
       ref="boardEl"
       class="board"
       :class="{ picking, 'board--won': scenery }"
-      :style="{ '--size': puzzle.size, '--k': scenery ? puzzle.size / scenery.rows : 1, ...railStyle }"
+      :style="{ '--size': puzzle.size, '--k': scenery ? scenery.frame.k : 1, ...railStyle }"
       role="grid"
       aria-label="Grille de jeu"
       @pointermove="onMove"
@@ -656,7 +657,7 @@ onMounted(() => {
   display: grid;
   place-items: start center;
   min-height: 4.9rem; /* récapitulatif complet : la place est prise dès le début, rien ne bouge à la victoire */
-  margin-top: -0.4rem; /* remonté contre la grille : moins de hauteur perdue */
+  margin-top: 0.1rem; /* le décor couvre maintenant toute la zone de la grille : petit espace avant le récapitulatif */
 }
 .win-zone.win-zone--compact > * {
   grid-area: 1 / 1;

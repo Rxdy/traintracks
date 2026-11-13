@@ -40,9 +40,10 @@ const cols = computed(() => props.scenery.cols)
 // sur un grand écran). Position et taille en % de la grille de jeu (qui fait (taille + 1) cases avec la colonne des indices).
 const box = computed(() => {
   const s = props.scenery
-  const board = s.rows - 2 * s.margin.y
+  const board = s.rows - s.margin.y - s.margin.b
   const u = 100 / (board + 1)
-  return { width: `${s.cols * u}%`, height: `${s.rows * u}%`, left: `${-s.margin.x * u}%`, top: `${-s.margin.y * u}%` }
+  // hauteur : seulement la partie visible (jusqu'au bas de la zone d'origine) ; le reste du dessin est rogné (slice)
+  return { width: `${s.cols * u}%`, height: `${s.frame.visibleRows * u}%`, left: `${-s.margin.x * u}%`, top: `${-s.margin.y * u}%` }
 })
 
 const items = computed(() => {
@@ -64,7 +65,7 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
 </script>
 
 <template>
-  <svg class="scenery" :style="box" :viewBox="`0 0 ${cols} ${rows}`" preserveAspectRatio="none" data-test="scenery" aria-hidden="true">
+  <svg class="scenery" :style="box" :viewBox="`0 0 ${cols} ${rows}`" preserveAspectRatio="xMidYMin slice" data-test="scenery" aria-hidden="true">
     <rect :width="cols" :height="rows" :fill="pal.a" />
     <template v-for="(row, r) in scenery.tiles" :key="'g' + r">
       <template v-for="(_t, c) in row" :key="'g' + r + '-' + c">
