@@ -34,8 +34,8 @@ describe('API des comptes', () => {
     const { app } = await setup()
     const r = await post(app, '/api/auth/register', { pseudo: 'Rudy', email: 'r@x.fr', password: 'Password123!' })
     expect(r.statusCode).toBe(422)
-    expect(r.json()).toMatchObject({ error: 'weak', min: 50 })
-    expect(r.json().bits).toBeLessThan(50)
+    expect(r.json()).toMatchObject({ error: 'weak', min: 36 })
+    expect(r.json().bits).toBeLessThan(36)
   })
   it('pseudo pris : 409 ; données invalides : 400', async () => {
     const { app } = await setup()

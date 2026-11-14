@@ -7,14 +7,15 @@
 import zxcvbn from 'zxcvbn'
 import { hash, verify } from '@node-rs/argon2'
 
-export const MIN_BITS = 50
+export const MIN_BITS = 36
 const MAX_ANALYSED = 100 // zxcvbn devient lent sur de très longues chaînes
 
 // Estimation PRUDENTE : zxcvbn compte 10 possibilités par caractère qu'il ne reconnaît pas, quelle que soit sa
 // nature. Un mot de passe vraiment aléatoire est donc sous-noté (12 caractères au hasard valent 71 bits, il en
 // compte 40). C'est voulu : on ne peut pas distinguer un mot français inconnu de lui d'un tirage aléatoire, et
-// sur-noter un mot faible est pire que sous-noter un bon mot de passe. Un mot de passe sort du seuil de 50 bits
-// avec ~16 caractères au hasard, ou 4 mots, ou une phrase.
+// sur-noter un mot faible est pire que sous-noter un bon mot de passe. Le seuil (36 bits) laisse passer un mot
+// inventé suivi de chiffres et d'un symbole (« Ruleju42170! » : 38 bits) mais pas les mots de passe courants, même
+// décorés (« Password123! » : 19 bits). Quatre mots ou une phrase font plus de 65 bits.
 export function strengthBits(password: string, userInputs: string[] = []): number {
   if (!password) return 0
   const r = zxcvbn(password.slice(0, MAX_ANALYSED), userInputs.filter(Boolean))

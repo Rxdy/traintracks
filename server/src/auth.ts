@@ -1,9 +1,12 @@
 // Comptes : inscription, confirmation d'e-mail, connexion (avec blocage), sessions.
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto'
 import type { Db } from './db.js'
 import type { Mailer } from './mailer.js'
 import { MIN_BITS, checkPassword, dummyHash, hashPassword, strengthBits } from './password.js'
 import { credit } from './wallet.js'
+import { eraseOwner, ownerOf, recordDeletion } from './deleted.js'
+import { randomFreeAvatar } from './avatars.js'
+import type { GoogleProfile } from './google.js'
 import { EMAIL_MAX_FAILS, IP_MAX_FAILS, emailKey, ipKey, lockedFor, recordFailure, recordSuccess } from './limits.js'
 
 export interface Ctx {
@@ -19,6 +22,8 @@ export interface PublicUser {
   email: string
   provider: string
   leaderboard: boolean // apparaît dans le classement
+  avatar: string // un identifiant de la liste fixe (shared/avatars.ts)
+  localLogin: boolean // peut se connecter par e-mail + mot de passe ; faux pour un compte créé par Google tant qu'il n'en a pas défini
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
@@ -70,8 +75,8 @@ export async function register(ctx: Ctx, input: { pseudo: string; email: string;
   try {
     await ctx.db.tx(async (t) => {
       await t.query(
-        'INSERT INTO users (id, pseudo, pseudo_key, email, password_hash, provider, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)', // email_key : calculée par la base (migration 008)
-        [id, pseudo, pseudoKey, email, await hashPassword(input.password), 'local', now],
+        'INSERT INTO users (id, pseudo, pseudo_key, email, password_hash, provider, created_at, avatar) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', // email_key : calculée par la base (migration 008)
+        [id, pseudo, pseudoKey, email, await hashPassword(input.password), 'local', now, randomFreeAvatar()],
       )
       await t.query('INSERT INTO email_tokens (token_hash, user_id, expires_at) VALUES ($1,$2,$3)', [
         sha256(token),
@@ -126,8 +131,8 @@ export async function login(ctx: Ctx, input: { email: string; password: string; 
   const wait = await lockedFor(ctx.db, keys, now)
   if (wait > 0) return { ok: false, code: 'locked', retryAfterSec: wait }
 
-  const { rows } = await ctx.db.query<{ id: string; pseudo: string; email: string; provider: string; leaderboard: boolean; password_hash: string | null; email_confirmed_at: Date | null }>(
-    'SELECT id, pseudo, email, provider, leaderboard, password_hash, email_confirmed_at FROM users WHERE email = $1',
+  const { rows } = await ctx.db.query<{ id: string; pseudo: string; email: string; provider: string; leaderboard: boolean; avatar: string; password_hash: string | null; email_confirmed_at: Date | null }>(
+    'SELECT id, pseudo, email, provider, leaderboard, avatar, password_hash, email_confirmed_at FROM users WHERE email = $1',
     [email],
   )
   const u = rows[0]
@@ -141,20 +146,27 @@ export async function login(ctx: Ctx, input: { email: string; password: string; 
   if (!u.email_confirmed_at) return { ok: false, code: 'unconfirmed' }
 
   await recordSuccess(ctx.db, emailKey(email))
+  const token = await openSession(ctx, u.id)
+  return { ok: true, user: { id: u.id, pseudo: u.pseudo, email: u.email, provider: u.provider, leaderboard: u.leaderboard, avatar: u.avatar, localLogin: true }, sessionToken: token }
+}
+
+// Ouvre une session (cookie de 30 jours) : seule l'empreinte du jeton est gardée en base.
+async function openSession(ctx: Ctx, userId: string): Promise<string> {
+  const now = ctx.now()
   const token = newToken()
   await ctx.db.query('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES ($1,$2,$3,$4)', [
     sha256(token),
-    u.id,
+    userId,
     now,
     new Date(now.getTime() + SESSION_TTL_MS),
   ])
-  return { ok: true, user: { id: u.id, pseudo: u.pseudo, email: u.email, provider: u.provider, leaderboard: u.leaderboard }, sessionToken: token }
+  return token
 }
 
 export async function userForSession(ctx: Ctx, token: string | undefined): Promise<PublicUser | null> {
   if (!token) return null
   const { rows } = await ctx.db.query<PublicUser>(
-    `SELECT u.id, u.pseudo, u.email, u.provider, u.leaderboard FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.pseudo, u.email, u.provider, u.leaderboard, u.avatar, (u.password_hash IS NOT NULL) AS "localLogin" FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > $2`,
     [sha256(token), ctx.now()],
   )
@@ -163,6 +175,77 @@ export async function userForSession(ctx: Ctx, token: string | undefined): Promi
 
 export async function logout(ctx: Ctx, token: string | undefined): Promise<void> {
   if (token) await ctx.db.query('DELETE FROM sessions WHERE token_hash = $1', [sha256(token)])
+}
+
+// --- Connexion avec Google ---------------------------------------------------------------------------------------
+export type GoogleSignInResult =
+  | { ok: true; user: PublicUser; sessionToken: string; created: boolean }
+  | { ok: false; code: 'unverified_email' }
+
+// Pseudo neutre (le pseudo apparaît dans le classement) : jamais le nom ni l'adresse de la personne.
+const PSEUDO_WORDS = ['Cheminot', 'Voyageur', 'Wagon', 'Rail', 'Quai', 'Gare', 'Signal', 'Aiguille', 'Tunnel', 'Locomotive']
+async function freePseudo(db: Db): Promise<string> {
+  for (let i = 0; i < 30; i++) {
+    const pseudo = `${PSEUDO_WORDS[randomInt(PSEUDO_WORDS.length)]}${randomInt(1000, 10000)}`
+    if (!(await db.query('SELECT 1 FROM users WHERE pseudo_key = $1', [pseudo.toLowerCase()])).rows.length) return pseudo
+  }
+  return `Joueur${randomUUID().slice(0, 8)}`
+}
+
+/**
+ * Qui est cette personne ? 1) déjà connue par son identifiant Google → son compte ; 2) sinon, si Google certifie l'adresse et
+ * qu'un compte existe avec cette adresse → on le rattache ; 3) sinon on crée un compte. Une adresse non certifiée par Google
+ * n'est jamais acceptée (sinon on pourrait prendre le compte de quelqu'un d'autre).
+ */
+export async function googleSignIn(ctx: Ctx, profile: GoogleProfile): Promise<GoogleSignInResult> {
+  if (!profile.sub || !profile.emailVerified) return { ok: false, code: 'unverified_email' }
+  const email = normEmail(profile.email)
+  if (!EMAIL_RE.test(email) || email.length > 254) return { ok: false, code: 'unverified_email' }
+  const now = ctx.now()
+  type Row = { id: string; pseudo: string; email: string; provider: string; leaderboard: boolean; avatar: string; password_hash: string | null; email_confirmed_at: Date | null }
+  const COLS = 'id, pseudo, email, provider, leaderboard, avatar, password_hash, email_confirmed_at'
+
+  const resolve = async (): Promise<{ row: Row; created: boolean }> => {
+    const known = await ctx.db.query<Row>(`SELECT ${COLS} FROM users WHERE id = (SELECT user_id FROM identities WHERE provider = 'google' AND subject = $1)`, [profile.sub])
+    if (known.rows[0]) return { row: known.rows[0], created: false }
+
+    const same = await ctx.db.query<Row>(`SELECT ${COLS} FROM users WHERE email_key = $1`, [emailKeyOf(email)])
+    if (same.rows[0]) {
+      const u = same.rows[0]
+      await ctx.db.tx(async (t) => {
+        await t.query(`INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('google', $1, $2, $3)`, [profile.sub, u.id, now])
+        // Compte jamais confirmé : quelqu'un a pu l'ouvrir avec l'adresse d'un autre et SON mot de passe. Google prouve que l'adresse est
+        // bien à cette personne : le compte devient le sien, et on supprime le mot de passe posé avant (elle en choisira un par « mot de passe oublié »).
+        if (!u.email_confirmed_at) await t.query('UPDATE users SET password_hash = NULL WHERE id = $1', [u.id])
+        await t.query('UPDATE users SET email_confirmed_at = COALESCE(email_confirmed_at, $2) WHERE id = $1', [u.id, now])
+      })
+      return { row: { ...u, password_hash: u.email_confirmed_at ? u.password_hash : null }, created: false }
+    }
+
+    const id = randomUUID()
+    const pseudo = await freePseudo(ctx.db)
+    const avatar = randomFreeAvatar()
+    await ctx.db.tx(async (t) => {
+      await t.query(
+        'INSERT INTO users (id, pseudo, pseudo_key, email, password_hash, provider, email_confirmed_at, created_at, avatar) VALUES ($1,$2,$3,$4,NULL,$5,$6,$6,$7)',
+        [id, pseudo, pseudo.toLowerCase(), email, 'google', now, avatar],
+      )
+      await t.query(`INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('google', $1, $2, $3)`, [profile.sub, id, now])
+      await credit(t, `u:${id}`, SIGNUP_COINS, 'signup', 'google', now) // Google a déjà confirmé l'adresse : les pièces de bienvenue tout de suite
+    })
+    return { row: { id, pseudo, email, provider: 'google', leaderboard: true, avatar, password_hash: null, email_confirmed_at: now }, created: true }
+  }
+
+  let r: { row: Row; created: boolean }
+  try {
+    r = await resolve()
+  } catch (e) {
+    if (!/unique|duplicate/i.test(String(e)) && (e as { code?: string }).code !== '23505') throw e
+    r = await resolve() // deux connexions en même temps : la seconde retrouve le compte créé par la première
+  }
+  const token = await openSession(ctx, r.row.id)
+  const u = r.row
+  return { ok: true, created: r.created, sessionToken: token, user: { id: u.id, pseudo: u.pseudo, email: u.email, provider: u.provider, leaderboard: u.leaderboard, avatar: u.avatar, localLogin: !!u.password_hash } }
 }
 
 // --- Mot de passe oublié -------------------------------------------------------------------------------------
@@ -174,7 +257,7 @@ export async function forgotPassword(ctx: Ctx, input: { email: string }): Promis
   const email = normEmail(input.email)
   if (!EMAIL_RE.test(email) || email.length > 254) return
   const { rows } = await ctx.db.query<{ id: string; pseudo: string }>(
-    'SELECT id, pseudo FROM users WHERE email = $1 AND password_hash IS NOT NULL',
+    'SELECT id, pseudo FROM users WHERE email = $1', // y compris un compte créé par Google : c'est ainsi qu'il se donne un mot de passe
     [email],
   )
   const u = rows[0]
@@ -225,6 +308,35 @@ export async function resetPassword(ctx: Ctx, input: { token: string; password: 
   return { ok: true }
 }
 
+// --- Changer de mot de passe, connecté ---------------------------------------------------------------------------
+export type ChangePasswordResult =
+  | { ok: true }
+  | { ok: false; code: 'invalid' | 'wrong_password' | 'same' }
+  | { ok: false; code: 'weak'; bits: number; min: number }
+  | { ok: false; code: 'locked'; retryAfterSec: number }
+
+// L'ancien mot de passe est redemandé (même blocage d'essais que la connexion). Les autres appareils sont déconnectés :
+// la session en cours (`sessionToken`) reste ouverte. Un mail prévient le titulaire, sans jamais contenir de mot de passe.
+export async function changePassword(
+  ctx: Ctx,
+  input: { userId: string; currentPassword: string; newPassword: string; ip: string; sessionToken?: string },
+): Promise<ChangePasswordResult> {
+  if (!input.newPassword || input.newPassword.length > 200) return { ok: false, code: 'invalid' }
+  const pw = await checkOwnerPassword(ctx, input.userId, input.currentPassword, input.ip)
+  if (!pw.ok) return pw.code === 'locked' ? pw : { ok: false, code: 'wrong_password' }
+  if (input.newPassword === input.currentPassword) return { ok: false, code: 'same' }
+  const { rows } = await ctx.db.query<{ pseudo: string }>('SELECT pseudo FROM users WHERE id = $1', [input.userId])
+  const bits = strengthBits(input.newPassword, [rows[0]?.pseudo ?? '', pw.email, pw.email.split('@')[0]])
+  if (bits < MIN_BITS) return { ok: false, code: 'weak', bits, min: MIN_BITS }
+  const newHash = await hashPassword(input.newPassword)
+  await ctx.db.tx(async (t) => {
+    await t.query('UPDATE users SET password_hash = $2 WHERE id = $1', [input.userId, newHash])
+    await t.query('DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2', [input.userId, input.sessionToken ? sha256(input.sessionToken) : ''])
+  })
+  await ctx.mailer.send(pw.email, 'Train Tracks : mot de passe modifié', `Ton mot de passe vient d'être modifié depuis ton compte. Les autres appareils ont été déconnectés. Si ce n'est pas toi, demande un nouveau mot de passe sur ${ctx.appUrl}.\n`)
+  return { ok: true }
+}
+
 // --- Suppression du compte (droit à l'effacement) ---------------------------------------------------------------
 // Efface le compte ET toutes ses données : progression, pièces, aides, puzzle du jour, sessions, jetons.
 // Vérifie le mot de passe d'un compte connecté pour une action sensible (suppression, changement d'adresse) : même blocage
@@ -262,13 +374,12 @@ export async function deleteAccount(ctx: Ctx, input: { userId: string; password:
     await recordFailure(ctx.db, ipKey(input.ip), IP_MAX_FAILS, now)
     return { ok: false, code: 'invalid' }
   }
-  const owner = `u:${input.userId}`
+  const owner = ownerOf(input.userId)
   await ctx.db.tx(async (t) => {
-    for (const table of ['progress', 'level_runs', 'wallets', 'rewards', 'aid_stock', 'aid_gifts', 'daily_runs', 'daily_results']) {
-      await t.query(`DELETE FROM ${table} WHERE owner = $1`, [owner])
-    }
+    await eraseOwner(t, owner)
     await t.query('DELETE FROM login_limits WHERE key = $1', [emailKey(u.email)])
     await t.query('DELETE FROM users WHERE id = $1', [input.userId]) // sessions et jetons partent avec (ON DELETE CASCADE)
+    await recordDeletion(t, owner, now) // pour re-supprimer ce compte si une sauvegarde plus ancienne est restaurée
   })
   await ctx.mailer.send(u.email, 'Train Tracks : compte supprimé', 'Ton compte et toutes tes données ont été supprimés. À bientôt peut-être !\n')
   return { ok: true }

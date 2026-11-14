@@ -188,4 +188,22 @@ describe('statistiques et classements', () => {
     expect(s.entries[1]).toMatchObject({ pseudo: 'Bob', value: 1 })
     void post; void b; void today
   })
+  it('classement des séries : le record reste après une série perdue, jusqu\'à ce qu\'il soit dépassé', async () => {
+    const { get, account, clock, db } = await setup()
+    const a = await account('Alice', 'alice@x.fr')
+    const b = await account('Bob', 'bob@x.fr')
+    const ids = (await db.query<{ id: string; pseudo: string }>('SELECT id, pseudo FROM users')).rows
+    const own = (p: string) => `u:${ids.find((x) => x.pseudo === p)!.id}`
+    const ago = (n: number) => new Date(clock.t - n * 86_400_000).toISOString().slice(0, 10)
+    // Alice : 4 jours de suite il y a 10 à 7 jours, puis rien depuis (série perdue). Bob : 2 jours d'affilée jusqu'à aujourd'hui.
+    for (const n of [10, 9, 8, 7]) await db.query('INSERT INTO daily_results (owner, date, time_ms, solved_at) VALUES ($1,$2,1000,now())', [own('Alice'), ago(n)])
+    for (const n of [1, 0]) await db.query('INSERT INTO daily_results (owner, date, time_ms, solved_at) VALUES ($1,$2,1000,now())', [own('Bob'), ago(n)])
+    let s = (await get('/api/leaderboard?board=serie', a)).json()
+    expect(s.entries.map((e: { pseudo: string; value: number }) => [e.pseudo, e.value])).toEqual([['Alice', 4], ['Bob', 2]])
+    expect(s.me).toEqual({ rank: 1, value: 4 })
+    // Bob dépasse Alice : son score remplace l'ancien rang d'Alice.
+    for (const n of [2, 3, 4]) await db.query('INSERT INTO daily_results (owner, date, time_ms, solved_at) VALUES ($1,$2,1000,now())', [own('Bob'), ago(n)])
+    s = (await get('/api/leaderboard?board=serie', b)).json()
+    expect(s.entries.map((e: { pseudo: string; value: number }) => [e.pseudo, e.value])).toEqual([['Bob', 5], ['Alice', 4]])
+  })
 })

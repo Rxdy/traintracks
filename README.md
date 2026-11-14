@@ -44,7 +44,7 @@ traintracks/
 ## Serveur (comptes) — `server/`
 
 API Fastify (TypeScript) + PostgreSQL. Comptes avec confirmation d'e-mail, mots de passe argon2id d'au
-moins 50 bits (estimés par zxcvbn), blocage des essais de connexion (5 échecs : 15 min, puis le double),
+moins 36 bits (estimés par zxcvbn, jamais affichés au joueur : une barre colorée), blocage des essais de connexion (5 échecs : 15 min, puis le double),
 sessions par cookie HttpOnly. Les niveaux (grilles et solutions) vivent côté serveur : le navigateur ne reçoit
 que la grille du niveau en cours et le serveur vérifie le tracé. Les règles du jeu partagées sont dans `shared/`.
 Le puzzle du jour est généré par le serveur (graine = date, solution unique garantie par le solveur).

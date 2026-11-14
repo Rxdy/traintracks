@@ -2,18 +2,21 @@
 // la session est un cookie HttpOnly que le JavaScript ne peut pas lire.
 import { ref } from 'vue'
 import { api } from './api'
+import { DEFAULT_AVATAR } from './avatars'
 
 export interface User {
   name: string
   email: string
   provider: 'local' | 'google'
   leaderboard?: boolean // apparaît dans le classement (oui si non précisé)
+  avatar?: string // identifiant de la liste fixe (avatars/)
+  localLogin?: boolean // peut se connecter par mot de passe (non si le compte vient de Google et n'en a pas défini) ; oui si non précisé
 }
 
 export type AuthResult = { ok: true; message?: string } | { ok: false; error: string }
 
 // Seuil de robustesse (en bits) ; le serveur recalcule et fait foi.
-export const MIN_BITS = 50
+export const MIN_BITS = 36
 
 export const user = ref<User | null>(null)
 // Message à afficher une fois (ex. résultat du lien de confirmation d'e-mail).
@@ -26,13 +29,33 @@ interface ServerUser {
   email: string
   provider: 'local' | 'google'
   leaderboard?: boolean
+  avatar?: string
+  localLogin?: boolean
 }
-const toUser = (u: ServerUser): User => ({ name: u.pseudo, email: u.email, provider: u.provider, leaderboard: u.leaderboard !== false })
+const toUser = (u: ServerUser): User => ({ name: u.pseudo, email: u.email, provider: u.provider, leaderboard: u.leaderboard !== false, avatar: u.avatar ?? DEFAULT_AVATAR, localLogin: u.localLogin !== false })
 
 // Au démarrage : le cookie de session dit-il qui je suis ?
 export async function refreshSession(): Promise<void> {
   const r = await api('GET', '/api/me')
   user.value = r?.status === 200 ? toUser((r.data as { user: ServerUser }).user) : null
+}
+
+// Connexion avec Google : le serveur dit si elle est configurée (sinon le bouton n'apparaît pas).
+export const googleEnabled = ref(false)
+export async function loadProviders(): Promise<void> {
+  const r = await api('GET', '/api/auth/providers')
+  googleEnabled.value = r?.status === 200 && r.data.google === true
+}
+
+// Retour de Google en échec : le serveur revient sur le site avec ?auth_error=… (jamais de détail technique).
+export function authErrorFromUrl(search = window.location.search): void {
+  const code = new URLSearchParams(search).get('auth_error')
+  if (!code) return
+  notice.value =
+    code === 'google_email'
+      ? 'Google n\'a pas confirmé ton adresse e-mail : connexion impossible avec ce compte.'
+      : 'La connexion avec Google a échoué. Réessaie.'
+  history.replaceState(null, '', window.location.pathname)
 }
 
 // Lien reçu par e-mail : https://site/?confirm=JETON
@@ -73,7 +96,7 @@ export async function register(name: string, email: string, password: string): P
     if (r.data.error === 'email_taken') return { ok: false, error: 'Cette adresse e-mail a déjà un compte. Connecte-toi, ou utilise « Mot de passe oublié ».' }
     return { ok: false, error: 'Ce pseudo est déjà pris.' }
   }
-  if (r.status === 422) return { ok: false, error: `Mot de passe trop faible (${r.data.bits} bits, ${r.data.min} requis).` }
+  if (r.status === 422) return { ok: false, error: 'Mot de passe trop faible : allonge-le ou mélange davantage de caractères.' }
   if (r.data.field === 'pseudo') return { ok: false, error: 'Pseudo invalide : 2 à 24 caractères (lettres, chiffres, . _ -).' }
   if (r.data.field === 'email') return { ok: false, error: 'Adresse e-mail invalide.' }
   return { ok: false, error: 'Inscription impossible.' }
@@ -105,7 +128,7 @@ export async function resetPassword(token: string, password: string): Promise<Au
     resetToken.value = ''
     return { ok: true, message: 'Mot de passe modifié. Tu peux te connecter.' }
   }
-  if (r.status === 422) return { ok: false, error: `Mot de passe trop faible (${r.data.bits} bits, ${r.data.min} requis).` }
+  if (r.status === 422) return { ok: false, error: 'Mot de passe trop faible : allonge-le ou mélange davantage de caractères.' }
   return { ok: false, error: 'Lien invalide ou expiré. Demande un nouveau lien.' }
 }
 
@@ -136,6 +159,18 @@ export async function changeEmail(newEmail: string, password: string): Promise<A
   if (r.status === 409) return { ok: false, error: 'Cette adresse e-mail a déjà un compte.' }
   if (r.data.error === 'same') return { ok: false, error: 'C\'est déjà l\'adresse de ton compte.' }
   if (r.data.error === 'invalid_email') return { ok: false, error: 'Adresse e-mail invalide.' }
+  return { ok: false, error: 'Changement impossible.' }
+}
+
+// --- Changer de mot de passe, connecté : l'ancien est redemandé ; les autres appareils sont déconnectés ---
+export async function changePassword(currentPassword: string, newPassword: string): Promise<AuthResult> {
+  const r = await api('POST', '/api/account/password', { currentPassword, newPassword })
+  if (!r) return { ok: false, error: OFFLINE }
+  if (r.status === 200) return { ok: true, message: 'Mot de passe modifié. Les autres appareils ont été déconnectés.' }
+  if (r.status === 429) return { ok: false, error: `Trop d'essais : réessaie dans ${minutes(r.retryAfter)} min.` }
+  if (r.status === 403) return { ok: false, error: 'Mot de passe actuel incorrect.' }
+  if (r.data.error === 'weak') return { ok: false, error: 'Mot de passe trop faible : allonge-le ou mélange davantage de caractères.' }
+  if (r.data.error === 'same') return { ok: false, error: 'Le nouveau mot de passe doit être différent de l\'ancien.' }
   return { ok: false, error: 'Changement impossible.' }
 }
 
@@ -170,4 +205,45 @@ export async function importFile(file: unknown): Promise<ImportOutcome> {
   if (r.status === 409) return { ok: false, error: 'Ce fichier a déjà été importé : il ne sert qu\'une fois.' }
   if (r.status === 403) return { ok: false, error: 'Fichier modifié ou venant d\'un autre serveur : import refusé.' }
   return { ok: false, error: 'Fichier invalide : choisis un export Train Tracks.' }
+}
+
+// --- Avatars : une liste fixe ; les payants s'achètent avec les pièces (le serveur fait foi) ---
+export interface AvatarState {
+  current: string
+  owned: string[] // les avatars payants déjà achetés
+  coins: number
+}
+export const avatars = ref<AvatarState | null>(null)
+
+function takeAvatars(data: Record<string, unknown>): void {
+  const st = { current: String(data.current), owned: (data.owned as string[]) ?? [], coins: Number(data.coins ?? 0) }
+  avatars.value = st
+  if (user.value) user.value = { ...user.value, avatar: st.current }
+}
+
+export async function loadAvatars(): Promise<void> {
+  const r = await api('GET', '/api/avatars')
+  if (r?.status === 200) takeAvatars(r.data)
+}
+
+export async function selectAvatar(id: string): Promise<AuthResult> {
+  const r = await api('POST', '/api/avatars/select', { id })
+  if (!r) return { ok: false, error: OFFLINE }
+  if (r.status === 200) {
+    takeAvatars(r.data)
+    return { ok: true }
+  }
+  return { ok: false, error: 'Cet avatar n\'est pas encore à toi.' }
+}
+
+export async function buyAvatar(id: string): Promise<AuthResult> {
+  const r = await api('POST', '/api/avatars/buy', { id })
+  if (!r) return { ok: false, error: OFFLINE }
+  if (r.status === 200) {
+    takeAvatars(r.data)
+    return { ok: true }
+  }
+  if (r.status === 402) return { ok: false, error: 'Pas assez de pièces.' }
+  if (r.status === 409) return { ok: false, error: 'Tu as déjà cet avatar.' }
+  return { ok: false, error: 'Achat impossible.' }
 }

@@ -35,15 +35,32 @@ describe('estimation de robustesse', () => {
 })
 
 describe('PasswordMeter', () => {
-  it('affiche les bits et la couleur selon le seuil', () => {
-    const low = mount(PasswordMeter, { props: { bits: 12 } })
-    expect(low.find('[data-test=meter]').classes()).toContain('low')
-    expect(low.text()).toContain('12 / 50 bits')
-    expect(mount(PasswordMeter, { props: { bits: 40 } }).find('[data-test=meter]').classes()).toContain('mid')
-    const ok = mount(PasswordMeter, { props: { bits: 55 } })
-    expect(ok.find('[data-test=meter]').classes()).toContain('ok')
-    expect(ok.text()).toContain('Solide')
-    expect(mount(PasswordMeter, { props: { bits: 0 } }).text()).toContain('50 bits')
+  const fill = (w: ReturnType<typeof mount>) => w.find('[data-test=meter-fill]').attributes('style') ?? ''
+  const hue = (w: ReturnType<typeof mount>) => Number(w.find('[data-test=meter-fill]').attributes('data-hue'))
+  it('une barre colorée, sans aucun chiffre ni mot « bits »', () => {
+    for (const bits of [0, 5, 20, 36, 60, 100]) {
+      const t = mount(PasswordMeter, { props: { bits } }).text()
+      expect(t).not.toMatch(/\d|bits/i)
+    }
+  })
+  it('sous le seuil : du rouge à l\'orange ; au seuil : vert ; au-delà : le vert s\'enrichit', () => {
+    const at = (bits: number) => mount(PasswordMeter, { props: { bits } })
+    expect(hue(at(3))).toBeLessThan(10) // rouge
+    expect(hue(at(MIN_BITS - 1))).toBeGreaterThan(30) // orange
+    expect(at(MIN_BITS - 1).find('[data-test=meter]').classes()).toContain('mid')
+    expect(hue(at(MIN_BITS))).toBe(140) // vert franc dès le seuil
+    expect(at(MIN_BITS).find('[data-test=meter]').classes()).toContain('ok')
+    expect(hue(at(MIN_BITS * 1.5))).toBeGreaterThan(140)
+    expect(hue(at(MIN_BITS * 2.4))).toBeGreaterThan(hue(at(MIN_BITS * 1.5))) // plus robuste : teinte plus profonde
+    expect(at(MIN_BITS * 2.4).text()).toBe('Très robuste')
+    expect(at(MIN_BITS).text()).toBe('Suffisant')
+  })
+  it('la barre grandit avec la robustesse, et le repère du seuil est sur la barre', () => {
+    const w = (bits: number) => parseFloat(/width: ([\d.]+)%/.exec(fill(mount(PasswordMeter, { props: { bits } })))![1])
+    expect(w(10)).toBeLessThan(w(MIN_BITS))
+    expect(w(MIN_BITS)).toBeLessThan(w(MIN_BITS * 2))
+    expect(w(1000)).toBe(100)
+    expect(mount(PasswordMeter, { props: { bits: 0 } }).find('.mark').exists()).toBe(true)
   })
 })
 
@@ -53,15 +70,54 @@ describe('inscription (AuthPanel)', () => {
     await w.find('[data-test=name]').setValue('Rudy')
     await w.find('[data-test=email]').setValue('rudy@x.fr')
     await w.find('[data-test=password]').setValue(password)
-    await vi.waitFor(() => expect(w.find('[data-test=meter-text]').text()).not.toContain('Au moins'))
+    await w.find('[data-test=confirm]').setValue(password)
+    await vi.waitFor(() => expect(w.find('[data-test=meter-text]').text()).not.toContain('Une phrase'))
   }
-  it('le bouton reste inactif sous 50 bits, et aucun envoi n\'est possible', async () => {
+  it('le bouton reste inactif sous le seuil, et aucun envoi n\'est possible', async () => {
     const calls = mockFetch()
     const w = mount(AuthPanel)
     await fill(w, 'Password123!')
     expect(w.find('[data-test=submit]').attributes('disabled')).toBeDefined()
     await w.find('[data-test=auth-form]').trigger('submit')
     expect(calls).toHaveLength(0)
+  })
+  it('« Ruleju42170! » passe ; un mot de passe courant décoré, non', async () => {
+    mockFetch()
+    const ok = mount(AuthPanel)
+    await fill(ok, 'Ruleju42170!')
+    expect(ok.find('[data-test=submit]').attributes('disabled')).toBeUndefined()
+    const weak = mount(AuthPanel)
+    await fill(weak, 'Password123!')
+    expect(weak.find('[data-test=submit]').attributes('disabled')).toBeDefined()
+  })
+  it('il faut ressaisir le mot de passe : tant que les deux saisies diffèrent, l\'envoi est bloqué et le dit', async () => {
+    const calls = mockFetch()
+    const w = mount(AuthPanel)
+    await fill(w, 'bleu-fenetre-cactus-moteur-zebre')
+    await w.find('[data-test=confirm]').setValue('bleu-fenetre-cactus-moteur-zebr')
+    expect(w.find('[data-test=mismatch]').exists()).toBe(true)
+    expect(w.find('[data-test=submit]').attributes('disabled')).toBeDefined()
+    await w.find('[data-test=auth-form]').trigger('submit')
+    expect(calls).toHaveLength(0)
+    await w.find('[data-test=confirm]').setValue('bleu-fenetre-cactus-moteur-zebre')
+    expect(w.find('[data-test=mismatch]').exists()).toBe(false)
+    expect(w.find('[data-test=submit]').attributes('disabled')).toBeUndefined()
+  })
+  it('le bouton « Afficher » montre le mot de passe en clair (les deux champs), « Masquer » le recache', async () => {
+    const w = mount(AuthPanel)
+    await w.find('[data-test=switch]').trigger('click')
+    expect(w.find('[data-test=password]').attributes('type')).toBe('password')
+    await w.find('[data-test=show-password]').trigger('click')
+    expect(w.find('[data-test=password]').attributes('type')).toBe('text')
+    expect(w.find('[data-test=confirm]').attributes('type')).toBe('text')
+    expect(w.find('[data-test=show-password]').text()).toBe('Masquer')
+    await w.find('[data-test=show-password]').trigger('click')
+    expect(w.find('[data-test=password]').attributes('type')).toBe('password')
+  })
+  it('la connexion n\'a pas de confirmation, mais garde l\'œil', () => {
+    const w = mount(AuthPanel)
+    expect(w.find('[data-test=confirm]').exists()).toBe(false)
+    expect(w.find('[data-test=show-password]').exists()).toBe(true)
   })
   it('au-dessus du seuil : envoie pseudo, e-mail, mot de passe, puis demande de confirmer l\'e-mail (pas de connexion)', async () => {
     const calls = mockFetch({ status: 201, body: { ok: true } })
@@ -80,7 +136,7 @@ describe('connexion et messages d\'erreur', () => {
   it('connecte et expose le pseudo', async () => {
     mockFetch({ status: 200, body: { user: { id: '1', pseudo: 'Rudy', email: 'r@x.fr', provider: 'local' } } })
     expect(await login('r@x.fr', 'x')).toEqual({ ok: true })
-    expect(user.value).toEqual({ name: 'Rudy', email: 'r@x.fr', provider: 'local', leaderboard: true })
+    expect(user.value).toEqual({ name: 'Rudy', email: 'r@x.fr', provider: 'local', leaderboard: true, avatar: 'loco', localLogin: true })
   })
   it('messages distincts : mauvais identifiants, e-mail non confirmé, trop d\'essais, serveur injoignable', async () => {
     mockFetch({ status: 401 })
@@ -98,8 +154,8 @@ describe('connexion et messages d\'erreur', () => {
     expect(await register('a', 'a@b.fr', 'x')).toEqual({ ok: false, error: 'Ce pseudo est déjà pris.' })
     mockFetch({ status: 409, body: { error: 'email_taken' } })
     expect(await register('a', 'a@b.fr', 'x')).toMatchObject({ ok: false, error: expect.stringContaining('a déjà un compte') })
-    mockFetch({ status: 422, body: { error: 'weak', bits: 20, min: 50 } })
-    expect(await register('a', 'a@b.fr', 'x')).toMatchObject({ ok: false, error: expect.stringContaining('20 bits') })
+    mockFetch({ status: 422, body: { error: 'weak', bits: 20, min: 36 } })
+    expect(await register('a', 'a@b.fr', 'x')).toMatchObject({ ok: false, error: expect.stringContaining('trop faible') })
   })
 })
 
@@ -166,7 +222,7 @@ describe('mot de passe oublié', () => {
     mockFetch({ status: 200 })
     expect(await resetPassword('abc', 'x')).toMatchObject({ ok: true })
     expect(resetToken.value).toBe('')
-    mockFetch({ status: 422, body: { bits: 10, min: 50 } })
+    mockFetch({ status: 422, body: { bits: 10, min: 36 } })
     expect(await resetPassword('abc', 'x')).toMatchObject({ ok: false, error: expect.stringContaining('trop faible') })
     mockFetch({ status: 400 })
     expect(await resetPassword('abc', 'x')).toMatchObject({ ok: false, error: expect.stringContaining('expiré') })
@@ -260,7 +316,7 @@ describe('changer de compte sur le même appareil', () => {
     await flushPromises()
     expect(calls2[0].url).toBe('/api/auth/login')
     expect(JSON.parse(String(calls2[0].init?.body))).toMatchObject({ email: 'bob@x.fr' })
-    expect(user.value).toEqual({ name: 'Bob', email: 'bob@x.fr', provider: 'local', leaderboard: true })
+    expect(user.value).toEqual({ name: 'Bob', email: 'bob@x.fr', provider: 'local', leaderboard: true, avatar: 'loco', localLogin: true })
     expect(w.text()).toContain('Bob')
     expect(w.text()).toContain('bob@x.fr')
     expect(w.text()).not.toContain('Alice')
@@ -272,6 +328,7 @@ describe('changer de compte sur le même appareil', () => {
     await w.find('[data-test=name]').setValue('Alice2')
     await w.find('[data-test=email]').setValue('alice@x.fr')
     await w.find('[data-test=password]').setValue('bleu-fenetre-cactus-moteur-zebre')
+    await w.find('[data-test=confirm]').setValue('bleu-fenetre-cactus-moteur-zebre')
     await flushPromises()
     await new Promise((r) => setTimeout(r, 50))
     mockFetch({ status: 409, body: { error: 'email_taken' } })

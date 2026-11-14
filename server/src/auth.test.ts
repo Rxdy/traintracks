@@ -19,7 +19,7 @@ describe('inscription', () => {
   it('refuse un mot de passe sous le seuil, sans créer de compte', async () => {
     const { ctx, db, mails } = await makeCtx()
     const r = await register(ctx, { ...sign, password: 'Password123!' })
-    expect(r).toMatchObject({ ok: false, code: 'weak', min: 50 })
+    expect(r).toMatchObject({ ok: false, code: 'weak', min: 36 })
     expect((await db.query('SELECT 1 FROM users')).rows).toHaveLength(0)
     expect(mails).toHaveLength(0)
   })

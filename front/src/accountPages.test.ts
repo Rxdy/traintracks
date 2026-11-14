@@ -129,7 +129,7 @@ describe('page Statistiques', () => {
   it('niveaux, temps de jeu, records, par taille de grille, pièces, environnement', async () => {
     mockFetch({ status: 200, body: {
       journey: { level: 31, total: 299, allDone: false, solved: 30, totalTimeMs: 3_900_000, avgMs: 130_000, fastest: { level: 4, timeMs: 8_000 }, slowest: { level: 29, timeMs: 400_000 }, bySize: [{ size: 4, count: 10, avgMs: 20_000, bestMs: 8_000 }, { size: 5, count: 20, avgMs: 150_000, bestMs: 40_000 }], coinsEarned: 400, coins: 250, firstSolvedAt: '2026-11-01T10:00:00Z' },
-      daily: { count: 2, avgMs: 60_000, bestMs: 50_000, worstMs: 70_000, streak: 2 },
+      daily: { count: 2, avgMs: 60_000, bestMs: 50_000, worstMs: 70_000, streak: 2, bestStreak: 5 },
     } })
     const w = mount(StatsView)
     await flushPromises()
@@ -142,6 +142,7 @@ describe('page Statistiques', () => {
     expect(w.findAll('[data-test=by-size] li').map((l) => l.text())).toEqual(['4×410 niveauxmoy. 0:20record 0:08', '5×520 niveauxmoy. 2:30record 0:40'])
     expect(w.find('[data-test=place]').text()).toContain('Forêt') // niveaux 26 à 50
     expect(w.find('[data-test=streak]').text()).toBe('2')
+    expect(w.find('[data-test=best-streak]').text()).toBe('5')
   })
   it('non connecté : le formulaire de connexion', () => {
     user.value = null

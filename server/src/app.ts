@@ -1,18 +1,22 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 import cookie from '@fastify/cookie'
-import { confirmEmail, deleteAccount, forgotPassword, login, logout, register, resetPassword, userForSession, type Ctx } from './auth.js'
+import { changePassword, confirmEmail, deleteAccount, forgotPassword, googleSignIn, login, logout, register, resetPassword, userForSession, type Ctx } from './auth.js'
 import { MIN_BITS } from './password.js'
+import { challengeOf, newOAuthSecret, type GoogleClient } from './google.js'
 import { begin, mergeAnonymous, start, status, submit } from './journey.js'
 import { aidState, buyAid, useAid } from './aids.js'
 import { beginDaily, dailyStats, dailyStatus, dateKey, startDaily, submitDaily } from './daily.js'
 import { randomUUID } from 'node:crypto'
 import { confirmEmailChange, exportData, importData, requestEmailChange, setLeaderboard } from './accountData.js'
+import { completeTutorial } from './tutorial.js'
+import { avatarState, buyAvatar, selectAvatar } from './avatars.js'
 import { journeyStats, leaderboard, type Board } from './stats.js'
 
 const COOKIE = 'tt_session'
 const ANON = 'tt_anon' // identifiant d'un joueur pas encore inscrit : sa progression est gardée côté serveur
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const COOKIE_MAX_AGE = 30 * 24 * 3600
+const OAUTH = 'tt_oauth' // état et vérificateur PKCE d'une connexion Google en cours (10 minutes)
 
 export interface AppOptions extends Ctx {
   secureCookies?: boolean
@@ -20,6 +24,7 @@ export interface AppOptions extends Ctx {
   dailyTz?: string // fuseau horaire qui définit « aujourd'hui » pour le puzzle du jour
   exportSecret?: string // clé qui signe les fichiers d'export (EXPORT_SECRET)
   legal?: LegalInfo // éditeur, contact et hébergeur affichés dans les mentions légales
+  google?: GoogleClient // connexion avec Google ; absent : la fonction est désactivée (bouton masqué)
 }
 
 export interface LegalInfo {
@@ -76,6 +81,36 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     if (r.code === 'locked') return reply.code(429).header('Retry-After', String(r.retryAfterSec)).send({ error: 'locked', retryAfterSec: r.retryAfterSec })
     if (r.code === 'unconfirmed') return reply.code(403).send({ error: 'unconfirmed' })
     return reply.code(401).send({ error: 'invalid' })
+  })
+
+  // --- Connexion avec Google --------------------------------------------------------------------------------
+  app.get('/api/auth/providers', async () => ({ google: !!opts.google }))
+  app.get('/api/auth/google/start', async (req, reply) => {
+    if (!opts.google) return reply.code(404).send({ error: 'google_off' })
+    const state = newOAuthSecret()
+    const verifier = newOAuthSecret()
+    reply.setCookie(OAUTH, `${state}.${verifier}`, { httpOnly: true, sameSite: 'lax', secure: opts.secureCookies ?? false, path: '/api/auth/google', maxAge: 600 })
+    return reply.redirect(opts.google.authUrl(state, challengeOf(verifier)))
+  })
+  app.get('/api/auth/google/callback', async (req, reply) => {
+    const fail = (code: string) => reply.clearCookie(OAUTH, { path: '/api/auth/google' }).redirect(`${opts.appUrl}/?auth_error=${code}`)
+    if (!opts.google) return reply.code(404).send({ error: 'google_off' })
+    const q = (req.query ?? {}) as Record<string, unknown>
+    const [state, verifier] = (req.cookies[OAUTH] ?? '').split('.')
+    // L'état doit revenir à l'identique : il prouve que cette connexion a bien été lancée depuis ce navigateur.
+    if (!state || !verifier || str(q.state) !== state || !str(q.code)) return fail('google')
+    const profile = await opts.google.exchange(str(q.code), verifier)
+    if (!profile) return fail('google')
+    const r = await googleSignIn(ctx, profile)
+    if (!r.ok) return fail('google_email')
+    setSession(reply, r.sessionToken)
+    reply.clearCookie(OAUTH, { path: '/api/auth/google' })
+    const anon = req.cookies[ANON]
+    if (anon && UUID_RE.test(anon)) {
+      await mergeAnonymous(opts.db, anon, r.user.id)
+      reply.clearCookie(ANON, { path: '/' })
+    }
+    return reply.redirect(`${opts.appUrl}/`)
   })
 
   // Mot de passe oublié : la réponse est la même que l'adresse ait un compte ou non.
@@ -154,6 +189,13 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const r = await submit(opts.db, owner, { level: b.level, edges: b.edges }, opts.now())
     if (r.ok) return r
     return reply.code(r.code === 'wrong' ? 422 : r.code === 'invalid' ? 400 : 409).send({ ok: false, error: r.code })
+  })
+
+  app.post('/api/tutorial/complete', async (req, reply) => {
+    const owner = (await ownerOf(req, reply, true))!
+    const r = await completeTutorial(opts.db, owner, ((req.body ?? {}) as Body).edges, opts.now())
+    if (r.ok) return r
+    return reply.code(r.code === 'wrong' ? 422 : 400).send({ ok: false, error: r.code })
   })
 
   // --- Pièces et aides -------------------------------------------------------------------------------------
@@ -241,10 +283,46 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     if (r.code === 'locked') return reply.code(429).header('Retry-After', String(r.retryAfterSec)).send({ error: 'locked', retryAfterSec: r.retryAfterSec })
     return reply.code(r.code === 'email_taken' ? 409 : r.code === 'wrong_password' ? 403 : 400).send({ error: r.code })
   })
+  app.post('/api/account/password', async (req, reply) => {
+    const user = await userOrFail(req, reply)
+    if (!user) return
+    const b = (req.body ?? {}) as Body
+    const r = await changePassword(ctx, {
+      userId: user.id,
+      currentPassword: str(b.currentPassword),
+      newPassword: str(b.newPassword),
+      ip: req.ip,
+      sessionToken: req.cookies[COOKIE],
+    })
+    if (r.ok) return { ok: true }
+    if (r.code === 'locked') return reply.code(429).header('Retry-After', String(r.retryAfterSec)).send({ error: 'locked', retryAfterSec: r.retryAfterSec })
+    if (r.code === 'weak') return reply.code(400).send({ error: 'weak', bits: r.bits, min: r.min })
+    return reply.code(r.code === 'wrong_password' ? 403 : 400).send({ error: r.code })
+  })
   app.post('/api/account/email/confirm', async (req, reply) => {
     const r = await confirmEmailChange(ctx, str(((req.body ?? {}) as Body).token))
     if (r.ok) return { ok: true }
     return reply.code(r.code === 'email_taken' ? 409 : 400).send({ error: r.code })
+  })
+  // --- Avatars : une liste fixe ; les payants s'achètent avec les pièces ---
+  app.get('/api/avatars', async (req, reply) => {
+    const user = await userOrFail(req, reply)
+    if (!user) return
+    return avatarState(opts.db, user.id)
+  })
+  app.post('/api/avatars/buy', async (req, reply) => {
+    const user = await userOrFail(req, reply)
+    if (!user) return
+    const r = await buyAvatar(opts.db, user.id, ((req.body ?? {}) as Body).id, ctx.now())
+    if (r.ok) return { ok: true, ...(await avatarState(opts.db, user.id)) }
+    return reply.code(r.code === 'owned' ? 409 : r.code === 'poor' ? 402 : 400).send({ error: r.code })
+  })
+  app.post('/api/avatars/select', async (req, reply) => {
+    const user = await userOrFail(req, reply)
+    if (!user) return
+    const r = await selectAvatar(opts.db, user.id, ((req.body ?? {}) as Body).id)
+    if (r.ok) return { ok: true, ...(await avatarState(opts.db, user.id)) }
+    return reply.code(r.code === 'not_owned' ? 403 : 400).send({ error: r.code })
   })
   app.post('/api/account/leaderboard', async (req, reply) => {
     const user = await userOrFail(req, reply)

@@ -26,11 +26,12 @@ les pièces. Le navigateur n'est qu'une interface.
   (lien à durée limitée, usage unique).
 - **Robustesse du mot de passe** : estimée en bits par un outil de type zxcvbn, pas par un simple compte de
   caractères (« Password123! » paraît fort en bits naïfs et se devine en quelques secondes).
-  L'estimation est volontairement **prudente** : 50 bits, c'est environ 16 caractères tirés au hasard, ou
-  4 mots, ou une phrase (12 caractères aléatoires, pourtant bons, comptent ~40 bits et sont refusés).
+  L'estimation est volontairement **prudente** : 36 bits laissent passer un mot inventé suivi de chiffres et d'un
+  symbole (« Ruleju42170! » : 38 bits), pas les mots de passe courants même décorés (« Password123! » : 19 bits).
+  Quatre mots ou une phrase font plus de 65 bits.
   Distinguer un mot français inconnu de l'outil d'un tirage au hasard est impossible ; sur-noter un mot
-  faible est pire que sous-noter un bon mot de passe. **Seuil proposé :
-  50 bits, sans minimum de longueur** (les bits suffisent) ; aucune valeur en dessous n'est acceptée. L'estimation tient compte du
+  faible est pire que sous-noter un bon mot de passe. **Seuil retenu :
+  36 bits, sans minimum de longueur** (les bits suffisent) ; aucune valeur en dessous n'est acceptée. L'estimation tient compte du
   pseudo et de l'e-mail saisis.
 - **Indicateur** : barre de robustesse, libellé et nombre de bits affichés pendant la frappe ; le bouton
   d'inscription reste inactif sous le seuil. **Le serveur recalcule** : il ne fait jamais confiance au navigateur.

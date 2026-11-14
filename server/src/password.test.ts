@@ -7,6 +7,11 @@ describe('robustesse en bits', () => {
       expect(strengthBits(p), p).toBeLessThan(MIN_BITS)
     }
   })
+  it('accepte « Ruleju42170! » (mot inventé, chiffres, symbole) mais pas sa version sans symbole ni un mot trop court', () => {
+    expect(strengthBits('Ruleju42170!')).toBeGreaterThanOrEqual(MIN_BITS)
+    expect(strengthBits('Ruleju')).toBeLessThan(MIN_BITS)
+    expect(strengthBits('Rudy2024!', ['Rudy'])).toBeLessThan(MIN_BITS)
+  })
   it('accepte une phrase de plusieurs mots ou un long mot de passe aléatoire', () => {
     expect(strengthBits('correct horse battery staple')).toBeGreaterThanOrEqual(MIN_BITS)
     expect(strengthBits('bleu-fenetre-cactus-moteur-zebre')).toBeGreaterThanOrEqual(MIN_BITS)

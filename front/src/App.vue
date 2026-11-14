@@ -11,6 +11,7 @@ import LandscapeBg from './components/LandscapeBg.vue'
 import InstallButton from './components/InstallButton.vue'
 import CoinBadge from './components/CoinBadge.vue'
 import { notice, resetToken } from './auth'
+import { homeTheme } from './journey'
 import { suspend, unlock } from './sound/director'
 
 // Accueil = le Voyage (mode principal). Les autres écrans s'ouvrent depuis
@@ -56,7 +57,7 @@ watch(resetToken, (t) => t && go('account'), { immediate: true })
 
 <template>
   <div class="app" :class="{ immersive: playing, landscape: scenery }">
-    <LandscapeBg v-if="scenery" />
+    <LandscapeBg v-if="scenery" :theme="homeTheme" />
 
     <header v-if="!playing" class="header">
       <div class="left">
