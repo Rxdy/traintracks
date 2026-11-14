@@ -67,7 +67,7 @@ const picking = ref(false)
 const trainRunning = ref(false) // le train roule : la cabine montre la carte vue de la locomotive
 const trainS = ref(0) // position de la locomotive sur son trajet (cases)
 const landFrame = shallowRef<LandFrame | null>(null) // voitures, barrières, animaux : l'image du décor vivant, reprise par la cabine
-const cabScene = ref<{ route: Route; scenery: Scenery } | null>(null) // le trajet et le décor de la carte, pour la vue de la cabine
+const cabScene = ref<{ route: Route; scenery: Scenery; rails: Route | null } | null>(null) // le trajet et le décor de la carte, pour la vue de la cabine
 const storeDown = computed(() => levelFinished.value && !trainRunning.value) // le store de la cabine se ferme sur le récapitulatif
 const fmt = (ms: number): string => {
   const t = Math.floor(ms / 1000)

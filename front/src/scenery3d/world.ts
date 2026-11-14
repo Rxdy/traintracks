@@ -10,7 +10,8 @@ import * as THREE from 'three'
 import { PAL, rng, type Scenery, type Tile } from '../scenery'
 import { riverD, sample } from '../scenery/motion'
 import type { Pal } from '../scenery/themes'
-import type { Route } from '../trainRoute'
+import { pointAt, type Route } from '../trainRoute'
+import { SKY } from '../scenery/sky'
 
 const SHEAR = 1 // une hauteur h remonte de h à l'écran (vue cavalière : on voit les façades et les troncs)
 const NIGHT = new Set(['lune', 'neon'])
@@ -372,7 +373,9 @@ function build(kind: Tile['kind'], v: number, pal: Pal, kit: Kit, anims: Anim[],
       const m = mesh(geo('mount', () => new THREE.ConeGeometry(0.5, 0.75, 6)), mat(pal.rock[0], texs.stone), 0, 0.375, 0, g)
       m.rotation.y = v * 0.7
       mesh(geo('mount2', () => new THREE.ConeGeometry(0.3, 0.45, 5)), mat(pal.rock[1], texs.stone), 0.28, 0.225, 0.12, g)
-      const cap = mesh(geo('cap', () => new THREE.ConeGeometry(0.2, 0.3, 6)), mat(pal.cap ?? '#ffffff', null, { roughness: 0.6 }), 0, 0.6, 0, g)
+      // le sommet dépasse un peu de la pente (rayon et hauteur plus grands) : posé PILE sur la surface, il se battrait avec elle
+      // à chaque image (deux faces au même endroit) et la montagne clignoterait
+      const cap = mesh(geo('cap', () => new THREE.ConeGeometry(0.235, 0.335, 6)), mat(pal.cap ?? '#ffffff', null, { roughness: 0.6 }), 0, 0.59, 0, g)
       cap.rotation.y = v * 0.7
       anims.push({ g, delay, phase: 0 })
       break
@@ -492,15 +495,32 @@ function build(kind: Tile['kind'], v: number, pal: Pal, kit: Kit, anims: Anim[],
   return g
 }
 
-// ---------- la vue ----------
-export interface View3D {
-  dispose(): void
+// ---------- le monde partagé ----------
+// Un niveau gagné = UN monde 3D, regardé par deux vues : le plateau (vu du dessus, ou incliné) et le pare-brise de la cabine.
+// Chaque vue a son propre rendu (son canvas) ; le monde, lui, n'est construit et animé qu'une fois.
+//   - 'top'  : vue du dessus, monde cisaillé (vue cavalière) ; rails et train sont ceux de la grille (DOM), cachés ici ;
+//   - 'free' : plateau incliné, vraie perspective ; la grille est cachée, rails et train 3D visibles ;
+//   - 'cab'  : depuis la locomotive ; rails visibles, train caché (on est dedans), brume et ciel à l'horizon.
+export type Mode = 'top' | 'free' | 'cab'
+export interface World {
+  scene: THREE.Scene
+  sc: Scenery
+  setMode(m: Mode): void
+  setTrain(route: Route | null, s: number): void
+  addView(draw: (t: number, dt: number) => void): () => void
 }
-export async function createView(canvas: HTMLCanvasElement, sc: Scenery, route: Route | null): Promise<View3D> {
+
+const CAR = 0.6 // longueur d'une voiture + attelage, en cases (le train de la grille fait 2,4 cases : 4 voitures)
+
+function along(route: Route, s: number, mg: { x: number; y: number }) {
+  const p = pointAt(route, s)
+  const a = (p.angle * Math.PI) / 180
+  return { x: p.x + mg.x, z: p.y + mg.y, tx: Math.cos(a), tz: Math.sin(a) }
+}
+
+async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { dispose(): void }> {
   const pal = PAL[sc.theme]
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
-  renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  const sky = SKY[sc.theme] ?? SKY.plaine
   const scene = new THREE.Scene()
   const night = NIGHT.has(sc.theme)
   const hot = HOT.has(sc.theme)
@@ -518,33 +538,64 @@ export async function createView(canvas: HTMLCanvasElement, sc: Scenery, route: 
   sun.shadow.normalBias = 0.02
   scene.add(sun, sun.target)
 
-  // le monde cisaillé : ce qui est haut remonte à l'écran
+  // horizon : ciel en dégradé et brume de la couleur du bas du ciel (vues 'free' et 'cab')
+  const skyTex = canvasTex(4, 256, (g, w, h) => {
+    const gr = g.createLinearGradient(0, 0, 0, h)
+    gr.addColorStop(0, sky.top)
+    gr.addColorStop(0.6, sky.mid)
+    gr.addColorStop(1, sky.low)
+    g.fillStyle = gr
+    g.fillRect(0, 0, w, h)
+  }, false)
+  const fogFree = new THREE.Fog(sky.low, 18, 60)
+  const fogCab = new THREE.Fog(sky.low, 4, 22)
+
   const world = new THREE.Group()
   world.matrixAutoUpdate = false
-  world.matrix.set(1, 0, 0, 0, 0, 1, 0, 0, 0, -SHEAR, 1, 0, 0, 0, 0, 1)
   scene.add(world)
+  const shear = new THREE.Matrix4().set(1, 0, 0, 0, 0, 1, 0, 0, 0, -SHEAR, 1, 0, 0, 0, 0, 1)
+  const flat = new THREE.Matrix4()
 
   const texs = makeTextures(sc.seed)
   const kit = makeKit(texs)
-  const disposables: { dispose(): void }[] = [kit, ...Object.values(texs)]
+  const disposables: { dispose(): void }[] = [kit, skyTex, ...Object.values(texs)]
 
-  // sol
+  // sol du décor
   const groundMat = new THREE.MeshStandardMaterial({ color: pal.a, roughness: 1 })
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(sc.cols, sc.rows).rotateX(-Math.PI / 2), groundMat)
   ground.position.set(cx, 0, cz)
   ground.receiveShadow = true
   world.add(ground)
   disposables.push(ground.geometry, groundMat)
-  const maxTex = Math.min(renderer.capabilities.maxTextureSize, 4096)
-  const groundReady = loadSvgTexture(groundSvg(sc, route, pal), sc.cols * 100, sc.rows * 100, maxTex)
+  // au-delà du décor : la même herbe qui continue jusqu'à l'horizon (on ne la voit que plateau incliné ou depuis la cabine)
+  const farMat = new THREE.MeshStandardMaterial({ color: pal.a, roughness: 1 })
+  const far = new THREE.Mesh(new THREE.PlaneGeometry(160, 160).rotateX(-Math.PI / 2), farMat)
+  far.position.set(cx, -0.004, cz)
+  far.receiveShadow = true
+  world.add(far)
+  disposables.push(far.geometry, farMat)
+
+  const groundReady = loadSvgTexture(groundSvg(sc, rails, pal), sc.cols * 100, sc.rows * 100, 4096)
     .then((t) => {
-      t.anisotropy = renderer.capabilities.getMaxAnisotropy()
+      t.anisotropy = 8
       groundMat.map = t
       groundMat.color.set('#ffffff')
       groundMat.needsUpdate = true
       disposables.push(t)
     })
     .catch(() => undefined) // sans texture : un sol uni de la bonne couleur
+  const tile = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">${groundSvg({ ...sc, cols: 4, rows: 4, tiles: [], ext: [], road: null, river: null, pond: [] } as Scenery, null, pal).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '').replace(/<feTurbulence /g, '<feTurbulence stitchTiles="stitch" ')}</svg>`
+  const farReady = loadSvgTexture(tile, 400, 400, 512)
+    .then((t) => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping
+      t.repeat.set(40, 40)
+      t.anisotropy = 8
+      farMat.map = t
+      farMat.color.set('#ffffff')
+      farMat.needsUpdate = true
+      disposables.push(t)
+    })
+    .catch(() => undefined)
 
   // eau : un ruban brillant posé sur le lit peint, avec des reflets qui avancent (sauf glace)
   const frozen = sc.theme === 'hiver'
@@ -615,6 +666,55 @@ export async function createView(canvas: HTMLCanvasElement, sc: Scenery, route: 
     world.add(deck)
   }
 
+  // rails 3D le long de toute la voie (grille comprise) : visibles seulement quand la grille n'est pas affichée
+  const track = new THREE.Group()
+  track.visible = false
+  world.add(track)
+  if (rails) {
+    const mg = sc.margin
+    const STEP = 0.05
+    const n = Math.ceil(rails.length / STEP) + 2
+    const railMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(STEP + 0.008, 0.035, 0.03), kit.mat(pal.rail.rail, null, { metalness: 0.6, roughness: 0.35, flatShading: false }), 2 * n)
+    const sleeperMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, 0.025, 0.42), kit.mat(pal.rail.tie, texs.wood), Math.ceil(rails.length / 0.25) + 2)
+    for (const m of [railMesh, sleeperMesh]) {
+      m.castShadow = m.receiveShadow = true
+      m.count = 0
+      track.add(m)
+    }
+    const d = new THREE.Object3D()
+    const put = (m: THREE.InstancedMesh, x: number, y: number, z: number, ang: number) => {
+      d.position.set(x, y, z)
+      d.rotation.set(0, ang, 0)
+      d.updateMatrix()
+      m.setMatrixAt(m.count++, d.matrix)
+    }
+    for (let s = 0; s <= rails.length; s += STEP) {
+      const q = along(rails, s, mg)
+      for (const o of [-0.12, 0.12]) put(railMesh, q.x - q.tz * o, 0.05, q.z + q.tx * o, Math.atan2(-q.tz, q.tx))
+    }
+    for (let s = 0.125; s <= rails.length; s += 0.25) {
+      const q = along(rails, s, mg)
+      put(sleeperMesh, q.x, 0.02, q.z, Math.atan2(-q.tz, q.tx))
+    }
+  }
+
+  // le train 3D (vue inclinée) : locomotive rouge, trois voitures
+  const train = new THREE.Group()
+  train.visible = false
+  world.add(train)
+  const cars = ['#dc2626', '#2563eb', '#f59e0b', '#16a34a'].map((c, i) => {
+    const g = new THREE.Group()
+    kit.mesh(kit.geo('carbody', () => new THREE.BoxGeometry(0.5, 0.2, 0.3)), kit.mat(c, texs.plaster, { roughness: 0.5 }), 0, 0.17, 0, g)
+    if (i === 0) {
+      kit.mesh(kit.geo('cabin', () => new THREE.BoxGeometry(0.18, 0.16, 0.3)), kit.mat(dark(c, 0.3)), -0.16, 0.35, 0, g)
+      kit.mesh(kit.geo('chimney', () => new THREE.CylinderGeometry(0.04, 0.04, 0.12, 10)), kit.mat('#1f2937'), 0.16, 0.33, 0, g)
+      kit.mesh(kit.geo('lamp', () => new THREE.SphereGeometry(0.035, 8, 6)), new THREE.MeshBasicMaterial({ color: '#fde68a' }), 0.26, 0.2, 0, g)
+    } else kit.mesh(kit.geo('carroof', () => new THREE.BoxGeometry(0.48, 0.03, 0.28)), kit.mat(light(c, 0.3)), 0, 0.285, 0, g)
+    for (const x of [-0.15, 0.15]) for (const z of [-0.15, 0.15]) kit.mesh(kit.geo('wheel', () => new THREE.CylinderGeometry(0.06, 0.06, 0.03, 12).rotateX(Math.PI / 2)), kit.mat('#1f2937'), x, 0.07, z, g)
+    train.add(g)
+    return g
+  })
+
   // objets debout, qui poussent l'un après l'autre (même rythme que le décor SVG)
   const anims: Anim[] = []
   sc.tiles.forEach((row, r) =>
@@ -629,37 +729,41 @@ export async function createView(canvas: HTMLCanvasElement, sc: Scenery, route: 
     }),
   )
 
-  // caméra : verticale, orthographique, calée en haut (comme le SVG en « xMidYMin slice »)
-  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 60)
-  camera.up.set(0, 0, -1)
-  let lastScale = 0
-  function resize(): void {
-    const w = canvas.clientWidth
-    const h = canvas.clientHeight
-    if (!w || !h) return
-    const rect = canvas.getBoundingClientRect()
-    const scale = rect.width / w || 1 // la grille est agrandie par CSS à la victoire : on dessine à la taille réelle
-    lastScale = scale
-    renderer.setPixelRatio(Math.min(3, (window.devicePixelRatio || 1) * scale))
-    renderer.setSize(w, h, false)
-    const viewH = (sc.cols * h) / w
-    camera.left = -sc.cols / 2
-    camera.right = sc.cols / 2
-    camera.top = viewH / 2
-    camera.bottom = -viewH / 2
-    camera.position.set(cx, 20, viewH / 2)
-    camera.lookAt(cx, 0, viewH / 2)
-    camera.updateProjectionMatrix()
-  }
-  const ro = new ResizeObserver(resize)
-  ro.observe(canvas)
-  resize()
+  await Promise.all([groundReady, farReady])
 
-  await groundReady
+  let mode: Mode = 'top'
+  function setMode(m: Mode): void {
+    mode = m
+    world.matrix.copy(m === 'top' ? shear : flat)
+    track.visible = m !== 'top'
+    train.visible = m === 'free'
+    far.visible = m !== 'top'
+    scene.fog = m === 'cab' ? fogCab : m === 'free' ? fogFree : null
+    scene.background = m === 'cab' ? skyTex : null
+  }
+  setMode('top')
+  void mode
+
+  function setTrain(route: Route | null, s: number): void {
+    if (!route || s < 0) {
+      cars.forEach((g) => (g.visible = false))
+      return
+    }
+    cars.forEach((g, i) => {
+      const d = s - i * CAR
+      g.visible = d >= 0 && d <= route.length
+      if (!g.visible) return
+      const q = along(route, d, sc.margin)
+      g.position.set(q.x, 0, q.z)
+      g.rotation.y = Math.atan2(-q.tz, q.tx)
+    })
+  }
+
+  // une seule boucle d'animation pour le monde ; chaque vue y dessine à son tour
+  const views = new Set<(t: number, dt: number) => void>()
   const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   const t0 = performance.now()
   let raf = 0
-  let frame = 0
   let last = t0
   const loop = (now: number) => {
     raf = requestAnimationFrame(loop)
@@ -667,20 +771,13 @@ export async function createView(canvas: HTMLCanvasElement, sc: Scenery, route: 
     const t = now - t0
     const dt = Math.min(0.1, (now - last) / 1000)
     last = now
-    if (++frame % 30 === 0) {
-      const rect = canvas.getBoundingClientRect()
-      if (canvas.clientWidth && Math.abs(rect.width / canvas.clientWidth - lastScale) > 0.02) resize()
-    }
     for (const a of anims) {
       if (a.delay >= 0) {
         const p = still ? 1 : Math.min(1, Math.max(0, (t - a.delay) / 700))
         const e = p < 1 ? 1 + 2.2 * Math.pow(p - 1, 3) + 1.2 * Math.pow(p - 1, 2) : 1 // petit rebond à l'arrivée
         const base = (a.g.userData.base as number | undefined) ?? 1
-        if (!a.kind) a.g.scale.setScalar(Math.max(0.001, e * base))
-        else if (a.kind === 'sway') {
-          a.g.scale.setScalar(Math.max(0.001, e * base))
-          if (!still) a.g.rotation.z = Math.sin(t / 900 + a.phase + a.g.position.x) * 0.03
-        }
+        a.g.scale.setScalar(Math.max(0.001, e * base))
+        if (a.kind === 'sway' && !still) a.g.rotation.z = Math.sin(t / 900 + a.phase + a.g.position.x) * 0.03
       } else if (!still && a.kind === 'blades') a.g.rotation.z -= dt * 1.4
       else if (!still && a.kind === 'smoke')
         a.g.children.forEach((p) => {
@@ -691,16 +788,23 @@ export async function createView(canvas: HTMLCanvasElement, sc: Scenery, route: 
         })
     }
     if (shineTex && !still) shineTex.offset.y -= dt * 0.35
-    renderer.render(scene, camera)
+    views.forEach((draw) => draw(t, dt))
   }
   raf = requestAnimationFrame(loop)
 
   return {
+    scene,
+    sc,
+    setMode,
+    setTrain,
+    addView(draw) {
+      views.add(draw)
+      return () => views.delete(draw)
+    },
     dispose() {
       cancelAnimationFrame(raf)
-      ro.disconnect()
       // tout ce qui a été créé (géométries, matériaux, textures de façade…) ; libérer deux fois ne pose pas de problème
-      world.traverse((o) => {
+      scene.traverse((o) => {
         const m = o as THREE.Mesh
         if (!m.isMesh) return
         m.geometry.dispose()
@@ -711,8 +815,54 @@ export async function createView(canvas: HTMLCanvasElement, sc: Scenery, route: 
           mt.dispose()
         }
       })
-      disposables.forEach((d) => d.dispose())
-      renderer.dispose()
+      disposables.forEach((x) => x.dispose())
     },
   }
 }
+
+// Registre : le plateau et la cabine demandent le monde du même décor ; il est construit au premier appel et libéré au dernier.
+const worlds = new Map<Scenery, { p: Promise<World & { dispose(): void }>; refs: number }>()
+export function acquireWorld(sc: Scenery, rails: Route | null): Promise<World> {
+  let e = worlds.get(sc)
+  if (!e) worlds.set(sc, (e = { p: makeWorld(sc, rails), refs: 0 }))
+  e.refs++
+  return e.p
+}
+export function releaseWorld(sc: Scenery): void {
+  const e = worlds.get(sc)
+  if (!e || --e.refs > 0) return
+  worlds.delete(sc)
+  void e.p.then((w) => w.dispose()).catch(() => undefined)
+}
+
+// Un rendu WebGL sur un canvas, à la bonne résolution (la grille est agrandie par CSS à la victoire : on dessine à la taille réelle).
+export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: !opaque })
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  let lastScale = 0
+  let frame = 0
+  const fit = (onSize: (w: number, h: number) => void) => {
+    const w = canvas.clientWidth
+    const h = canvas.clientHeight
+    if (!w || !h) return
+    const scale = canvas.getBoundingClientRect().width / w || 1
+    lastScale = scale
+    renderer.setPixelRatio(Math.min(3, (window.devicePixelRatio || 1) * scale))
+    renderer.setSize(w, h, false)
+    onSize(w, h)
+  }
+  return {
+    renderer,
+    fit,
+    // à appeler à chaque image : se recale si la taille à l'écran a changé (agrandissement CSS animé)
+    check(onSize: (w: number, h: number) => void) {
+      if (++frame % 20 !== 0) return
+      const w = canvas.clientWidth
+      if (!w) return
+      const scale = canvas.getBoundingClientRect().width / w
+      if (Math.abs(scale - lastScale) > 0.02 || renderer.domElement.width === 0) fit(onSize)
+    },
+  }
+}
+export { THREE }

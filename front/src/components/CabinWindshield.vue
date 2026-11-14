@@ -5,12 +5,18 @@ import { PAL, type Theme } from '../scenery/themes'
 import type { Scenery } from '../scenery/generate'
 import type { Route } from '../trainRoute'
 import type { LandFrame } from '../scenery/motion'
+import Windshield3D from './Windshield3D.vue'
+import { decorMode, webglAvailable } from '../decor'
 
 // Pare-brise de la cabine. Quand le train roule, c'est la VRAIE carte vue de la locomotive : le trajet, les arbres, les maisons, les
 // champs, l'eau et la route sont ceux du décor, projetés en perspective depuis la position du train (voir cabView.ts). Une maison à droite de
 // la voie sur la carte est à droite ici, au moment où le petit train la dépasse. Sans carte (avant la victoire) : une voie droite, fixe.
 // Aucun clic, aucun son : c'est un décor.
-const props = defineProps<{ scene?: { route: Route; scenery: Scenery } | null; progress?: number; running?: boolean; theme?: Theme; land?: LandFrame | null }>()
+const props = defineProps<{ scene?: { route: Route; scenery: Scenery; rails?: Route | null } | null; progress?: number; running?: boolean; theme?: Theme; land?: LandFrame | null }>()
+
+// Décor 3D choisi et possible : la vraie 3D vue de la locomotive, par-dessus le dessin (qui reste en secours).
+const failed3d = ref(false)
+const use3d = computed(() => !!props.scene && decorMode.value === '3d' && !failed3d.value && webglAvailable())
 
 const pal = computed(() => PAL[props.scene?.scenery.theme ?? props.theme ?? 'plaine'] ?? PAL.plaine)
 // Le cap de la caméra suit celui de la voie EN DOUCEUR (filtre + vitesse de rotation limitée) : dans un virage la vue pivote lentement, sans tournis.
@@ -60,6 +66,7 @@ const calmSleepers = [66, 70.5, 76.5, 84.5, 95, 109].map((y, i) => ({ y, x1: 170
 </script>
 
 <template>
+  <div class="pb-wrap">
   <svg class="pare-brise" viewBox="0 0 340 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true" data-test="cabin-windshield" :data-running="props.running ? 'true' : 'false'" :data-mapped="view ? 'true' : 'false'" :data-heading="heading === null ? undefined : heading.toFixed(3)">
     <defs>
       <linearGradient id="pb-ciel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc4f0" /><stop offset="1" stop-color="#dbeefe" /></linearGradient>
@@ -209,9 +216,16 @@ const calmSleepers = [66, 70.5, 76.5, 84.5, 95, 109].map((y, i) => ({ y, x1: 170
     <!-- montants du pare-brise -->
     <polygon points="0,0 26,0 6,120 0,120" fill="#0b1220" /><polygon points="340,0 314,0 334,120 340,120" fill="#0b1220" />
   </svg>
+    <Windshield3D v-if="use3d && scene" :key="'w3d-' + scene.scenery.seed" :scenery="scene.scenery" :route="scene.route" :rails="scene.rails" :progress="progress" :heading="heading" @fail="failed3d = true" />
+  </div>
 </template>
 
 <style scoped>
+.pb-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
 .pare-brise {
   display: block;
   width: 100%;

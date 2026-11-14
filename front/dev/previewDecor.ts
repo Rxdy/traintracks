@@ -3,6 +3,7 @@
 import { createApp, defineComponent, h, type VNode } from 'vue'
 import SceneryLayer from '../src/components/SceneryLayer.vue'
 import Scenery3D from '../src/components/Scenery3D.vue'
+import Windshield3D from '../src/components/Windshield3D.vue'
 import { levels } from '../src/testLevels'
 import { buildScenery, PAL, sceneryMargin, seedOf, THEMES, THEME_NAMES, type Theme } from '../src/scenery'
 import { buildRoute } from '../src/trainRoute'
@@ -17,6 +18,9 @@ const sc = buildScenery(lv.puzzle, lv.solution, theme, seedOf(lv.puzzle), mg)
 const horiz = (d: string) => d === 'left' || d === 'right'
 const route = buildRoute(lv.solution, lv.puzzle, { entry: horiz(lv.puzzle.entry.dir) ? mg.x : mg.y, exit: horiz(lv.puzzle.exit.dir) ? mg.x : mg.y })
 const pal = PAL[theme]
+const tilt = Number(q.get('tilt') ?? 50)
+const yaw = Number(q.get('yaw') ?? 25)
+const s = Number(q.get('s') ?? 6)
 
 // Les rails de la voie, comme la grille les dessine par-dessus le décor (deux rails, traverses tous les quarts de case).
 const Rails = defineComponent(() => () => {
@@ -34,11 +38,11 @@ const Rails = defineComponent(() => () => {
 
 const BOARD = 200 // px
 const cell = BOARD / (n + 1)
-const panel = (title: string, layer: VNode) =>
+const panel = (title: string, layer: VNode, rails = true) =>
   h('section', { style: { display: 'inline-block', verticalAlign: 'top', margin: '12px' } }, [
     h('h2', { style: { font: '600 15px system-ui', margin: '0 0 8px' } }, title),
     h('div', { style: { position: 'relative', overflow: 'hidden', width: `${sc.cols * cell}px`, height: `${sc.frame.visibleRows * cell}px`, borderRadius: '10px' } }, [
-      h('div', { style: { position: 'absolute', left: `${sc.margin.x * cell}px`, top: `${sc.margin.y * cell}px`, width: `${BOARD}px`, height: `${BOARD}px` } }, [layer, h(Rails)]),
+      h('div', { style: { position: 'absolute', left: `${sc.margin.x * cell}px`, top: `${sc.margin.y * cell}px`, width: `${BOARD}px`, height: `${BOARD}px` } }, rails ? [layer, h(Rails)] : [layer]),
     ]),
   ])
 
@@ -51,5 +55,13 @@ createApp({
       ]),
       panel('Décor 3D', h(Scenery3D, { scenery: sc, route })),
       panel('Décor classique', h(SceneryLayer, { scenery: sc, route })),
+      panel(`Plateau incliné (${tilt}°, rotation ${yaw}°)`, h(Scenery3D, { scenery: sc, route, trainRoute: route, trainS: s, tilt, yaw }), false),
+      h('section', { style: { display: 'inline-block', verticalAlign: 'top', margin: '12px' } }, [
+        h('h2', { style: { font: '600 15px system-ui', margin: '0 0 8px' } }, `Vue cabine (à ${s} cases du départ)`),
+        h('div', { style: { position: 'relative', width: '680px', height: '240px', borderRadius: '16px', overflow: 'hidden', background: '#000' } }, [h(Windshield3D, { scenery: sc, route, rails: route, progress: s })]),
+      ]),
     ]),
 }).mount('#app')
+
+// ?still : sans animations (captures d'écran automatiques : le navigateur sans écran n'avance pas les fondus)
+if (q.has('still')) document.head.insertAdjacentHTML('beforeend', '<style>*{animation:none!important;transition:none!important}</style>')
