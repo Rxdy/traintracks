@@ -16,6 +16,7 @@ import { refreshWallet, setCoins } from '../wallet'
 import { user } from '../auth'
 import { themeForLevel } from '../scenery'
 import { sound } from '../sound/director'
+import { decorMode, webglAvailable } from '../decor'
 
 // Le Voyage : page principale. On ne montre que le niveau en cours (pas de
 // liste, pas de taille de grille) et un gros bouton pour jouer.
@@ -231,6 +232,11 @@ function quit(): void {
             </div>
             <div class="pupitre-wrap">
               <CabinDash />
+              <!-- Sur le bloc de commande du pupitre : le style du décor (3D ou classique), choix gardé sur l'appareil. -->
+              <div v-if="webglAvailable()" class="decor-switch" role="group" aria-label="Style du décor" data-test="decor-switch">
+                <button type="button" :class="{ on: decorMode === '3d' }" :aria-pressed="decorMode === '3d'" data-test="decor-3d" @click="decorMode = '3d'">Décor 3D</button>
+                <button type="button" :class="{ on: decorMode === 'svg' }" :aria-pressed="decorMode === 'svg'" data-test="decor-svg" @click="decorMode = 'svg'">Classique</button>
+              </div>
             </div>
           </div>
           <div class="bonus-col" data-test="bonus-col">
@@ -470,6 +476,33 @@ section {
   padding: 0.45rem 0;
   font-size: 1rem;
   font-weight: 800;
+}
+.decor-switch {
+  position: absolute;
+  left: 29.5%;
+  width: 41%;
+  top: 58.6%;
+  height: 31%;
+  display: flex;
+  gap: 2%;
+  padding: 1.2%;
+  border-radius: 1.6cqw;
+  background: #0b1220;
+}
+.decor-switch button {
+  flex: 1;
+  border: 0;
+  border-radius: 1.2cqw;
+  background: transparent;
+  color: #94a3b8;
+  font: inherit;
+  font-size: 2.6cqw;
+  font-weight: 800;
+  cursor: pointer;
+}
+.decor-switch button.on {
+  background: #e2e8f0;
+  color: #0f172a;
 }
 .store .trophy {
   margin: 0.3rem 0 0;

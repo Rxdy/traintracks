@@ -22,6 +22,8 @@ import { buildRoute, leadCells, type Route } from '../trainRoute'
 import { buildScenery, distanceNear, PAL, sceneryMargin, seedOf, timing, type Scenery, type Theme } from '../scenery'
 import TrainRun from './TrainRun.vue'
 import SceneryLayer from './SceneryLayer.vue'
+import Scenery3D from './Scenery3D.vue'
+import { decorMode, webglAvailable } from '../decor'
 import SceneryLife from './SceneryLife.vue'
 import type { LandFrame } from '../scenery/motion'
 import { sound, soundOn } from '../sound/director'
@@ -115,6 +117,8 @@ const elapsed = ref(0)
 const route = ref<Route | null>(null)
 // Décor : d'abord il se dévoile (voie posée), PUIS le train démarre.
 const scenery = ref<Scenery | null>(null)
+const failed3d = ref(false) // le décor 3D n'a pas pu s'afficher : décor classique jusqu'à la fin de la visite
+const use3d = computed(() => decorMode.value === '3d' && !failed3d.value && webglAvailable())
 const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
@@ -571,7 +575,9 @@ onMounted(() => {
       aria-label="Grille de jeu"
       @pointermove="onMove"
     >
-      <SceneryLayer v-if="scenery" :scenery="scenery" :route="sceneryRoute" />
+      <!-- Décor : en 3D si le joueur le veut et que l'appareil sait le faire ; sinon (ou en cas d'échec) le décor classique en SVG. -->
+      <Scenery3D v-if="scenery && use3d" :key="'3d-' + scenery.seed" :scenery="scenery" :route="sceneryRoute" @fail="failed3d = true" />
+      <SceneryLayer v-else-if="scenery" :scenery="scenery" :route="sceneryRoute" />
 
       <template v-for="r in indices" :key="'row-' + r">
         <TrackCell

@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Décor : trois rendus</title>
+<style>
+  :root { --bg: #f4f1ea; --fg: #1f2937; --muted: #6b7280; --card: #ffffff; --line: #e5e0d5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1560px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr)); gap: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .card h2 { font-size: 16px; margin: 0; padding: 12px 14px 2px; }
+  .card p { margin: 0; padding: 0 14px 12px; color: var(--muted); font-size: 14px; }
+  .view { position: relative; aspect-ratio: 10 / 8; width: 100%; background: #9bd66f; }
+  .view svg, .view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #v3d { background: linear-gradient(#bfe3ff, #eaf6ff); }
+  .ctrl { display: flex; align-items: center; gap: 10px; padding: 10px 14px 0; font-size: 14px; }
+  .ctrl input { flex: 1; }
+  .seg { flex: 1; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font: inherit; cursor: pointer; }
+  .seg.on { background: #1f2937; color: #fff; border-color: #1f2937; }
+  .shine { animation: flow 40s linear infinite; }
+  @keyframes flow { to { transform: translateY(800px); } }
+  .sway { animation: sway 4s ease-in-out infinite alternate; transform-box: view-box; }
+  @keyframes sway { from { transform: rotate(-1.2deg); } to { transform: rotate(1.2deg); } }
+  .cloud { animation: cloud 60s linear infinite; }
+  @keyframes cloud { from { transform: translateX(-700px); } to { transform: translateX(1300px); } }
+  @media (prefers-reduced-motion: reduce) { .shine, .sway, .cloud { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Décor du niveau : trois rendus</h1>
+  <p class="lead">Le même niveau de plaine, avec la même voie, la même rivière et les mêmes arbres et maisons, dessiné de trois façons.</p>
+  <div class="grid">
+    <section class="card">
+      <h2>Aujourd'hui</h2>
+      <p>Formes plates, sol en damier, objets vus de face sur un sol vu du dessus.</p>
+      <div class="view"><svg id="vflat" viewBox="0 0 1000 800"></svg></div>
+    </section>
+    <section class="card">
+      <h2>Option 1 : SVG en 2,5D</h2>
+      <p>Même technique et même grille. Une seule lumière (en haut à gauche), des ombres portées, du volume et un sol texturé.</p>
+      <div class="view"><svg id="v25" viewBox="0 0 1000 800"></svg></div>
+    </section>
+    <section class="card">
+      <h2>Option 2 : vraie 3D (Three.js)</h2>
+      <p>Vraies lumières et vraies ombres, avec le sol de l'option 1. La caméra peut aller partout, jusque dans la cabine. Demande de refaire le plateau, et pèse environ 150 Ko de plus.</p>
+      <div class="view" id="v3d"></div>
+      <div class="ctrl"><button id="m-top" class="seg on" type="button">Vue d'ensemble</button><button id="m-cab" class="seg" type="button">Vue cabine</button></div>
+      <div class="ctrl"><label for="tilt">Inclinaison</label><input id="tilt" type="range" min="30" max="89" value="55" /><span id="tiltv">55°</span></div>
+      <p style="padding-top:6px">À 89°, on retrouve la vue du dessus du jeu actuel.</p>
+    </section>
+  </div>
+</main>
+
+<script>
+// ---------- Données communes (unité : une case) ----------
+const P = {
+  a: '#9bd66f', b: '#8acb5f', bed: '#e6d9ab', bedEdge: '#c9b784', bank: '#e2d6a4', water: '#4aa8e8', shine: '#8fcdf5',
+  deep: '#2f86c8', shallow: '#7cc4f0', road: '#6b7480', canopy: ['#3f9d4a', '#4cae56', '#45a550'], pine: ['#2f7d4a', '#3a9158'],
+  crops: [['#e9c75b', '#dcb549'], ['#7cc653', '#6bb745']], walls: ['#fdf3dc', '#fbd9d0', '#f9e5a6'], roofs: ['#c2410c', '#9a3412', '#b45309'],
+  rail: '#475569', tie: '#7a4e2d', trunk: '#7a4e2d',
+}
+const TREES = [[0.5, 0.5, 0], [1.45, 0.4, 1], [2.6, 0.6, 2], [4.1, 0.45, 0], [0.55, 2.5, 1], [1.5, 2.45, 0], [5.4, 2.6, 2], [0.45, 6.6, 0], [8.5, 6.55, 1], [9.4, 7.4, 2], [7.55, 7.45, 0], [5.5, 7.2, 1]]
+const PINES = [[9.5, 0.5], [8.55, 0.4], [7.5, 0.6], [9.5, 4.5], [3.45, 7.5]]
+const HOUSES = [[1.5, 4.55, 0], [2.55, 6.5, 1], [9.5, 3.4, 2]]
+const FIELDS = [[7, 2, 0], [8, 2, 0], [7, 3, 1], [8, 3, 1]]
+const ROCKS = [[3.3, 2.3], [5.2, 4.3], [8.2, 4.6]]
+const RAIL_D = 'M-1 3.5 L4 3.5 Q4.5 3.5 4.5 4 L4.5 5 Q4.5 5.5 5 5.5 L11 5.5'
+
+// Échantillonnage de la voie (segments droits et quadratiques), par longueur d'arc
+const SEGS = [['L', [-24, 3.5], [4, 3.5]], ['Q', [4, 3.5], [4.5, 3.5], [4.5, 4]], ['L', [4.5, 4], [4.5, 5]], ['Q', [4.5, 5], [4.5, 5.5], [5, 5.5]], ['L', [5, 5.5], [34, 5.5]]]
+const dense = []
+for (const s of SEGS) {
+  for (let i = dense.length ? 1 : 0; i <= 200; i++) {
+    const t = i / 200
+    if (s[0] === 'L') dense.push([s[1][0] + (s[2][0] - s[1][0]) * t, s[1][1] + (s[2][1] - s[1][1]) * t])
+    else { const [a, b, c] = [s[1], s[2], s[3]], u = 1 - t; dense.push([u * u * a[0] + 2 * u * t * b[0] + t * t * c[0], u * u * a[1] + 2 * u * t * b[1] + t * t * c[1]]) }
+  }
+}
+const cum = [0]
+for (let i = 1; i < dense.length; i++) cum.push(cum[i - 1] + Math.hypot(dense[i][0] - dense[i - 1][0], dense[i][1] - dense[i - 1][1]))
+const LEN = cum[cum.length - 1]
+function at(s) {
+  s = Math.max(0, Math.min(LEN, s))
+  let lo = 0, hi = cum.length - 1
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] < s) lo = m; else hi = m }
+  const f = (s - cum[lo]) / (cum[hi] - cum[lo] || 1), A = dense[lo], B = dense[hi]
+  const d = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1
+  return { x: A[0] + (B[0] - A[0]) * f, y: A[1] + (B[1] - A[1]) * f, tx: (B[0] - A[0]) / d, ty: (B[1] - A[1]) / d }
+}
+const distRail = (x, y) => { let m = 9; for (let i = 0; i < dense.length; i += 10) m = Math.min(m, Math.hypot(dense[i][0] - x, dense[i][1] - y)); return m }
+
+// fleurs et touffes : placées au hasard (graine fixe) sur l'herbe libre
+let seed = 7
+const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+const objs = [...TREES, ...PINES, ...HOUSES, ...ROCKS]
+const free = (x, y) => !(x > 5.85 && x < 7.15) && !(y > 0.9 && y < 2.1) && distRail(x, y) > 0.45 &&
+  !FIELDS.some(([c, r]) => x > c - 0.1 && x < c + 1.1 && y > r - 0.1 && y < r + 1.1) && !objs.some(([ox, oy]) => Math.hypot(ox - x, oy - y) < 0.42)
+const FLOWERS = [], TUFTS = []
+for (let i = 0; i < 400 && (FLOWERS.length < 46 || TUFTS.length < 70); i++) {
+  const x = rnd() * 10, y = rnd() * 8
+  if (!free(x, y)) continue
+  if (FLOWERS.length < 46 && rnd() < 0.45) FLOWERS.push([x, y, rnd() < 0.6 ? '#ffffff' : '#fde68a'])
+  else if (TUFTS.length < 70) TUFTS.push([x, y])
+}
+
+// couleurs
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+const mix = (h, w, k) => '#' + hex(h).map((c, i) => Math.round(c + (hex(w)[i] - c) * k).toString(16).padStart(2, '0')).join('')
+const light = (h, k) => mix(h, '#ffffff', k)
+const dark = (h, k) => mix(h, '#000000', k)
+const px = (v) => +(v * 100).toFixed(1)
+
+// ---------- Panneau 1 : le rendu actuel ----------
+function flat() {
+  let s = `<rect width="1000" height="800" fill="${P.a}"/>`
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 10; c++) if ((r + c) % 2) s += `<rect x="${c * 100}" y="${r * 100}" width="100" height="100" fill="${P.b}"/>`
+  for (const [c, r, v] of FIELDS) { s += `<g transform="translate(${c * 100} ${r * 100})">`; for (let i = 0; i < 5; i++) s += `<rect x="8" y="${10 + i * 17}" width="84" height="10" rx="5" fill="${P.crops[v][i % 2]}"/>`; s += '</g>' }
+  s += `<rect x="0" y="115" width="1000" height="70" fill="${P.road}"/>`
+  s += `<rect x="600" y="0" width="100" height="800" fill="${P.bank}"/><rect x="610" y="0" width="80" height="800" fill="${P.water}"/>`
+  s += `<rect x="595" y="110" width="110" height="80" fill="#a0703f"/><rect x="595" y="515" width="110" height="70" fill="#b8aa90"/>`
+  s += `<path d="${RAIL_D}" transform="scale(100)" fill="none" stroke="${P.bedEdge}" stroke-width="0.68"/><path d="${RAIL_D}" transform="scale(100)" fill="none" stroke="${P.bed}" stroke-width="0.58"/>`
+  s += `<path d="${RAIL_D}" transform="scale(100)" fill="none" stroke="${P.tie}" stroke-width="0.4" stroke-dasharray="0.07 0.18"/>`
+  for (const o of [-0.12, 0.12]) s += `<polyline fill="none" stroke="${P.rail}" stroke-width="6" points="${dense.filter((_, i) => i % 6 === 0).map((p, i, a) => { const q = at(cum[dense.indexOf(p)]); return `${px(q.x - q.ty * o)},${px(q.y + q.tx * o)}` }).join(' ')}"/>`
+  const st = [...TREES.map((t) => ['t', ...t]), ...PINES.map((t) => ['p', ...t]), ...HOUSES.map((t) => ['h', ...t]), ...ROCKS.map((t) => ['r', ...t])]
+  for (const [k, x, y, v] of st) {
+    s += `<g transform="translate(${px(x) - 50} ${px(y) - 50})">`
+    if (k === 't') s += `<ellipse cx="50" cy="84" rx="28" ry="8" fill="#000" opacity="0.14"/><rect x="45" y="56" width="10" height="28" rx="3" fill="${P.trunk}"/><circle cx="50" cy="40" r="26" fill="${P.canopy[0]}"/><circle cx="38" cy="48" r="17" fill="${P.canopy[1]}"/><circle cx="62" cy="46" r="17" fill="${P.canopy[2]}"/>`
+    if (k === 'p') s += `<rect x="46" y="70" width="8" height="14" fill="${P.trunk}"/><path d="M50 10 L80 74 L20 74 Z" fill="${P.pine[0]}"/>`
+    if (k === 'h') s += `<rect x="18" y="44" width="64" height="40" fill="${P.walls[v]}" stroke="#a8977a" stroke-width="2.5"/><path d="M10 46 L50 14 L90 46 Z" fill="${P.roofs[v]}"/><rect x="44" y="58" width="14" height="26" rx="2" fill="#7a4e2d"/><rect x="24" y="54" width="12" height="12" fill="#bfe3fa"/><rect x="66" y="54" width="12" height="12" fill="#bfe3fa"/>`
+    if (k === 'r') s += `<ellipse cx="50" cy="60" rx="18" ry="12" fill="#9ca3af"/>`
+    s += '</g>'
+  }
+  document.getElementById('vflat').innerHTML = s
+}
+
+// ---------- Panneau 2 : SVG 2,5D ----------
+function tree25(x, y, v) {
+  const c = P.canopy[v]
+  return `<ellipse cx="${x + 18}" cy="${y + 4}" rx="32" ry="13" fill="#173d0e" opacity="0.32" filter="url(#soft)"/>
+  <rect x="${x - 5}" y="${y - 28}" width="10" height="30" rx="3" fill="${P.trunk}"/><rect x="${x}" y="${y - 28}" width="5" height="30" fill="#000" opacity="0.2"/>
+  <g class="sway" style="transform-origin:${x}px ${y}px;animation-delay:-${v * 1.3}s">
+    <circle cx="${x}" cy="${y - 54}" r="26" fill="url(#cg${v})"/>
+    <circle cx="${x - 16}" cy="${y - 38}" r="18" fill="url(#cg${(v + 1) % 3})"/>
+    <circle cx="${x + 16}" cy="${y - 36}" r="19" fill="url(#cg${(v + 2) % 3})"/>
+    <circle cx="${x + 1}" cy="${y - 30}" r="15" fill="url(#cg${v})"/>
+    <ellipse cx="${x - 9}" cy="${y - 64}" rx="8" ry="5" fill="#fff" opacity="0.18"/>
+  </g>`
+}
+function pine25(x, y) {
+  const L = light(P.pine[1], 0.08), D = dark(P.pine[0], 0.15)
+  let s = `<path d="M${x - 4} ${y} L${x + 34} ${y + 10} L${x + 44} ${y - 4} L${x + 4} ${y - 10} Z" fill="#173d0e" opacity="0.3" filter="url(#soft)"/>
+  <rect x="${x - 4}" y="${y - 14}" width="8" height="16" fill="${P.trunk}"/>`
+  for (const [w, top, bot] of [[62, -54, -10], [50, -74, -38], [36, -94, -62]]) {
+    const B = y + bot, Tp = y + top
+    s += `<path d="M${x - w / 2} ${B} Q${x - w / 4} ${B + 6} ${x} ${B + 5} L${x} ${Tp} Z" fill="${L}"/><path d="M${x} ${B + 5} Q${x + w / 4} ${B + 6} ${x + w / 2} ${B} L${x} ${Tp} Z" fill="${D}"/>`
+  }
+  return s
+}
+function house25(cx, cy, v) {
+  const ox = cx - 45, oy = cy - 52, w = P.walls[v], r = P.roofs[v]
+  const L = (f, a, b) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]
+  const pt = (p) => `${ox + p[0]},${oy + p[1]}`
+  let tiles = ''
+  for (const f of [0.25, 0.5, 0.75]) {
+    const a = L(f, [14, 58], [45, 36]), b = L(f, [14, 33], [45, 11]); tiles += `<line x1="${ox + a[0]}" y1="${oy + a[1]}" x2="${ox + b[0]}" y2="${oy + b[1]}"/>`
+    const c = L(f, [45, 36], [76, 58]), d = L(f, [45, 11], [76, 33]); tiles += `<line x1="${ox + c[0]}" y1="${oy + c[1]}" x2="${ox + d[0]}" y2="${oy + d[1]}"/>`
+  }
+  return `<polygon transform="translate(16 9)" points="${[[14, 58], [14, 33], [45, 11], [76, 33], [76, 58], [70, 58], [70, 88], [20, 88], [20, 58]].map(pt).join(' ')}" fill="#173d0e" opacity="0.32" filter="url(#soft)"/>
+  <polygon points="${[[20, 88], [20, 53.5], [45, 36.5], [70, 53.5], [70, 88]].map(pt).join(' ')}" fill="${w}"/>
+  <rect x="${ox + 20}" y="${oy + 74}" width="50" height="14" fill="url(#ao)"/>
+  <rect x="${ox + 39}" y="${oy + 66}" width="12" height="22" rx="2" fill="#7a4e2d"/><rect x="${ox + 45}" y="${oy + 66}" width="6" height="22" fill="#000" opacity="0.15"/>
+  <rect x="${ox + 25}" y="${oy + 63}" width="9" height="9" fill="#bfe3fa" stroke="#a8977a" stroke-width="1.5"/><rect x="${ox + 56}" y="${oy + 63}" width="9" height="9" fill="#bfe3fa" stroke="#a8977a" stroke-width="1.5"/>
+  <circle cx="${ox + 45}" cy="${oy + 50}" r="3.5" fill="#bfe3fa" stroke="#a8977a" stroke-width="1.2"/>
+  <polygon points="${[[14, 58], [45, 36], [45, 11], [14, 33]].map(pt).join(' ')}" fill="${light(r, 0.12)}"/>
+  <polygon points="${[[45, 36], [76, 58], [76, 33], [45, 11]].map(pt).join(' ')}" fill="${dark(r, 0.22)}"/>
+  <g stroke="#000" stroke-opacity="0.13" stroke-width="1.2">${tiles}</g>
+  <polyline points="${[[14, 58], [45, 36], [76, 58]].map(pt).join(' ')}" fill="none" stroke="${light(r, 0.35)}" stroke-width="2" stroke-linejoin="round"/>
+  <line x1="${ox + 45}" y1="${oy + 36}" x2="${ox + 45}" y2="${oy + 11}" stroke="${light(r, 0.3)}" stroke-width="1.6"/>
+  <rect x="${ox + 59}" y="${oy + 20}" width="8" height="12" fill="#a8977a"/><rect x="${ox + 63}" y="${oy + 20}" width="4" height="12" fill="#000" opacity="0.15"/><rect x="${ox + 59}" y="${oy + 17}" width="8" height="3" fill="#c9bba0"/>`
+}
+function rock25(x, y) {
+  return `<ellipse cx="${x + 9}" cy="${y + 6}" rx="20" ry="9" fill="#173d0e" opacity="0.3" filter="url(#soft)"/><path d="M${x - 18} ${y + 4} Q${x - 18} ${y - 14} ${x - 2} ${y - 16} Q${x + 18} ${y - 14} ${x + 18} ${y + 2} Q${x} ${y + 9} ${x - 18} ${y + 4} Z" fill="url(#rockg)"/>`
+}
+function field25(c, r, v) {
+  const [a, b] = P.crops[v], ox = c * 100, oy = r * 100
+  let s = `<rect x="${ox + 5}" y="${oy + 5}" width="90" height="90" rx="6" fill="#9a6b3f"/><rect x="${ox + 5}" y="${oy + 5}" width="90" height="90" rx="6" fill="url(#soil)" opacity="0.6"/>`
+  for (let i = 0; i < 5; i++) {
+    const y = oy + 12 + i * 17
+    s += `<rect x="${ox + 10}" y="${y + 3}" width="80" height="11" rx="5.5" fill="#000" opacity="0.2"/><rect x="${ox + 10}" y="${y}" width="80" height="11" rx="5.5" fill="${b}"/><rect x="${ox + 12}" y="${y + 1}" width="76" height="4" rx="2" fill="${light(a, 0.3)}"/>`
+  }
+  return s
+}
+function train25() {
+  const body = (col, loco) => `<rect x="-14" y="-7" width="30" height="22" rx="4" fill="#000" opacity="0.3" filter="url(#soft)"/>
+    <rect x="-15" y="-11" width="30" height="22" rx="4" fill="${dark(col, 0.15)}"/><rect x="-15" y="-11" width="30" height="18" rx="4" fill="${col}"/>
+    <rect x="-12" y="-9" width="24" height="5" rx="2" fill="#fff" opacity="0.28"/>` +
+    (loco ? `<rect x="-15" y="-11" width="11" height="22" rx="3" fill="${dark(col, 0.3)}"/><circle cx="8" cy="-1" r="4" fill="#1f2937"/><circle cx="15" cy="-6" r="2" fill="#fde68a"/><circle cx="15" cy="5" r="2" fill="#fde68a"/>` : '')
+  const cars = [['#dc2626', 1], ['#2563eb'], ['#f59e0b'], ['#16a34a']]
+  return cars.map(([c, l], i) => `<g><animateMotion dur="16s" repeatCount="indefinite" rotate="auto" begin="${(-(cars.length - 1 - i) * 0.36).toFixed(2)}s" path="M-100 350 L400 350 Q450 350 450 400 L450 500 Q450 550 500 550 L1100 550"/>${body(c, l)}</g>`).join('')
+}
+function v25() {
+  const W = (y, a, f) => (a + 5 * Math.sin(y * f)).toFixed(1)
+  const left = [], right = []
+  for (let y = 0; y <= 800; y += 20) { left.push(`${W(y, 612, 0.045)},${y}`); right.push(`${W(y, 688, 0.05)},${y}`) }
+  const waterPts = [...left, ...right.reverse()].join(' ')
+  const bankL = [], bankR = []
+  for (let y = 0; y <= 800; y += 20) { bankL.push(`${W(y, 597, 0.07)},${y}`); bankR.push(`${W(y, 703, 0.06)},${y}`) }
+  const bankPts = [...bankL, ...bankR.reverse()].join(' ')
+  let shine = ''
+  for (let i = 0; i < 18; i++) { const x = 624 + ((i * 37) % 52), y = (i * 61) % 800; for (const o of [0, -800]) shine += `<line x1="${x}" y1="${y + o}" x2="${x}" y2="${y + o + 16}"/>` }
+  const rails = [-0.12, 0.12].map((o) => { const pts = []; for (let s = 0; s <= LEN; s += 0.04) { const q = at(s); pts.push(`${px(q.x - q.ty * o)},${px(q.y + q.tx * o)}`) } return pts.join(' ') })
+  const cg = P.canopy.map((c, i) => `<radialGradient id="cg${i}" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="${light(c, 0.3)}"/><stop offset="0.55" stop-color="${c}"/><stop offset="1" stop-color="${dark(c, 0.3)}"/></radialGradient>`).join('')
+  const stand = [
+    ...TREES.map(([x, y, v]) => [y + 0.22, tree25(px(x), px(y) + 22, v)]),
+    ...PINES.map(([x, y]) => [y + 0.3, pine25(px(x), px(y) + 30)]),
+    ...HOUSES.map(([x, y, v]) => [y + 0.3, house25(px(x), px(y), v)]),
+    ...ROCKS.map(([x, y]) => [y, rock25(px(x), px(y))]),
+  ].sort((a, b) => a[0] - b[0]).map((a) => a[1]).join('')
+  let s = `<defs>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
+    <filter id="blur30" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="30"/></filter>
+    <filter id="patchD" filterUnits="userSpaceOnUse" x="0" y="0" width="1000" height="800"><feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="3" seed="4"/><feColorMatrix type="matrix" values="0 0 0 0 0.33  0 0 0 0 0.55  0 0 0 0 0.18  1.8 0 0 0 -0.8"/></filter>
+    <filter id="patchL" filterUnits="userSpaceOnUse" x="0" y="0" width="1000" height="800"><feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="11"/><feColorMatrix type="matrix" values="0 0 0 0 0.78  0 0 0 0 0.92  0 0 0 0 0.52  1.8 0 0 0 -0.85"/></filter>
+    <filter id="grain" filterUnits="userSpaceOnUse" x="0" y="0" width="1000" height="800"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="2"/><feColorMatrix type="matrix" values="0 0 0 0 0.1  0 0 0 0 0.25  0 0 0 0 0.05  0 0 0 -1.4 0.9"/></filter>
+    ${cg}
+    <radialGradient id="rockg" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#d1d5db"/><stop offset="0.6" stop-color="#9ca3af"/><stop offset="1" stop-color="#6b7280"/></radialGradient>
+    <linearGradient id="ao" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.18"/></linearGradient>
+    <linearGradient id="wg" x1="0" x2="1"><stop offset="0" stop-color="${P.shallow}"/><stop offset="0.3" stop-color="${P.water}"/><stop offset="0.5" stop-color="${P.deep}"/><stop offset="0.7" stop-color="${P.water}"/><stop offset="1" stop-color="${P.shallow}"/></linearGradient>
+    <linearGradient id="road" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7b8490"/><stop offset="0.5" stop-color="${P.road}"/><stop offset="1" stop-color="#5d6570"/></linearGradient>
+    <radialGradient id="vig" cx="0.5" cy="0.5" r="0.75"><stop offset="0.6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#0b2a10" stop-opacity="0.22"/></radialGradient>
+    <pattern id="gravel" width="24" height="24" patternUnits="userSpaceOnUse"><rect width="24" height="24" fill="${P.bed}"/>
+      <circle cx="4" cy="5" r="2.2" fill="${P.bedEdge}"/><circle cx="15" cy="3" r="1.8" fill="#f3ead0"/><circle cx="10" cy="13" r="2.4" fill="#d6c79a"/><circle cx="20" cy="15" r="2" fill="${P.bedEdge}"/><circle cx="5" cy="20" r="1.8" fill="#f3ead0"/><circle cx="17" cy="22" r="1.6" fill="#d6c79a"/></pattern>
+    <pattern id="soil" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.2" fill="#6e4a2a"/><circle cx="8" cy="7" r="1" fill="#c49a6c"/></pattern>
+    <clipPath id="wclip"><polygon points="${waterPts}"/></clipPath>
+  </defs>
+  <rect width="1000" height="800" fill="${P.a}"/>
+  <rect width="1000" height="800" filter="url(#patchD)" opacity="0.5"/>
+  <rect width="1000" height="800" filter="url(#patchL)" opacity="0.45"/>
+  <rect width="1000" height="800" filter="url(#grain)" opacity="0.5"/>`
+  for (const [x, y] of TUFTS) { const X = px(x), Y = px(y); s += `<path d="M${X} ${Y} l-3 -7 M${X} ${Y} l0 -9 M${X} ${Y} l3 -7" stroke="${dark(P.a, 0.28)}" stroke-width="1.8" stroke-linecap="round" fill="none"/>` }
+  for (const [x, y, c] of FLOWERS) { const X = px(x), Y = px(y); s += `<circle cx="${X + 1}" cy="${Y + 1.5}" r="2.6" fill="#000" opacity="0.15"/><circle cx="${X}" cy="${Y}" r="2.6" fill="${c}"/><circle cx="${X}" cy="${Y}" r="0.9" fill="#f59e0b"/>` }
+  // route
+  s += `<rect x="0" y="108" width="1000" height="84" fill="#000" opacity="0.12" filter="url(#soft)"/>
+  <rect x="0" y="112" width="1000" height="76" fill="url(#road)"/>
+  <rect x="0" y="112" width="1000" height="3" fill="#a3abb5"/><rect x="0" y="185" width="1000" height="3" fill="#4b525c"/>`
+  for (let x = 10; x < 1000; x += 50) s += `<rect x="${x}" y="148" width="24" height="4" rx="2" fill="#f1f5f9" opacity="0.85"/>`
+  // rivière
+  s += `<polygon points="${bankPts}" fill="${P.bank}"/><polygon points="${bankPts}" fill="url(#soil)" opacity="0.25"/>
+  <polygon points="${waterPts}" fill="url(#wg)" stroke="#e9f6ff" stroke-opacity="0.7" stroke-width="2.5"/>
+  <g clip-path="url(#wclip)"><g class="shine" stroke="#fff" stroke-opacity="0.55" stroke-width="2.5" stroke-linecap="round">${shine}</g></g>`
+  // ponts
+  s += `<rect x="598" y="114" width="124" height="92" fill="#000" opacity="0.3" filter="url(#soft)"/>
+  <rect x="588" y="104" width="124" height="92" fill="#a0703f"/>`
+  for (let x = 596; x < 712; x += 11) s += `<line x1="${x}" y1="104" x2="${x}" y2="196" stroke="#7a522c" stroke-width="1.4"/>`
+  s += `<rect x="588" y="104" width="124" height="7" fill="#5b3a21"/><rect x="588" y="189" width="124" height="7" fill="#4a2f1b"/>
+  <rect x="598" y="522" width="128" height="76" fill="#000" opacity="0.3" filter="url(#soft)"/>
+  <rect x="586" y="512" width="128" height="76" fill="#c2b59a"/><rect x="586" y="512" width="128" height="6" fill="#d8ccb2"/><rect x="586" y="582" width="128" height="6" fill="#8f8268"/>`
+  for (const [c, r, v] of FIELDS) s += field25(c, r, v)
+  // voie
+  s += `<path d="${RAIL_D}" transform="translate(3 5) scale(100)" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="0.72" stroke-linejoin="round"/>
+  <path d="${RAIL_D}" transform="scale(100)" fill="none" stroke="${P.bedEdge}" stroke-width="0.7" stroke-linejoin="round"/>
+  <path d="${RAIL_D}" transform="scale(100)" fill="none" stroke="url(#gravel)" stroke-width="0.6" stroke-linejoin="round"/>
+  <path d="${RAIL_D}" transform="translate(1.5 2.5) scale(100)" fill="none" stroke="#3d2614" stroke-width="0.42" stroke-dasharray="0.07 0.18"/>
+  <path d="${RAIL_D}" transform="scale(100)" fill="none" stroke="#8b5a34" stroke-width="0.42" stroke-dasharray="0.07 0.18"/>`
+  for (const r of rails) s += `<polyline points="${r}" transform="translate(2 3)" fill="none" stroke="#000" stroke-opacity="0.25" stroke-width="5.5"/><polyline points="${r}" fill="none" stroke="${P.rail}" stroke-width="5.5"/><polyline points="${r}" transform="translate(-0.8 -1.2)" fill="none" stroke="#dbe3ec" stroke-width="1.6"/>`
+  s += train25()
+  s += stand
+  s += `<g class="cloud"><ellipse cx="200" cy="300" rx="220" ry="110" fill="#0b2a10" opacity="0.12" filter="url(#blur30)"/></g>
+  <g class="cloud" style="animation-delay:-30s"><ellipse cx="100" cy="620" rx="180" ry="90" fill="#0b2a10" opacity="0.1" filter="url(#blur30)"/></g>
+  <rect width="1000" height="800" fill="url(#vig)"/>`
+  document.getElementById('v25').innerHTML = s
+}
+
+flat()
+v25()
+// ?only3d : n'affiche que le panneau 3D (captures)
+if (location.search.includes('only3d')) document.querySelectorAll('.card').forEach((c, i) => { if (i < 2) c.style.display = 'none' })
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ---------- Panneau 3 : Three.js, avec le sol de l'option 1 et une vue cabine ----------
+;(function () {
+  const el = document.getElementById('v3d')
+  if (!window.THREE) { el.innerHTML = '<p style="padding:20px">Three.js n\'a pas pu être chargé (connexion ?).</p>'; return }
+  const T = THREE
+  const lin = (h) => new T.Color(h).convertSRGBToLinear() // couleurs saisies en sRGB, calculs en linéaire
+  const scene = new T.Scene()
+  const renderer = new T.WebGLRenderer({ antialias: true, alpha: true })
+  renderer.outputEncoding = T.sRGBEncoding
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = T.PCFSoftShadowMap
+  el.appendChild(renderer.domElement)
+  const camTop = new T.PerspectiveCamera(28, 1.25, 0.1, 200)
+  const camCab = new T.PerspectiveCamera(64, 1.25, 0.02, 200)
+  const target = new T.Vector3(5, 0, 4)
+  function placeCam(deg) { const t = (deg * Math.PI) / 180, d = 17; camTop.position.set(5, Math.sin(t) * d, 4 + Math.cos(t) * d); camTop.lookAt(target) }
+  const tilt = document.getElementById('tilt'), tiltv = document.getElementById('tiltv')
+  tilt.oninput = () => { tiltv.textContent = tilt.value + '°'; placeCam(+tilt.value) }
+  placeCam(55)
+
+  scene.add(new T.HemisphereLight(lin('#eaf5ff'), lin('#5d7f35'), 0.75))
+  const sun = new T.DirectionalLight(lin('#fff3dc'), 1.25)
+  sun.position.set(0, 9, 0.5)
+  sun.target.position.copy(target)
+  sun.castShadow = true
+  sun.shadow.mapSize.set(4096, 4096)
+  Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 30 })
+  sun.shadow.bias = -0.0005
+  sun.shadow.normalBias = 0.01
+  scene.add(sun, sun.target)
+  const SKY = '#cfe8fb'
+  const fogTop = new T.Fog(lin(SKY), 30, 60), fogCab = new T.Fog(lin(SKY), 5, 30)
+  scene.fog = fogTop
+
+  const mats = {}
+  const mat = (c, o = {}) => { const k = c + JSON.stringify(o); return (mats[k] ??= new T.MeshStandardMaterial(Object.assign({ color: lin(c), roughness: 0.9, metalness: 0, flatShading: true }, o))) }
+  const add = (geo, m, x, y, z, parent = scene) => { const mesh = new T.Mesh(geo, m); mesh.position.set(x, y, z); mesh.castShadow = mesh.receiveShadow = true; parent.add(mesh); return mesh }
+  const box = (w, h, d, c, x, y, z, parent) => add(new T.BoxGeometry(w, h, d), typeof c === 'string' ? mat(c) : c, x, y, z, parent)
+  const outer = new T.Group(); outer.visible = false; scene.add(outer) // le monde autour du plateau, seulement en vue cabine
+
+  // ---- textures : le sol de l'option 1 (même SVG), dessiné dans un canvas ----
+  function svgTexture(svg, w, h, onReady) {
+    const img = new Image()
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = w; c.height = h
+      c.getContext('2d').drawImage(img, 0, 0, w, h)
+      const tex = new T.CanvasTexture(c)
+      tex.encoding = T.sRGBEncoding
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy()
+      onReady(tex)
+    }
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+  }
+  const filters = (W, H, stitch) => `
+    <filter id="pd" filterUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><feTurbulence type="fractalNoise" baseFrequency="${stitch ? 0.0125 : 0.011}" numOctaves="3" seed="4" ${stitch ? 'stitchTiles="stitch"' : ''}/><feColorMatrix type="matrix" values="0 0 0 0 0.33  0 0 0 0 0.55  0 0 0 0 0.18  1.8 0 0 0 -0.8"/></filter>
+    <filter id="pl" filterUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><feTurbulence type="fractalNoise" baseFrequency="${stitch ? 0.02 : 0.018}" numOctaves="2" seed="11" ${stitch ? 'stitchTiles="stitch"' : ''}/><feColorMatrix type="matrix" values="0 0 0 0 0.78  0 0 0 0 0.92  0 0 0 0 0.52  1.8 0 0 0 -0.85"/></filter>
+    <filter id="gr" filterUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="2" ${stitch ? 'stitchTiles="stitch"' : ''}/><feColorMatrix type="matrix" values="0 0 0 0 0.1  0 0 0 0 0.25  0 0 0 0 0.05  0 0 0 -1.4 0.9"/></filter>`
+  const layers = (W, H) => `<rect width="${W}" height="${H}" fill="${P.a}"/><rect width="${W}" height="${H}" filter="url(#pd)" opacity="0.5"/><rect width="${W}" height="${H}" filter="url(#pl)" opacity="0.45"/><rect width="${W}" height="${H}" filter="url(#gr)" opacity="0.5"/>`
+  const tuft = (X, Y) => `<path d="M${X} ${Y} l-3 -7 M${X} ${Y} l0 -9 M${X} ${Y} l3 -7" stroke="${dark(P.a, 0.28)}" stroke-width="1.8" stroke-linecap="round" fill="none"/>`
+  let boardSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="800" viewBox="0 0 1000 800"><defs>${filters(1000, 800)}</defs>${layers(1000, 800)}`
+  for (const [x, y] of TUFTS) boardSvg += tuft(px(x), px(y))
+  boardSvg += '</svg>'
+  let tileSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><defs>${filters(400, 400, true)}</defs>${layers(400, 400)}`
+  for (let i = 0; i < 26; i++) tileSvg += tuft(10 + ((i * 137) % 380), 12 + ((i * 89) % 380))
+  tileSvg += '</svg>'
+
+  const boardMat = new T.MeshStandardMaterial({ color: lin(P.a), roughness: 1 })
+  const tileMat = new T.MeshStandardMaterial({ color: lin(P.a), roughness: 1 })
+  svgTexture(boardSvg, 2000, 1600, (t) => { boardMat.map = t; boardMat.color.set(0xffffff); boardMat.needsUpdate = true })
+  svgTexture(tileSvg, 512, 512, (t) => { t.wrapS = t.wrapT = T.RepeatWrapping; tileMat.map = t; tileMat.color.set(0xffffff); tileMat.needsUpdate = true })
+
+  // plaque de sol avec des coordonnées de texture prises dans le monde : le plateau prend sa part de l'image, l'extérieur répète la tuile
+  function groundPlate(x0, x1, z0, z1, m, uvOf, parent = scene) {
+    const g = new T.PlaneGeometry(x1 - x0, z1 - z0, 1, 1); g.rotateX(-Math.PI / 2)
+    const pos = g.attributes.position, uv = g.attributes.uv
+    for (let i = 0; i < pos.count; i++) { const [u, v] = uvOf(pos.getX(i) + (x0 + x1) / 2, pos.getZ(i) + (z0 + z1) / 2); uv.setXY(i, u, v) }
+    const mesh = add(g, m, (x0 + x1) / 2, 0.001, (z0 + z1) / 2, parent); mesh.castShadow = false
+    return mesh
+  }
+  const boardUV = (x, z) => [x / 10, 1 - z / 8]
+  const tileUV = (x, z) => [x / 4, -z / 4]
+
+  // ---- socle : terre, deux berges d'herbe, lit de la rivière ----
+  box(10, 0.6, 8, '#7a4f33', 5, -0.6, 4)
+  for (const [x0, x1] of [[0, 6], [7, 10]]) { groundPlate(x0, x1, 0, 8, boardMat, boardUV); box(x1 - x0, 0.3, 8, '#6e9a45', (x0 + x1) / 2, -0.15, 4) }
+  const river = (z0, z1, parent) => {
+    box(1, 0.15, z1 - z0, P.bank, 6.5, -0.225, (z0 + z1) / 2, parent)
+    box(0.06, 0.3, z1 - z0, P.bank, 6.03, -0.15, (z0 + z1) / 2, parent); box(0.06, 0.3, z1 - z0, P.bank, 6.97, -0.15, (z0 + z1) / 2, parent)
+    const w = add(new T.PlaneGeometry(0.88, z1 - z0).rotateX(-Math.PI / 2), new T.MeshStandardMaterial({ color: lin(P.water), emissive: lin('#0b3d66'), emissiveIntensity: 0.35, roughness: 0.15, transparent: true, opacity: 0.9 }), 6.5, -0.07, (z0 + z1) / 2, parent)
+    w.castShadow = false
+  }
+  river(0, 8)
+  const shines = []
+  for (let i = 0; i < 14; i++) { const m = box(0.025, 0.002, 0.18, new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }), 6.15 + ((i * 0.37) % 0.7), -0.065, (i * 0.61) % 8); m.castShadow = false; shines.push(m) }
+
+  // ---- route et ponts ----
+  const road = (x0, x1, parent) => {
+    box(x1 - x0, 0.02, 0.76, P.road, (x0 + x1) / 2, 0.01, 1.5, parent)
+    for (let x = x0 + 0.2; x < x1; x += 0.5) box(0.24, 0.005, 0.04, '#f1f5f9', x, 0.023, 1.5, parent)
+  }
+  road(0, 5.95); road(7.05, 10)
+  box(1.2, 0.08, 0.88, '#a0703f', 6.5, 0.02, 1.5)
+  for (const z of [1.08, 1.92]) { box(1.2, 0.06, 0.04, '#5b3a21', 6.5, 0.14, z); for (let x = 5.95; x <= 7.05; x += 0.22) box(0.04, 0.12, 0.04, '#4a2f1b', x, 0.1, z) }
+  box(1.24, 0.1, 0.78, '#c2b59a', 6.5, -0.03, 5.5)
+  for (const z of [5.12, 5.88]) box(1.24, 0.12, 0.05, '#9c8e74', 6.5, 0.04, z)
+
+  // ---- voie : ballast (teintes variées = gravier), traverses, rails ----
+  const dummy = new T.Object3D()
+  const STEP = 0.04
+  function track(keep, parent) {
+    const inst = (geo, m, n) => { const im = new T.InstancedMesh(geo, m, n); im.castShadow = im.receiveShadow = true; im.count = 0; parent.add(im); return im }
+    const n = Math.ceil(LEN / STEP) + 2
+    const ballast = inst(new T.BoxGeometry(STEP + 0.012, 0.06, 0.6), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true }), n)
+    const rails = inst(new T.BoxGeometry(STEP + 0.006, 0.03, 0.026), mat('#556274', { metalness: 0.6, roughness: 0.35, flatShading: false }), 2 * n)
+    const sleepers = inst(new T.BoxGeometry(0.07, 0.03, 0.42), mat('#7a4e2d'), Math.ceil(LEN / 0.25) + 2)
+    ballast.instanceColor = new T.InstancedBufferAttribute(new Float32Array(n * 3), 3) // à créer à la bonne taille (setColorAt la crée vide si count = 0)
+    const shades = [P.bed, P.bedEdge, '#efe4bf', '#d6c79a'].map(lin)
+    const put = (im, x, y, z, ang) => { dummy.position.set(x, y, z); dummy.rotation.set(0, ang, 0); dummy.updateMatrix(); im.setMatrixAt(im.count++, dummy.matrix) }
+    for (let s = 0; s <= LEN; s += STEP) {
+      const q = at(s); if (!keep(q.x)) continue
+      const ang = Math.atan2(-q.ty, q.tx)
+      ballast.setColorAt(ballast.count, shades[Math.floor(rnd() * shades.length)]); put(ballast, q.x, 0.03, q.y, ang)
+      for (const o of [-0.12, 0.12]) put(rails, q.x - q.ty * o, 0.105, q.y + q.tx * o, ang)
+    }
+    for (let s = 0.125; s <= LEN; s += 0.25) { const q = at(s); if (keep(q.x)) put(sleepers, q.x, 0.075, q.y, Math.atan2(-q.ty, q.tx)) }
+    if (ballast.instanceColor) ballast.instanceColor.needsUpdate = true
+  }
+  track((x) => x >= 0 && x <= 10, scene)
+  track((x) => x < 0 || x > 10, outer)
+
+  // ---- arbres, sapins, maisons, champs, rochers, fleurs ----
+  const swayers = []
+  function tree(x, z, v, parent = scene) {
+    const g = new T.Group(); g.position.set(x, 0, z); parent.add(g)
+    add(new T.CylinderGeometry(0.04, 0.065, 0.3, 7), mat(P.trunk), 0, 0.15, 0, g)
+    const c = P.canopy
+    add(new T.IcosahedronGeometry(0.25, 1), mat(c[v % 3]), 0, 0.47, 0, g).rotation.y = v
+    add(new T.IcosahedronGeometry(0.17, 1), mat(c[(v + 1) % 3]), -0.15, 0.36, 0.06, g)
+    add(new T.IcosahedronGeometry(0.18, 1), mat(c[(v + 2) % 3]), 0.15, 0.37, 0.05, g)
+    add(new T.IcosahedronGeometry(0.13, 1), mat(light(c[v % 3], 0.12)), 0.02, 0.33, 0.16, g)
+    swayers.push([g, v])
+  }
+  function pine(x, z, parent = scene) {
+    add(new T.CylinderGeometry(0.04, 0.05, 0.16, 6), mat(P.trunk), x, 0.08, z, parent)
+    add(new T.ConeGeometry(0.25, 0.36, 8), mat(P.pine[0]), x, 0.32, z, parent)
+    add(new T.ConeGeometry(0.19, 0.3, 8), mat(P.pine[1]), x, 0.52, z, parent)
+    add(new T.ConeGeometry(0.12, 0.24, 8), mat(P.pine[0]), x, 0.7, z, parent)
+  }
+  for (const [x, z, v] of TREES) tree(x, z, v)
+  for (const [x, z] of PINES) pine(x, z)
+  for (const [x, z, v] of HOUSES) {
+    box(0.5, 0.3, 0.42, P.walls[v], x, 0.15, z)
+    const sh = new T.Shape(); sh.moveTo(-0.32, 0); sh.lineTo(0.32, 0); sh.lineTo(0, 0.24); sh.closePath()
+    const rg = new T.ExtrudeGeometry(sh, { depth: 0.54, bevelEnabled: false }); rg.translate(0, 0, -0.27)
+    add(rg, mat(P.roofs[v]), x, 0.3, z)
+    box(0.07, 0.16, 0.07, '#a8977a', x + 0.15, 0.44, z - 0.1)
+    box(0.11, 0.18, 0.01, '#7a4e2d', x, 0.09, z + 0.212)
+    for (const dx of [-0.16, 0.16]) box(0.09, 0.09, 0.01, new T.MeshStandardMaterial({ color: lin('#bfe3fa'), emissive: lin('#4a6a80'), emissiveIntensity: 0.4 }), x + dx, 0.18, z + 0.212)
+  }
+  for (const [c, r, v] of FIELDS) {
+    box(0.92, 0.04, 0.92, '#8a5e36', c + 0.5, 0.02, r + 0.5)
+    for (let i = 0; i < 5; i++) box(0.8, 0.07, 0.1, P.crops[v][i % 2], c + 0.5, 0.075, r + 0.14 + i * 0.18)
+  }
+  for (const [x, z] of ROCKS) { const m = add(new T.DodecahedronGeometry(0.12, 0), mat('#9ca3af'), x, 0.05, z); m.scale.y = 0.6 }
+  const fl = new T.SphereGeometry(0.024, 6, 4)
+  for (const [x, z, c] of FLOWERS) { const m = add(fl, mat(c), x, 0.02, z); m.castShadow = false }
+
+  // ---- le monde autour (vue cabine) : herbe répétée, la rivière, la route et la voie continuent, des bois ----
+  for (const [x0, x1, z0, z1] of [[-40, 0, -40, 48], [10, 50, -40, 48], [0, 6, -40, 0], [7, 10, -40, 0], [0, 6, 8, 48], [7, 10, 8, 48]]) groundPlate(x0, x1, z0, z1, tileMat, tileUV, outer)
+  river(-40, 0, outer); river(8, 48, outer)
+  road(-40, 0, outer); road(10, 50, outer)
+  for (let i = 0; i < 420; i++) {
+    const x = -22 + rnd() * 54, z = -22 + rnd() * 52
+    if (x > -0.4 && x < 10.4 && z > -0.4 && z < 8.4) continue
+    if ((x < 0 && Math.abs(z - 3.5) < 0.9) || (x > 10 && Math.abs(z - 5.5) < 0.9) || ((x < 0 || x > 10) && Math.abs(z - 1.5) < 0.9) || (x > 5.6 && x < 7.4)) continue
+    if (rnd() < 0.35) pine(x, z, outer); else tree(x, z, Math.floor(rnd() * 3), outer)
+  }
+
+  // ---- train ----
+  const cars = ['#dc2626', '#2563eb', '#f59e0b', '#16a34a'].map((c, i) => {
+    const g = new T.Group(); scene.add(g)
+    box(0.32, 0.15, 0.22, c, 0, 0.19, 0, g)
+    if (i === 0) { box(0.12, 0.12, 0.22, '#991b1b', -0.1, 0.32, 0, g); add(new T.CylinderGeometry(0.03, 0.03, 0.1, 8), mat('#1f2937'), 0.09, 0.31, 0, g) }
+    else box(0.3, 0.02, 0.2, light(c, 0.3), 0, 0.275, 0, g)
+    return g
+  })
+  let sIn = 0, sOut = LEN
+  for (let s = 0; s <= LEN; s += 0.01) { const x = at(s).x; if (x < 0) sIn = s; if (x <= 10) sOut = s }
+
+  // ---- vues ----
+  let mode = 'top'
+  const bTop = document.getElementById('m-top'), bCab = document.getElementById('m-cab')
+  function setMode(m) {
+    mode = m
+    outer.visible = m === 'cab'
+    scene.fog = m === 'cab' ? fogCab : fogTop
+    bTop.classList.toggle('on', m === 'top'); bCab.classList.toggle('on', m === 'cab')
+    tilt.disabled = m === 'cab'
+    t0 = performance.now()
+  }
+  bTop.onclick = () => setMode('top'); bCab.onclick = () => setMode('cab')
+  let t0 = performance.now()
+  if (location.hash === '#cabine') setMode('cab')
+
+  function resize() { const w = el.clientWidth, h = el.clientHeight; renderer.setSize(w, h, false); for (const c of [camTop, camCab]) { c.aspect = w / h; c.updateProjectionMatrix() } }
+  new ResizeObserver(resize).observe(el); resize()
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const ahead = new T.Vector3()
+  function frame(now) {
+    const t = still ? 3 : (now - t0) / 1000
+    const head = mode === 'cab' ? 3 + ((t * 1.1) % (LEN - 5)) : sIn + ((t * 0.85) % (sOut - sIn + 1.6))
+    cars.forEach((g, i) => {
+      const s = head - i * 0.38, q = at(s)
+      g.position.set(q.x, 0, q.y); g.rotation.y = Math.atan2(-q.ty, q.tx)
+      g.visible = mode === 'cab' ? i > 0 : s > sIn && q.x > 0.05 && q.x < 9.95
+    })
+    if (mode === 'cab') {
+      const q = at(head), f = at(head + 2)
+      camCab.position.set(q.x, 0.42, q.y)
+      ahead.set(f.x, 0.22, f.y)
+      camCab.lookAt(ahead)
+    }
+    for (const [g, v] of swayers) g.rotation.z = Math.sin(t * 1.4 + v * 2 + g.position.x) * 0.025
+    for (const m of shines) m.position.z = (m.position.z + (still ? 0 : 0.004)) % 8
+    renderer.render(scene, mode === 'cab' ? camCab : camTop)
+    requestAnimationFrame(frame)
+  }
+  requestAnimationFrame(frame)
+})()
+</script>
+</body>
+</html>
