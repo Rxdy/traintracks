@@ -95,19 +95,23 @@ export function sceneryMargin(size: number): number {
 // `margin` : cases de paysage AJOUTÉES autour de la grille de jeu, en hauteur (y) et en largeur (x) : le décor est plus
 // grand que la grille, et plus LARGE que haut sur un grand écran (pour que le train ne roule pas dans du blanc).
 // La voie se prolonge en ligne droite jusqu'au bord. Tout se calcule alors sur la grande grille, chemin décalé.
-export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, seed = seedOf(puzzle), margin: number | { x: number; y: number; b?: number } = 0): Scenery {
+// `top` et `below` (cases, téléphone et tablette) : du paysage en plus au-dessus (jusqu'en haut de l'écran) et en dessous (jusqu'à
+// la cabine), sans changer l'échelle de la grille : aucune bande vide autour du décor.
+export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, seed = seedOf(puzzle), margin: number | { x: number; y: number; b?: number; top?: number; below?: number } = 0): Scenery {
   const mx0 = typeof margin === 'number' ? margin : margin.x
   const my0 = typeof margin === 'number' ? margin : margin.y
+  const top = typeof margin === 'number' ? 0 : Math.max(0, Math.ceil(margin.top ?? 0))
+  const below = typeof margin === 'number' ? 0 : Math.max(0, margin.below ?? 0)
   const N0 = puzzle.size
   // À la victoire la grille rétrécit (échelle k) et le décor doit couvrir TOUTE la zone d'origine, du haut de la grille
   // jusqu'en bas de la colonne des indices : d'où des cases en plus sous la grille (b), pas de blanc avant le récapitulatif.
   const k = my0 > 0 ? N0 / (N0 + 2 * my0) : 1
-  const bottom = N0 / 2 + (N0 / 2 + 1) / k // bas visible, en cases du décor, depuis le haut de la grille
+  const bottom = N0 / 2 + (N0 / 2 + 1) / k + below // bas visible, en cases du décor, depuis le haut de la grille
   const b0 = typeof margin === 'number' || margin.b === undefined ? (my0 > 0 ? Math.ceil(bottom) - N0 : 0) : margin.b
-  const mg = { x: mx0, y: my0, b: b0 }
+  const mg = { x: mx0, y: my0 + top, b: b0 }
   const rows = N0 + mg.y + mg.b
   const cols = N0 + 2 * mg.x
-  const frame = { k, visibleRows: my0 > 0 ? bottom + my0 : rows }
+  const frame = { k, visibleRows: my0 > 0 ? bottom + mg.y : rows }
   const n = Math.min(rows, cols)
   const shifted: Cell[] = smallPath.map(([r, c]) => [r + mg.y, c + mg.x])
   const OUTV: Record<string, Cell> = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] }

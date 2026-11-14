@@ -628,6 +628,8 @@ section {
   padding: 0.4rem;
 }
 .bar {
+  position: relative;
+  z-index: 6; /* au-dessus du décor de fin de niveau, qui monte jusqu'en haut de l'écran */
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -638,6 +640,12 @@ section {
   justify-self: start;
 }
 .title {
+  justify-self: center;
+  padding: 0.3rem 0.9rem;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92); /* lisible sur le décor, qui monte jusqu'en haut de l'écran */
+  box-shadow: var(--shadow);
   font-weight: 800;
   text-align: center;
 }

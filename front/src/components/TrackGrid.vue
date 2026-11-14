@@ -213,18 +213,31 @@ async function checkWin(): Promise<void> {
 }
 // La voie prend l'allure de l'environnement : traverses grises sous la neige, acier plus sombre en forêt…
 const railStyle = computed(() => (scenery.value ? { '--won-rail': PAL[scenery.value.theme].rail.rail, '--won-tie': PAL[scenery.value.theme].rail.tie } : {}))
-// Marges de paysage autour de la grille : en hauteur, de quoi faire ~10 cases. Sur les côtés :
-//   - téléphone et tablette (les appareils visés) : de quoi couvrir toute la largeur de l'écran, jamais de blanc ;
-//   - ordinateur : autant qu'en hauteur, le décor est recadré (il ne s'étale pas sur tout un grand écran).
-function sceneryMargins(): { x: number; y: number } {
+// Marges de paysage autour de la grille : en hauteur, de quoi faire ~10 cases.
+//   - téléphone et tablette (les appareils visés), ou fenêtre étroite : le décor couvre TOUT l'écran autour de la grille, sans
+//     bande vide : toute la largeur, jusqu'en haut de l'écran (sous l'en-tête et la barre d'outils) et jusqu'à la cabine ;
+//   - ordinateur : autant sur les côtés qu'en hauteur, le décor est recadré (il ne s'étale pas sur tout un grand écran).
+const FULL_MAX_WIDTH = 1100 // px : au-delà, et sans écran tactile, c'est un ordinateur
+function sceneryMargins(): { x: number; y: number; top?: number; below?: number } {
   const n = puz.value.size
   const y = sceneryMargin(n)
-  if (!isTouch()) return { x: y, y }
+  if (!isTouch() && window.innerWidth > FULL_MAX_WIDTH) return { x: y, y }
   const rect = boardEl.value?.getBoundingClientRect()
   if (!rect || !(rect.width > 0)) return { x: y, y }
+  const k = n / (n + 2 * y) // échelle de la grille à la victoire (voir buildScenery)
   const cell = rect.width / (n + 1) // taille d'une case à l'écran avant le rétrécissement (px)
-  const visible = window.innerWidth / (cell * (n / (n + 2 * y))) // cases de décor qu'il faut pour couvrir la largeur
-  return { x: Math.min(28, Math.max(y, Math.ceil((visible - n) / 2) + 1)), y }
+  const unit = cell * k // une case du décor à l'écran, après le rétrécissement (px)
+  const visible = window.innerWidth / unit // cases de décor qu'il faut pour couvrir la largeur
+  const x = Math.min(28, Math.max(y, Math.ceil((visible - n) / 2) + 1))
+  // La grille rétrécit autour du centre de sa zone de jeu (sans la rangée des indices) : on situe à l'écran le haut et le bas
+  // du décor qu'on aurait sans complément. Le bas tombe pile sur le bas d'origine de la grille (rangée des indices comprise).
+  const oy = rect.top + (n / 2) * cell
+  const decorTop = oy - (y + n / 2) * unit
+  const decorBottom = rect.bottom
+  const cabin = document.querySelector<HTMLElement>('[data-test=cabin]')?.getBoundingClientRect().top
+  const top = Math.max(0, decorTop / unit) // jusqu'en haut de l'écran
+  const below = cabin !== undefined && cabin > decorBottom ? (cabin - decorBottom) / unit + 0.05 : 0 // jusqu'à la cabine
+  return { x, y, top, below }
 }
 function revealScenery(): void {
   const path = tracePath(connections.value, puz.value)
@@ -246,7 +259,8 @@ function revealScenery(): void {
   scenery.value = buildScenery(puz.value, path, props.theme, seedOf(puz.value), mg)
   sound.reveal(scenery.value)
   const horiz = (d: string) => d === 'left' || d === 'right'
-  sceneryRoute.value = buildRoute(path, puz.value, { entry: horiz(puz.value.entry.dir) ? mg.x : mg.y, exit: horiz(puz.value.exit.dir) ? mg.x : mg.y })
+  const sm = scenery.value.margin // marges réelles (avec le complément du haut) : la voie va jusqu'au bord du décor
+  sceneryRoute.value = buildRoute(path, puz.value, { entry: horiz(puz.value.entry.dir) ? sm.x : puz.value.entry.dir === 'up' ? sm.y : sm.b, exit: horiz(puz.value.exit.dir) ? sm.x : puz.value.exit.dir === 'up' ? sm.y : sm.b })
   if (timing.revealMs > 0) trainTimer = window.setTimeout(runTrain, timing.revealMs)
   else runTrain()
 }
@@ -646,6 +660,8 @@ onMounted(() => {
 }
 
 .toolbar {
+  position: relative;
+  z-index: 6; /* au-dessus du décor, qui monte jusqu'en haut de l'écran sur téléphone et tablette */
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
@@ -682,8 +698,13 @@ onMounted(() => {
 }
 .timer {
   align-self: center;
+  padding: 0.25rem 0.7rem;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92); /* lisible sur le décor */
+  box-shadow: var(--shadow);
   font-variant-numeric: tabular-nums;
-  color: #6b7280;
+  color: #4b5563;
 }
 .win-zone.win-zone--compact {
   /* Le récapitulatif se pose SUR l'écran du train (le décor), en bas : plus de place réservée sous la grille, la cabine remonte. */
