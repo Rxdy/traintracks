@@ -117,6 +117,13 @@ describe('niveaux fabriqués (server/data/levels.json) conformes au plan', () =>
   it('aucun écart : tailles, rails imposés aux bons niveaux, introduction, solution unique, pas de doublon', () => {
     expect(auditLevels(LEVELS).issues).toEqual([])
   })
+  it('chaque niveau commence par une case droite : le train ne tourne pas en entrant dans la grille', () => {
+    const tournants = LEVELS.filter((l) => {
+      const [[r0, c0], [r1, c1]] = l.solution
+      return l.puzzle.entry.dir !== 'left' || r1 !== r0 || c1 !== c0 + 1
+    }).map((l) => l.id)
+    expect(tournants).toEqual([])
+  })
   it('on ne fabrique pas au-delà de ce qui est jouable', () => {
     expect(LEVELS.length).toBeLessThanOrEqual(buildableUpTo())
     expect(LEVELS.length).toBe(buildableUpTo()) // tout ce qui est jouable est fabriqué

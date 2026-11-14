@@ -109,3 +109,14 @@ describe('générateur de puzzles', () => {
     expect(Date.now() - t).toBeLessThan(5000)
   })
 })
+
+describe("entrée de la voie : toujours une case droite", () => {
+  it('la deuxième case de la voie est juste à droite de l\'entrée (le train ne tourne pas en entrant)', () => {
+    for (let size = 4; size <= 8; size++)
+      for (let i = 0; i < 6; i++) {
+        const g = generate(`entree-${i}`, size)
+        const [[r0, c0], [r1, c1]] = g.solution
+        expect([r1 - r0, c1 - c0], `${size}×${size}, tirage ${i}`).toEqual([0, 1])
+      }
+  })
+})

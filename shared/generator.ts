@@ -59,7 +59,10 @@ function randomPath(rand: () => number, size: number, entry: Cell, exit: Cell, m
     if (r === exit[0] && c === exit[1]) {
       if (path.length >= minLen) return true
     } else if (path.length < maxLen) {
-      for (const [dr, dc] of shuffle(rand, [...STEPS])) {
+      // La voie entre par la gauche : sa première case est toujours droite (le train ne tourne pas dès qu'il entre dans la grille,
+      // la vue de la cabine part dans l'axe).
+      const steps: Cell[] = path.length === 1 ? [[0, 1]] : shuffle(rand, [...STEPS])
+      for (const [dr, dc] of steps) {
         const nr = r + dr
         const nc = c + dc
         if (nr < 0 || nc < 0 || nr >= size || nc >= size || seen[nr][nc]) continue
