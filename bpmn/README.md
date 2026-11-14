@@ -1,6 +1,6 @@
 # Processus BPMN de Train Tracks
 
-28 diagrammes (état cible : serveur et base font foi) dans `out/` (PNG), générés depuis `processes.py` :
+34 diagrammes (état cible : serveur et base font foi) dans `out/` (PNG), générés depuis `processes.py` :
 
 | # | Processus | # | Processus |
 |---|-----------|---|-----------|
@@ -18,6 +18,9 @@
 | 12 | Contrôle de la grille complète | 24 | Mot de passe oublié |
 | 25 | Nouveau mot de passe | 26 | Suppression du compte |
 | 27 | Décor de victoire | 28 | Ajout de niveaux après déploiement |
+| 29 | Changer d'adresse e-mail | 30 | Changer de mot de passe (connecté) |
+| 31 | Avatars : choisir ou acheter | 32 | Exporter mes données |
+| 33 | Importer des données | 34 | Classement |
 
 ## Régénérer
 

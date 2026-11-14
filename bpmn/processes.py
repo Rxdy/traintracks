@@ -1,4 +1,4 @@
-"""Les 28 processus de Train Tracks (état cible : serveur et base de données font foi)."""
+"""Les 34 processus de Train Tracks (état cible : serveur et base de données font foi)."""
 from bpmn_kit import Process
 
 J = ("J", "Joueur", "joueur")
@@ -101,22 +101,23 @@ def connexion():
 
 def google():
     p = Process("06-connexion-google", "06 · Connexion Google", [J, A, X, V, D])
-    p.start("s", "Clique Se connecter avec Google", "J", 0)
-    p.gw("g1", "Client ID configuré ?", "A", 1)
-    p.task("soon", "Voit « bientôt disponible »", "J", 2)
+    p.start("s", "Clique Continuer avec Google", "J", 0)
+    p.gw("g1", "Google configuré sur le serveur ?", "A", 1)
+    p.task("soon", "Voit « Google : pas encore disponible »", "J", 2)
     p.end("e0", "Rien ne se passe", "J", 3)
-    p.task("sc", "Injecte le script Google", "A", 2)
-    p.task("au", "Authentifie, rend un jeton signé", "X", 3)
-    p.task("v", "Vérifie signature, audience, expiration", "V", 4)
-    p.gw("g2", "Jeton valide ?", "V", 5)
-    p.task("err", "Voit « Connexion Google impossible »", "J", 6)
-    p.error("ee", "Connexion refusée", "J", 7)
-    p.task("c", "Crée ou retrouve le joueur (e-mail confirmé par Google)", "V", 6)
-    p.task("d", "Écrit le joueur, 100 pièces à la création", "D", 7)
-    p.task("o", "Ouvre la session, rattache la progression anonyme (07)", "V", 8)
-    p.end("e", "Connecté", "A", 9)
-    flows(p, ("s", "g1"), ("g1", "soon", "Non"), ("g1", "sc", "Oui"), ("soon", "e0"), ("sc", "au"), ("au", "v"),
-          ("v", "g2"), ("g2", "err", "Non"), ("g2", "c", "Oui"), ("err", "ee"), ("c", "d"), ("d", "o"), ("o", "e"))
+    p.task("go", "Suit le lien vers le serveur", "A", 2)
+    p.task("st", "Crée un état et un vérificateur PKCE (cookie 10 min), redirige", "V", 3)
+    p.task("au", "Fait choisir un compte, renvoie un code", "X", 4)
+    p.task("cb", "Au retour, compare l'état au cookie, échange le code (secret côté serveur)", "V", 5)
+    p.gw("g2", "État et adresse OK ?", "V", 6)
+    p.task("err", "Voit « La connexion avec Google a échoué »", "J", 7)
+    p.error("ee", "Connexion refusée, aucun compte créé", "J", 8)
+    p.task("r", "Retrouve le joueur (identifiant, sinon adresse) ou le crée", "V", 7)
+    p.task("d", "Écrit le lien Google (création : pseudo neutre, 100 pièces)", "D", 8)
+    p.task("o", "Ouvre la session, rattache la progression anonyme (07)", "V", 9)
+    p.end("e", "Connecté", "A", 10)
+    flows(p, ("s", "g1"), ("g1", "soon", "Non"), ("g1", "go", "Oui"), ("soon", "e0"), ("go", "st"), ("st", "au"), ("au", "cb"),
+          ("cb", "g2"), ("g2", "err", "Non"), ("g2", "r", "Oui"), ("err", "ee"), ("r", "d"), ("d", "o"), ("o", "e"))
     return p
 
 
@@ -432,7 +433,7 @@ def oubli():
     p = Process("24-mot-de-passe-oublie", "24 · Mot de passe oublié", [J, A, V, D])
     p.start("s", "Clique Mot de passe oublié, saisit son e-mail", "J", 0)
     p.task("a", "Envoie la demande", "A", 1)
-    p.task("v", "Cherche un compte avec mot de passe pour cette adresse", "V", 2)
+    p.task("v", "Cherche un compte pour cette adresse (même un compte Google)", "V", 2)
     p.gw("g", "Compte et pas de mail récent ?", "V", 3)
     p.task("t", "Crée un jeton à usage unique (empreinte seule, 1 h)", "D", 4)
     p.task("m", "Envoie le lien par e-mail", "V", 5)
@@ -465,11 +466,12 @@ def suppression():
     p.task("v", "Vérifie le mot de passe (même blocage que la connexion)", "V", 2)
     p.gw("g", "Mot de passe correct ?", "V", 3)
     p.error("err", "Suppression refusée, le compte reste", "A", 4)
-    p.task("d", "Efface progression, pièces, aides, puzzle du jour, sessions, jetons, compte", "D", 4)
-    p.task("m", "Envoie un e-mail de confirmation de suppression", "V", 5)
-    p.end("e", "Déconnecté, retour à l'accueil, message de confirmation", "A", 6)
+    p.task("d", "Efface toutes ses données puis le compte", "D", 4)
+    p.task("rg", "Note l'identifiant au registre des suppressions (35 jours)", "D", 5)
+    p.task("m", "Envoie un e-mail de confirmation de suppression", "V", 6)
+    p.end("e", "Déconnecté, retour à l'accueil, message de confirmation", "A", 7)
     p.chain("s", "a", "v", "g")
-    flows(p, ("g", "err", "Non"), ("g", "d", "Oui"), ("d", "m"), ("m", "e"))
+    flows(p, ("g", "err", "Non"), ("g", "d", "Oui"), ("d", "rg"), ("rg", "m"), ("m", "e"))
     return p
 
 
@@ -509,6 +511,110 @@ def ajout_niveaux():
     return p
 
 
+def changer_email():
+    p = Process("29-changer-adresse-email", "29 · Changer d'adresse e-mail", [J, A, V, D])
+    p.start("s", "Saisit la nouvelle adresse et son mot de passe", "J", 0)
+    p.task("a", "Envoie la demande", "A", 1)
+    p.task("v", "Vérifie le mot de passe (même blocage que la connexion)", "V", 2)
+    p.gw("g1", "Mot de passe correct ?", "V", 3)
+    p.gw("g2", "Adresse valide et libre ?", "V", 4)
+    p.task("err", "Voit le message d'erreur", "A", 5)
+    p.error("ee", "Changement refusé, l'adresse reste", "J", 6)
+    p.task("t", "Crée un jeton à usage unique (1 h), annule la demande précédente", "D", 5)
+    p.task("m", "Envoie le lien à la NOUVELLE adresse, un avertissement à l'ancienne", "V", 6)
+    p.task("c", "Clique le lien reçu dans la nouvelle boîte", "J", 7)
+    p.task("v2", "Vérifie le jeton (valide, non utilisé, adresse toujours libre)", "V", 8)
+    p.gw("g3", "Jeton valide ?", "V", 9)
+    p.error("e2", "Lien invalide ou expiré, l'adresse reste", "A", 10)
+    p.task("u", "Change l'adresse du compte, marque le jeton utilisé", "D", 10)
+    p.end("e", "Voit « Nouvelle adresse confirmée »", "A", 11)
+    p.chain("s", "a", "v", "g1")
+    flows(p, ("g1", "err", "Non"), ("g1", "g2", "Oui"), ("g2", "err", "Non"), ("g2", "t", "Oui"), ("err", "ee"), ("t", "m"), ("m", "c"),
+          ("c", "v2"), ("v2", "g3"), ("g3", "e2", "Non"), ("g3", "u", "Oui"), ("u", "e"))
+    return p
+
+
+def changer_mot_de_passe():
+    p = Process("30-changer-mot-de-passe", "30 · Changer de mot de passe (connecté)", [J, A, V, D])
+    p.start("s", "Saisit l'ancien et le nouveau mot de passe", "J", 0)
+    p.task("a", "Affiche l'indicateur de robustesse, bouton inactif sous le seuil", "A", 1)
+    p.task("v", "Vérifie l'ancien mot de passe (même blocage que la connexion)", "V", 2)
+    p.gw("g1", "Ancien mot de passe correct ?", "V", 3)
+    p.gw("g2", "Nouveau assez robuste et différent ?", "V", 4)
+    p.task("err", "Voit le message d'erreur", "A", 5)
+    p.error("ee", "Mot de passe inchangé", "J", 6)
+    p.task("h", "Hache le nouveau mot de passe", "V", 5)
+    p.task("d", "Met à jour l'empreinte, ferme les autres sessions", "D", 6)
+    p.task("m", "Prévient par e-mail (jamais le mot de passe)", "V", 7)
+    p.end("e", "Voit « Mot de passe modifié » ; les autres appareils se reconnectent", "A", 8)
+    p.chain("s", "a", "v", "g1")
+    flows(p, ("g1", "err", "Non"), ("g1", "g2", "Oui"), ("g2", "err", "Non"), ("g2", "h", "Oui"), ("err", "ee"), ("h", "d"), ("d", "m"), ("m", "e"))
+    return p
+
+
+def avatars():
+    p = Process("31-avatars", "31 · Avatars : choisir ou acheter", [J, A, V, D])
+    p.start("s", "Ouvre Compte : grille d'avatars (sans noms) et pièces", "J", 0)
+    p.task("c", "Clique un avatar", "J", 1)
+    p.gw("g1", "Déjà à lui (gratuit ou acheté) ?", "A", 2)
+    p.task("sel", "Vérifie la liste fixe et la possession", "V", 3)
+    p.task("u", "Enregistre l'avatar affiché", "D", 4)
+    p.end("e1", "Avatar enregistré, affiché partout", "D", 5)
+    p.task("cf", "Demande confirmation avec le prix", "A", 3)
+    p.gw("g2", "Confirme ?", "J", 4)
+    p.end("e0", "Annule, rien n'est débité", "J", 5)
+    p.task("b", "Verrouille le joueur, vérifie solde et possession", "V", 5)
+    p.gw("g3", "Solde suffisant et pas déjà acheté ?", "V", 6)
+    p.task("err", "Voit « Pas assez de pièces » ou « déjà acheté »", "A", 7)
+    p.error("ee", "Achat refusé, rien n'est débité", "J", 8)
+    p.task("d", "Débite le prix, note l'achat (une seule fois)", "D", 7)
+    p.end("e2", "Avatar acheté et adopté, solde mis à jour", "D", 8)
+    p.chain("s", "c", "g1")
+    flows(p, ("g1", "sel", "Oui"), ("sel", "u"), ("u", "e1"), ("g1", "cf", "Non"), ("cf", "g2"), ("g2", "e0", "Non"), ("g2", "b", "Oui"),
+          ("b", "g3"), ("g3", "err", "Non"), ("g3", "d", "Oui"), ("err", "ee"), ("d", "e2"))
+    return p
+
+
+def exporter():
+    p = Process("32-exporter-les-donnees", "32 · Exporter mes données", [J, A, V, D])
+    p.start("s", "Clique Exporter", "J", 0)
+    p.task("a", "Demande l'export", "A", 1)
+    p.task("d", "Lit la progression et les puzzles du jour du compte", "D", 2)
+    p.task("sg", "Numérote et signe le fichier (clé du serveur)", "V", 3)
+    p.end("e", "Télécharge le fichier, à garder", "A", 4)
+    p.chain("s", "a", "d", "sg", "e")
+    return p
+
+
+def importer():
+    p = Process("33-importer-des-donnees", "33 · Importer des données", [J, A, V, D])
+    p.start("s", "Choisit un fichier d'export", "J", 0)
+    p.task("a", "Lit le fichier, l'envoie", "A", 1)
+    p.task("v", "Vérifie la signature du serveur", "V", 2)
+    p.gw("g1", "Signature valide ?", "V", 3)
+    p.gw("g2", "Fichier jamais importé ?", "V", 4)
+    p.error("e1", "Refusé : fichier modifié ou d'un autre serveur", "A", 3)
+    p.error("e2", "Refusé : déjà importé", "A", 4)
+    p.task("d", "Ajoute niveaux et puzzles du jour (ni pièces ni aides), note l'export", "D", 5)
+    p.end("e", "Voit combien de niveaux et de puzzles sont importés", "A", 6)
+    p.chain("s", "a", "v", "g1")
+    flows(p, ("g1", "e1", "Non"), ("g1", "g2", "Oui"), ("g2", "e2", "Non"), ("g2", "d", "Oui"), ("d", "e"))
+    return p
+
+
+def classement():
+    p = Process("34-classement", "34 · Classement", [J, A, V, D])
+    p.start("s", "Ouvre Classement, choisit Voyage, Jour ou Série", "J", 0)
+    p.task("a", "Demande le classement", "A", 1)
+    p.task("v", "Ne retient que les joueurs qui ont choisi d'apparaître", "V", 2)
+    p.task("d", "Lit niveau atteint, meilleur temps du jour ou plus longue série", "D", 3)
+    p.task("c", "Trie, attribue les rangs, garde les 50 premiers, ajoute l'avatar de chacun", "V", 4)
+    p.end("e", "Voit la liste et, connecté, sa place", "A", 5)
+    p.chain("s", "a", "v", "d", "c", "e")
+    return p
+
+
 ALL = [navigation, compte, inscription, confirmation, connexion, google, rattachement, voyage, quotidien,
        generation, pose, controle, train, tutoriel, stats, aide, achat, deblocage, pieces, install,
-       sw_cycle, sw_fetch, solveur, oubli, reinit, suppression, decor, ajout_niveaux]
+       sw_cycle, sw_fetch, solveur, oubli, reinit, suppression, decor, ajout_niveaux,
+       changer_email, changer_mot_de_passe, avatars, exporter, importer, classement]
