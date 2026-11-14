@@ -3,6 +3,8 @@ export interface Config {
   databaseUrl: string
   appUrl: string // adresse publique du site (liens des e-mails)
   smtpUrl?: string
+  googleClientId?: string // connexion avec Google : active seulement si l'identifiant ET le secret sont fournis
+  googleClientSecret?: string
   mailFrom: string
   secureCookies: boolean
   trustProxy: boolean
@@ -20,6 +22,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrl,
     appUrl,
     smtpUrl: env.SMTP_URL,
+    googleClientId: env.GOOGLE_CLIENT_ID || undefined,
+    googleClientSecret: env.GOOGLE_CLIENT_SECRET || undefined,
     mailFrom: env.MAIL_FROM ?? 'Train Tracks <no-reply@traintracks.local>',
     // Cookie « Secure » seulement si le site est en https (sinon le navigateur le refuse et la connexion échoue).
     secureCookies: appUrl.startsWith('https://'),

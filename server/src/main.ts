@@ -2,6 +2,7 @@ import { buildApp } from './app.js'
 import { loadConfig } from './config.js'
 import { createPgDb, migrate } from './db.js'
 import { createMailer } from './mailer.js'
+import { createGoogleClient } from './google.js'
 import { seedLevels } from './journey.js'
 import { readFileSync } from 'node:fs'
 
@@ -24,5 +25,9 @@ const app = buildApp({
   exportSecret: cfg.exportSecret,
   dailyTz: cfg.dailyTz,
   legal: cfg.legal,
+  google:
+    cfg.googleClientId && cfg.googleClientSecret
+      ? createGoogleClient({ clientId: cfg.googleClientId, clientSecret: cfg.googleClientSecret, redirectUri: `${cfg.appUrl}/api/auth/google/callback` })
+      : undefined,
 })
 await app.listen({ port: cfg.port, host: '0.0.0.0' })

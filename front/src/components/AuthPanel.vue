@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { inject } from 'vue'
-import { forgotPassword, login, register, resetPassword, resetToken, estimateBits, notice, MIN_BITS } from '../auth'
+import { forgotPassword, googleEnabled, login, register, resetPassword, resetToken, estimateBits, notice, MIN_BITS } from '../auth'
 import PasswordMeter from './PasswordMeter.vue'
 
 // Connexion / inscription. L'inscription exige un mot de passe d'au moins MIN_BITS bits (indicateur en direct)
-// puis une confirmation par e-mail. Connexion Google : pas encore (elle sera vérifiée par le serveur).
+// puis une confirmation par e-mail. Connexion Google : un lien vers le serveur (jamais de secret dans le navigateur) ; masquée si le serveur ne la propose pas.
 const go = inject<(view: string) => void>('go', () => undefined)
 // 'forgot' : demander le lien ; 'reset' : choisir le nouveau mot de passe (arrivée par le lien reçu).
 const mode = ref<'login' | 'register' | 'forgot' | 'reset'>(resetToken.value ? 'reset' : 'login')
@@ -13,6 +13,8 @@ watch(resetToken, (t) => t && (mode.value = 'reset'))
 const name = ref('')
 const email = ref('')
 const password = ref('')
+const confirm = ref('') // inscription et nouveau mot de passe : à saisir deux fois
+const visible = ref(false) // afficher le mot de passe en clair
 const error = ref('')
 const info = ref('')
 const busy = ref(false)
@@ -26,7 +28,8 @@ watch([password, name, email], async () => {
 })
 
 const needsStrong = computed(() => mode.value === 'register' || mode.value === 'reset')
-const canSubmit = computed(() => !busy.value && (!needsStrong.value || bits.value >= MIN_BITS))
+const mismatch = computed(() => needsStrong.value && confirm.value !== '' && confirm.value !== password.value)
+const canSubmit = computed(() => !busy.value && (!needsStrong.value || (bits.value >= MIN_BITS && confirm.value === password.value)))
 
 async function submit(): Promise<void> {
   if (!canSubmit.value) return
@@ -43,6 +46,7 @@ async function submit(): Promise<void> {
   error.value = res.ok ? '' : res.error
   if (res.ok && res.message) {
     password.value = ''
+    confirm.value = ''
     if (mode.value === 'reset') {
       notice.value = res.message
       mode.value = 'login'
@@ -55,6 +59,7 @@ function open(m: 'login' | 'register' | 'forgot'): void {
   error.value = ''
   info.value = ''
   bits.value = 0
+  confirm.value = ''
 }
 
 </script>
@@ -64,7 +69,8 @@ function open(m: 'login' | 'register' | 'forgot'): void {
     <h2 class="halo">{{ { login: 'Connexion', register: 'Créer un compte', forgot: 'Mot de passe oublié', reset: 'Nouveau mot de passe' }[mode] }}</h2>
 
     <template v-if="mode === 'login' || mode === 'register'">
-      <p class="google-off halo" data-test="google-off">Google : pas encore disponible.</p>
+      <a v-if="googleEnabled" class="btn btn--ghost google" href="/api/auth/google/start" data-test="google">Continuer avec Google</a>
+      <p v-else class="google-off halo" data-test="google-off">Google : pas encore disponible.</p>
       <p class="or halo">ou avec une adresse e-mail</p>
     </template>
     <p v-else-if="mode === 'forgot'" class="or halo">Indique l'adresse de ton compte : tu recevras un lien pour choisir un nouveau mot de passe.</p>
@@ -74,8 +80,13 @@ function open(m: 'login' | 'register' | 'forgot'): void {
     <form v-else @submit.prevent="submit" data-test="auth-form">
       <input v-if="mode === 'register'" class="field" v-model="name" placeholder="Pseudo" autocomplete="nickname" data-test="name" />
       <input v-if="mode !== 'reset'" class="field" v-model="email" type="email" placeholder="E-mail" autocomplete="email" data-test="email" />
-      <input v-if="mode !== 'forgot'" class="field" v-model="password" type="password" :placeholder="mode === 'reset' ? 'Nouveau mot de passe' : 'Mot de passe'" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'" data-test="password" />
+      <div v-if="mode !== 'forgot'" class="pw">
+        <input class="field" v-model="password" :type="visible ? 'text' : 'password'" :placeholder="mode === 'reset' ? 'Nouveau mot de passe' : 'Mot de passe'" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'" data-test="password" />
+        <button type="button" class="eye" :aria-pressed="visible" data-test="show-password" @click="visible = !visible">{{ visible ? 'Masquer' : 'Afficher' }}</button>
+      </div>
       <PasswordMeter v-if="needsStrong" :bits="bits" />
+      <input v-if="needsStrong" class="field" v-model="confirm" :type="visible ? 'text' : 'password'" placeholder="Confirme le mot de passe" autocomplete="new-password" data-test="confirm" />
+      <p v-if="mismatch" class="err" data-test="mismatch">Les deux mots de passe ne sont pas identiques.</p>
       <p v-if="error" class="err" data-test="error">{{ error }}</p>
       <button type="submit" class="btn" :disabled="!canSubmit" data-test="submit">
         {{ { login: 'Se connecter', register: 'Créer mon compte', forgot: 'Envoyer le lien', reset: 'Changer le mot de passe' }[mode] }}
@@ -109,6 +120,10 @@ form {
   display: grid;
   gap: 0.65rem;
 }
+.google {
+  text-align: center;
+  text-decoration: none;
+}
 .or,
 .google-off {
   font-size: 0.85rem;
@@ -128,6 +143,26 @@ form {
   padding: 0.3rem 0.8rem;
   border-radius: 12px;
   background: #fff;
+}
+.pw {
+  position: relative;
+}
+.pw .field {
+  width: 100%;
+  padding-right: 5.2rem;
+}
+.eye {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  transform: translateY(-50%);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--blue);
+  cursor: pointer;
 }
 form .btn,
 .auth > .btn {
