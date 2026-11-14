@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { inject, onMounted, ref, watch } from 'vue'
 import { user } from '../auth'
+import Avatar from '../components/Avatar.vue'
 import { fetchBoard, formatTime, type BoardData, type BoardId } from '../stats'
 
-// Classements : ouverts à tous en lecture (seul le pseudo est montré) ; « ma place » si on est connecté.
+// Classements : ouverts à tous en lecture (seuls le pseudo et l'avatar sont montrés) ; « ma place » si on est connecté.
 const go = inject<(view: string) => void>('go', () => undefined)
 const BOARDS: { id: BoardId; label: string; hint: string }[] = [
   { id: 'voyage', label: 'Voyage', hint: 'Le niveau le plus loin atteint. À égalité, celui qui y est arrivé le premier.' },
   { id: 'jour', label: 'Du jour', hint: "Les temps du puzzle d'aujourd'hui, du plus rapide au plus lent." },
-  { id: 'serie', label: 'Séries', hint: 'Les jours de suite avec le puzzle du jour terminé.' },
+  { id: 'serie', label: 'Séries', hint: 'Ta plus longue série de jours de suite avec le puzzle du jour. Si tu perds ta série, ton record reste : il n\'est remplacé que quand tu le dépasses.' },
 ]
 const board = ref<BoardId>('voyage')
 const data = ref<BoardData | null>(null)
@@ -42,7 +43,7 @@ const value = (v: number): string => (board.value === 'voyage' ? `Niveau ${v}` :
       <ol v-else class="list" data-test="ranking-list">
         <li v-for="e in data.entries" :key="e.rank + e.pseudo" :class="{ me: e.me, top: e.rank <= 3 }" data-test="ranking-row">
           <span class="rank">{{ e.rank }}</span>
-          <span class="name">{{ e.pseudo }}</span>
+          <span class="name"><Avatar :id="e.avatar" class="pic" /><span class="pseudo">{{ e.pseudo }}</span></span>
           <span class="val">{{ value(e.value) }}</span>
         </li>
       </ol>
@@ -115,9 +116,19 @@ section {
   font-variant-numeric: tabular-nums;
 }
 .name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
   font-weight: 700;
+}
+.pic {
+  --avatar: 1.9rem;
+}
+.pseudo {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .val {
   font-variant-numeric: tabular-nums;

@@ -7,6 +7,7 @@ export interface DailyStats {
   bestMs: number | null
   worstMs: number | null
   streak: number // jours consécutifs
+  bestStreak: number // la plus longue série jamais faite
 }
 
 export interface JourneyStats {
@@ -32,6 +33,7 @@ export type BoardId = 'voyage' | 'jour' | 'serie'
 export interface BoardEntry {
   rank: number
   pseudo: string
+  avatar?: string // identifiant de la liste fixe (avatars/)
   value: number
   me: boolean
 }

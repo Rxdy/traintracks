@@ -8,6 +8,7 @@ export interface DailyStatus {
   done: boolean // déjà réalisé aujourd'hui
   timeMs: number | null
   streak: number
+  size: number // 5×5 en semaine, 6×6 du vendredi au dimanche
 }
 
 export async function fetchDaily(): Promise<DailyStatus | null> {

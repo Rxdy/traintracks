@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { beginDaily, dailyStats, dailyStatus, dateKey, previousDay, sizeFor, startDaily, submitDaily, streakUntil } from './daily.js'
+import { bestStreak, longestRun, beginDaily, dailyStats, dailyStatus, dateKey, previousDay, sizeFor, startDaily, submitDaily, streakUntil } from './daily.js'
 import { generate } from '../../shared/generator.js'
 import { edgeKey } from '../../shared/track.js'
 import { balance } from './wallet.js'
@@ -57,7 +57,7 @@ describe('puzzle du jour (serveur)', () => {
     const { db } = await makeGame()
     const r = await play(db, U, D1, t0, t0 + 83_000)
     expect(r).toEqual({ ok: true, counted: true, timeMs: 83_000, earned: { base: 20, streakBonus: 0 }, streak: 1, coins: 20 })
-    expect(await dailyStatus(db, U, D1)).toEqual({ date: D1, done: true, timeMs: 83_000, streak: 1 })
+    expect(await dailyStatus(db, U, D1)).toEqual({ date: D1, done: true, timeMs: 83_000, streak: 1, size: sizeFor(D1) })
   })
   it('rejouer le même jour : accepté mais non compté, rien de plus versé', async () => {
     const { db } = await makeGame()
@@ -92,6 +92,26 @@ describe('puzzle du jour (serveur)', () => {
   })
 })
 
+describe('meilleure série', () => {
+  it('la plus longue suite de jours consécutifs, doublons et désordre compris', () => {
+    expect(longestRun([])).toBe(0)
+    expect(longestRun(['2026-11-05', '2026-11-03', '2026-11-04', '2026-11-04', '2026-11-09', '2026-11-10'])).toBe(3)
+    expect(longestRun(['2026-02-27', '2026-03-01'])).toBe(1) // le 28 manque
+    expect(longestRun(['2026-02-27', '2026-02-28', '2026-03-01'])).toBe(3) // 2026 n'est pas bissextile : le 28 février précède le 1er mars
+  })
+  it('perdre la série garde le record ; il n\'est remplacé que par une série plus longue', async () => {
+    const { db } = await makeGame()
+    for (const d of ['2026-11-01', '2026-11-02', '2026-11-03']) await play(db, U, d, t0, t0 + 1)
+    expect(await bestStreak(db, U)).toBe(3)
+    await play(db, U, '2026-11-10', t0, t0 + 1) // jours manqués : la série en cours repart à 1
+    expect(await dailyStats(db, U, '2026-11-10')).toMatchObject({ streak: 1, bestStreak: 3 })
+    for (const d of ['2026-11-11', '2026-11-12']) await play(db, U, d, t0, t0 + 1)
+    expect(await bestStreak(db, U)).toBe(3) // 3 = 3 : pas de remplacement
+    await play(db, U, '2026-11-13', t0, t0 + 1)
+    expect(await bestStreak(db, U)).toBe(4)
+  })
+})
+
 describe('série de jours et statistiques', () => {
   it('jours consécutifs : bonus de +2 par jour de série (max +10)', async () => {
     const { db } = await makeGame()
@@ -121,11 +141,11 @@ describe('série de jours et statistiques', () => {
     const { db } = await makeGame()
     await play(db, U, '2026-11-11', t0, t0 + 60_000)
     await play(db, U, '2026-11-12', t0, t0 + 120_000)
-    expect(await dailyStats(db, U, '2026-11-12')).toEqual({ count: 2, avgMs: 90_000, bestMs: 60_000, worstMs: 120_000, streak: 2 })
+    expect(await dailyStats(db, U, '2026-11-12')).toEqual({ count: 2, avgMs: 90_000, bestMs: 60_000, worstMs: 120_000, streak: 2, bestStreak: 2 })
   })
   it('aucune partie : tout à vide ; la série d\'hier reste visible tant qu\'aujourd\'hui n\'est pas joué', async () => {
     const { db } = await makeGame()
-    expect(await dailyStats(db, U, D1)).toEqual({ count: 0, avgMs: null, bestMs: null, worstMs: null, streak: 0 })
+    expect(await dailyStats(db, U, D1)).toEqual({ count: 0, avgMs: null, bestMs: null, worstMs: null, streak: 0, bestStreak: 0 })
     await play(db, U, '2026-11-11', t0, t0 + 1)
     expect((await dailyStats(db, U, D1)).streak).toBe(1)
     expect((await dailyStats(db, U, '2026-11-14')).streak).toBe(0)

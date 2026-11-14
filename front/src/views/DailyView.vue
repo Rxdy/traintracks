@@ -88,20 +88,23 @@ function quit(): void {
 
     <!-- Salon -->
     <div v-else class="lobby">
-      <p class="note halo">Une grille par jour, la même pour tous, chronométrée, sans pouvoirs.</p>
-      <p v-if="status?.done" class="note halo" data-test="already">
-        Fait aujourd'hui en {{ formatTime(status.timeMs) }}. Tu peux rejouer, mais seul le premier temps compte.
-      </p>
-      <p v-if="status && status.streak > 0" class="note halo" data-test="streak">
-        {{ status.streak }} jour{{ status.streak > 1 ? 's' : '' }} d'affilée
-      </p>
-      <button type="button" class="btn btn--big" data-test="start" :disabled="loading || !status" @click="start">
-        {{ status?.done ? 'Rejouer' : 'Lancer' }}
-      </button>
-      <p v-if="error" class="note halo" data-test="load-error">{{ error }}</p>
-      <p class="note halo">Pas encore de classement.</p>
-      <p class="note halo">
-        Compte : <strong>{{ user.name }}</strong>
+      <div class="card" data-test="lobby">
+        <h2>Puzzle du jour</h2>
+        <p class="hint">Une grille par jour, la même pour tous, chronométrée, sans pouvoirs.</p>
+        <p v-if="status" class="size" data-test="size">Aujourd'hui : {{ status.size }}×{{ status.size }}</p>
+        <p v-if="status?.done" class="done" data-test="already">
+          Fait aujourd'hui en {{ formatTime(status.timeMs) }}. Tu peux rejouer, mais seul le premier temps compte.
+        </p>
+        <p v-if="status && status.streak > 0" class="streak" data-test="streak">
+          {{ status.streak }} jour{{ status.streak > 1 ? 's' : '' }} d'affilée
+        </p>
+        <button type="button" class="btn btn--big" data-test="start" :disabled="loading || !status" @click="start">
+          {{ status?.done ? 'Rejouer' : 'Lancer' }}
+        </button>
+        <p v-if="error" class="err" data-test="load-error">{{ error }}</p>
+      </div>
+      <p class="who">
+        Connecté : <strong>{{ user.name }}</strong>
         <button type="button" class="link-btn" @click="logout">Déconnexion</button>
       </p>
     </div>
@@ -124,21 +127,61 @@ section {
   justify-content: center;
 }
 .lobby {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
+  width: min(26rem, 100%);
+  display: grid;
+  gap: 0.8rem;
+  justify-items: center;
+}
+.card {
+  width: 100%;
+  display: grid;
+  gap: 0.6rem;
+  justify-items: center;
+  padding: 1rem 1.1rem 1.2rem;
+  border: 3px solid #fff;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: var(--shadow);
   text-align: center;
+  color: #374151;
 }
 h2 {
-  color: #111827;
+  font-size: 1.4rem;
+  color: var(--ink);
   font-weight: 800;
 }
-.note {
-  font-size: 0.95rem;
+.hint {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.size {
+  padding: 0.1rem 0.8rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: var(--blue-dark);
+  font-weight: 800;
+}
+.done {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #15803d;
+}
+.streak {
+  font-weight: 700;
+  color: var(--ink);
+}
+.err {
+  color: #b91c1c;
   font-weight: 600;
 }
-.note .link-btn {
+.who {
+  padding: 0.25rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  font-size: 0.85rem;
+  color: #374151;
+}
+.who .link-btn {
   margin-left: 0.5rem;
 }
 .bar {

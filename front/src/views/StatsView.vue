@@ -31,8 +31,8 @@ const place = computed(() => {
 
       <h3 class="halo">Voyage</h3>
       <div class="tiles">
-        <div class="tile"><b data-test="highest">{{ j ? j.level : '…' }}</b><span>Niveau atteint</span></div>
-        <div class="tile"><b data-test="solved">{{ j ? j.solved : '…' }}</b><span>Niveaux terminés</span></div>
+        <!-- une seule tuile : le niveau en cours vaut presque toujours « terminés + 1 », deux tuiles disaient la même chose -->
+        <div class="tile tile--wide"><b data-test="highest">{{ j ? j.level : '…' }}</b><span>Niveau en cours · <span data-test="solved">{{ j ? j.solved : '…' }}</span> terminé{{ j && j.solved > 1 ? 's' : '' }}</span></div>
         <div class="tile"><b data-test="playtime">{{ j ? formatLong(j.totalTimeMs) : '…' }}</b><span>Temps de jeu</span></div>
         <div class="tile"><b>{{ j ? formatTime(j.avgMs) : '…' }}</b><span>Temps moyen</span></div>
         <div class="tile"><b data-test="fastest">{{ j?.fastest ? formatTime(j.fastest.timeMs) : '—' }}</b><span>Le plus rapide{{ j?.fastest ? ` (niv. ${j.fastest.level})` : '' }}</span></div>
@@ -58,6 +58,7 @@ const place = computed(() => {
       <div class="tiles" v-if="s">
         <div class="tile"><b data-test="count">{{ s.daily.count }}</b><span>Grilles faites</span></div>
         <div class="tile"><b data-test="streak">{{ s.daily.streak }}</b><span>Série en cours</span></div>
+        <div class="tile"><b data-test="best-streak">{{ s.daily.bestStreak }}</b><span>Meilleure série</span></div>
         <div class="tile"><b>{{ formatTime(s.daily.avgMs) }}</b><span>Moyenne</span></div>
         <div class="tile"><b>{{ formatTime(s.daily.bestMs) }}</b><span>Meilleur temps</span></div>
         <div class="tile tile--wide"><b>{{ formatTime(s.daily.worstMs) }}</b><span>Pire temps</span></div>

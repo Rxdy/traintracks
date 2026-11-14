@@ -55,16 +55,36 @@ export async function streakUntil(db: Db, owner: string, from: string): Promise<
   return n
 }
 
+// Plus longue série de jours consécutifs jamais réalisée : elle reste même quand la série en cours est perdue,
+// et n'est remplacée que lorsqu'une nouvelle série la dépasse.
+export function longestRun(dates: Iterable<string>): number {
+  const sorted = [...new Set(dates)].sort()
+  let best = 0
+  let run = 0
+  let prev = ''
+  for (const d of sorted) {
+    run = prev && previousDay(d) === prev ? run + 1 : 1
+    best = Math.max(best, run)
+    prev = d
+  }
+  return best
+}
+export async function bestStreak(db: Db, owner: string): Promise<number> {
+  const { rows } = await db.query<{ date: string }>('SELECT date FROM daily_results WHERE owner = $1', [owner])
+  return longestRun(rows.map((r) => r.date))
+}
+
 export interface DailyStatus {
   date: string
   done: boolean
   timeMs: number | null
   streak: number
+  size: number // taille de la grille du jour (5×5 en semaine, 6×6 du vendredi au dimanche)
 }
 
 export async function dailyStatus(db: Db, owner: string, date: string): Promise<DailyStatus> {
   const r = (await db.query<{ time_ms: number }>('SELECT time_ms FROM daily_results WHERE owner = $1 AND date = $2', [owner, date])).rows[0]
-  return { date, done: !!r, timeMs: r?.time_ms ?? null, streak: await streakUntil(db, owner, r ? date : previousDay(date)) }
+  return { date, done: !!r, timeMs: r?.time_ms ?? null, size: sizeFor(date), streak: await streakUntil(db, owner, r ? date : previousDay(date)) }
 }
 
 export async function startDaily(db: Db, owner: string, date: string, now: Date): Promise<PublicDaily & { replay: boolean }> {
@@ -116,11 +136,12 @@ export interface DailyStats {
   bestMs: number | null
   worstMs: number | null
   streak: number
+  bestStreak: number // la plus longue série jamais faite
 }
 
 export async function dailyStats(db: Db, owner: string, today: string): Promise<DailyStats> {
   const r = (await db.query<{ n: number; avg: number | null; best: number | null; worst: number | null }>(
     'SELECT count(*)::int AS n, round(avg(time_ms))::int AS avg, min(time_ms) AS best, max(time_ms) AS worst FROM daily_results WHERE owner = $1', [owner])).rows[0]
   const doneToday = (await db.query('SELECT 1 FROM daily_results WHERE owner = $1 AND date = $2', [owner, today])).rows.length > 0
-  return { count: r.n, avgMs: r.avg, bestMs: r.best, worstMs: r.worst, streak: await streakUntil(db, owner, doneToday ? today : previousDay(today)) }
+  return { count: r.n, avgMs: r.avg, bestMs: r.best, worstMs: r.worst, streak: await streakUntil(db, owner, doneToday ? today : previousDay(today)), bestStreak: await bestStreak(db, owner) }
 }

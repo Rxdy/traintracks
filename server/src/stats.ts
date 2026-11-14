@@ -1,6 +1,7 @@
 // Statistiques personnelles et classements. Seul le serveur les calcule ; le navigateur n'en garde rien.
 import type { Db } from './db.js'
-import { previousDay, streakUntil } from './daily.js'
+import { DEFAULT_AVATAR } from '../../shared/avatars.js'
+import { longestRun } from './daily.js'
 
 export interface JourneyStats {
   solved: number // niveaux terminés
@@ -42,7 +43,8 @@ export type Board = 'voyage' | 'jour' | 'serie'
 export interface Entry {
   rank: number
   pseudo: string
-  value: number // voyage : niveau atteint ; jour : temps (ms) ; serie : jours de suite
+  avatar: string // identifiant de la liste fixe (shared/avatars.ts)
+  value: number // voyage : niveau atteint ; jour : temps (ms) ; serie : plus longue série de jours de suite
   me: boolean
 }
 export interface Leaderboard {
@@ -70,24 +72,23 @@ export async function leaderboard(db: Db, board: Board, today: string, viewer: s
       `SELECT u.id, u.pseudo, r.time_ms AS value FROM daily_results r JOIN users u ON 'u:' || u.id::text = r.owner
        WHERE r.date = $1 AND u.leaderboard ORDER BY r.time_ms ASC, r.solved_at ASC`, [today])).rows
   } else {
-    // série en cours : jours consécutifs jusqu'à aujourd'hui (ou hier si pas encore joué aujourd'hui)
-    const cands = (await db.query<{ id: string; pseudo: string; owner: string }>(
-      `SELECT DISTINCT u.id, u.pseudo, r.owner FROM daily_results r JOIN users u ON 'u:' || u.id::text = r.owner
-       WHERE r.date IN ($1, $2) AND u.leaderboard`, [today, previousDay(today)])).rows
-    const withStreak: { id: string; pseudo: string; value: number }[] = []
-    for (const c of cands) {
-      const doneToday = (await db.query('SELECT 1 FROM daily_results WHERE owner = $1 AND date = $2', [c.owner, today])).rows.length > 0
-      withStreak.push({ id: c.id, pseudo: c.pseudo, value: await streakUntil(db, c.owner, doneToday ? today : previousDay(today)) })
-    }
-    rows = withStreak.sort((a, b) => b.value - a.value || a.pseudo.localeCompare(b.pseudo))
+    // meilleure série de chaque joueur, tous jours confondus : perdre sa série ne retire rien du classement,
+    // et le score n'est remplacé que lorsqu'une série plus longue le dépasse.
+    const all = (await db.query<{ id: string; pseudo: string; date: string }>(
+      `SELECT u.id, u.pseudo, r.date FROM daily_results r JOIN users u ON 'u:' || u.id::text = r.owner WHERE u.leaderboard`)).rows
+    const byUser = new Map<string, { pseudo: string; dates: string[] }>()
+    for (const r of all) (byUser.get(r.id) ?? byUser.set(r.id, { pseudo: r.pseudo, dates: [] }).get(r.id)!).dates.push(r.date)
+    rows = [...byUser].map(([id, v]) => ({ id, pseudo: v.pseudo, value: longestRun(v.dates) })).sort((a, b) => b.value - a.value || a.pseudo.localeCompare(b.pseudo))
   }
   // rang « à la compétition » : deux joueurs à égalité ont le même rang (sauf voyage : départagé par l'heure d'arrivée)
   const ranked = rows.map((r, i) => ({ ...r, rank: board === 'voyage' ? i + 1 : (rows.findIndex((x) => x.value === r.value) + 1) }))
   const mine = viewer ? ranked.find((r) => r.id === viewer) : undefined
+  const top = ranked.slice(0, TOP)
+  const avatars = new Map((await db.query<{ id: string; avatar: string }>('SELECT id, avatar FROM users WHERE id = ANY($1::uuid[])', [top.map((r) => r.id)])).rows.map((r) => [r.id, r.avatar]))
   return {
     board,
     date: board === 'jour' || board === 'serie' ? today : undefined,
-    entries: ranked.slice(0, TOP).map((r) => ({ rank: r.rank, pseudo: r.pseudo, value: r.value, me: r.id === viewer })),
+    entries: top.map((r) => ({ rank: r.rank, pseudo: r.pseudo, avatar: avatars.get(r.id) ?? DEFAULT_AVATAR, value: r.value, me: r.id === viewer })),
     me: mine ? { rank: mine.rank, value: mine.value } : null,
     total: ranked.length,
   }
