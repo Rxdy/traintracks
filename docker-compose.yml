@@ -30,6 +30,9 @@ services:
       LEGAL_NAME: ${LEGAL_NAME:-}
       LEGAL_CONTACT: ${LEGAL_CONTACT:-}
       LEGAL_HOST: ${LEGAL_HOST:-}
+      # Connexion avec Google (facultative : sans ces deux valeurs, le bouton n'apparaît pas).
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     depends_on:
       db:
         condition: service_healthy

@@ -1,0 +1,79 @@
+# Production (Raspberry Pi) : images construites par la CI sur un tag de version (vX.Y.Z), tirées depuis GHCR.
+# Traefik (réseau externe « web ») fait le HTTPS ; le DNS de rxdy.fr a déjà un joker (*.rxdy.fr), rien à ajouter chez OVH.
+# Lancer :  docker compose -f docker-compose.prod.yml up -d      (variables : .env à côté de ce fichier, voir .env.prod.example)
+name: traintracks
+
+services:
+  front:
+    image: ghcr.io/rxdy/traintracks-front:${TAG:-latest}
+    container_name: traintracks-front-prod
+    restart: unless-stopped
+    mem_limit: 64m
+    depends_on:
+      - api
+    labels:
+      # Watchtower (mode --label-enable) met l'image à jour quand un nouveau tag « latest » est publié.
+      - com.centurylinklabs.watchtower.enable=true
+      - traefik.enable=true
+      - traefik.http.routers.traintracks.entrypoints=websecure
+      - traefik.http.routers.traintracks.rule=Host(`traintracks.rxdy.fr`)
+      - traefik.http.routers.traintracks.tls.certresolver=leresolver
+      - traefik.http.services.traintracks.loadbalancer.server.port=80
+    networks:
+      - default
+      - web
+
+  api:
+    image: ghcr.io/rxdy/traintracks-api:${TAG:-latest}
+    container_name: traintracks-api-prod
+    restart: unless-stopped
+    mem_limit: 256m
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    environment:
+      DATABASE_URL: postgres://traintracks:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant dans .env}@db:5432/traintracks
+      APP_URL: ${APP_URL:-https://traintracks.rxdy.fr}
+      SMTP_URL: ${SMTP_URL:?SMTP_URL manquant dans .env}
+      MAIL_FROM: ${MAIL_FROM:-Train Tracks <traintracks@rxdy.fr>}
+      TRUST_PROXY: "1"
+      # Signe les fichiers d'export de données : à ne plus changer une fois en service (les anciens exports deviendraient invalides).
+      EXPORT_SECRET: ${EXPORT_SECRET:?EXPORT_SECRET manquant dans .env}
+      LEGAL_NAME: ${LEGAL_NAME:-}
+      LEGAL_CONTACT: ${LEGAL_CONTACT:-}
+      LEGAL_HOST: ${LEGAL_HOST:-}
+      # Connexion avec Google (le code qui les lit arrive avec la fonctionnalité).
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - default
+
+  db:
+    image: postgres:17-alpine
+    container_name: traintracks-db-prod
+    restart: unless-stopped
+    mem_limit: 256m
+    # Pas de label Watchtower : la base ne se met jamais à jour toute seule.
+    environment:
+      POSTGRES_USER: traintracks
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant dans .env}
+      POSTGRES_DB: traintracks
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U traintracks"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - default
+
+volumes:
+  pgdata:
+
+networks:
+  default: {}
+  web:
+    external: true

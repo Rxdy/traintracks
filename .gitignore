@@ -9,3 +9,5 @@ server/dist
 backups/
 __pycache__/
 *.pyc
+.env.zimbra
+.env.prod

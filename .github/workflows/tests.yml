@@ -3,7 +3,9 @@ name: Tests
 
 on:
   push:
+    branches: ["**"] # pas les tags : un tag de version passe par release.yml, qui rappelle ces tests
   pull_request:
+  workflow_call:
 
 jobs:
   front:
