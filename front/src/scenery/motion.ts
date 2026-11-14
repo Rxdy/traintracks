@@ -154,7 +154,7 @@ export interface CarState {
   kind: 0 | 1 // voiture / camion
   color: string
 }
-export type AnimalKind = 'owl' | 'squirrel' | 'deer' | 'rabbit' | 'hedgehog' | 'butterfly'
+export type AnimalKind = 'owl' | 'squirrel' | 'deer' | 'rabbit' | 'hedgehog' | 'butterfly' | 'cat' | 'lizard' | 'scorpion' | 'alien'
 export interface AnimalState {
   id: number
   kind: AnimalKind
@@ -207,7 +207,8 @@ export function createLandSim(sc: Scenery) {
   }
   const trees = [...cells('tree'), ...cells('palm')]
   const pines = cells('pine')
-  const grass = cells('grass')
+  // les plus proches du centre d'abord : les animaux apparaissent là où on regarde, pas dans un coin rogné
+  const grass = cells('grass').sort((a, b) => Math.hypot(a[0] + 0.5 - H / 2, a[1] + 0.5 - W / 2) - Math.hypot(b[0] + 0.5 - H / 2, b[1] + 0.5 - W / 2))
   const anyTree = trees.length ? trees : pines
   // Les animaux de terre ne passent que d'une case d'herbe à une case d'herbe voisine : jamais dans la rivière,
   // sur la route ni sur la voie.
@@ -265,22 +266,30 @@ export function createLandSim(sc: Scenery) {
       s.t = t
     } })
   }
-  if ((th === 'foret' || th === 'montagne' || th === 'canyon') && grass.length) {
-    let cell = grass[0]
-    const s = mkAnimal('deer', { x: cell[1] + 0.5, y: cell[0] + 0.55 })
+  // Marcheur : va de case d'herbe en case d'herbe voisine, s'arrête entre deux (cerf, chat, lézard, scorpion, extraterrestre).
+  const walker = (kind: AnimalKind, from: number, speed: number, pause: [number, number]) => {
+    let cell = grass[Math.min(from, grass.length - 1)]
+    const s = mkAnimal(kind, { x: cell[1] + 0.5, y: cell[0] + 0.55 })
     let tgt: Pt = { x: s.x, y: s.y }, nxt = 3
     actors.push({ s, step: (dt, t) => {
       if (t > nxt) {
         const nb = neighbours(cell)
         if (nb.length) { cell = pick(nb); tgt = { x: cell[1] + 0.5, y: cell[0] + 0.55 } }
-        nxt = t + 6 + rand() * 4
+        nxt = t + pause[0] + rand() * pause[1]
       }
       const dx = tgt.x - s.x, dy = tgt.y - s.y, d = Math.hypot(dx, dy)
-      if (d > 0.03) { s.x += (dx / d) * 0.35 * dt; s.y += (dy / d) * 0.35 * dt; s.face = dx < 0 ? -1 : 1 }
+      if (d > 0.03) { s.x += (dx / d) * speed * dt; s.y += (dy / d) * speed * dt; s.face = dx < 0 ? -1 : 1 }
       s.t = t
     } })
   }
-  if ((th === 'plaine' || th === 'hiver' || th === 'desert' || th === 'canyon') && grass.length) {
+  if (grass.length) {
+    if (th === 'foret' || th === 'montagne' || th === 'canyon') walker('deer', 0, 0.35, [6, 4])
+    if (th === 'ville' || th === 'neon') walker('cat', 1, 0.3, [3, 4])
+    if (th === 'volcan' || th === 'desert' || th === 'fusion') walker('lizard', 1, 0.5, [2, 3])
+    if (th === 'enfer' || th === 'canyon') walker('scorpion', 2, 0.25, [3, 4])
+    if (th === 'lune') { walker('alien', 0, 0.22, [4, 4]); walker('alien', 3, 0.22, [5, 4]) }
+  }
+  if ((th === 'plaine' || th === 'hiver' || th === 'desert' || th === 'canyon' || th === 'fusion') && grass.length) {
     let cell = grass[0]
     const s = mkAnimal('rabbit', centre(cell))
     let a: Pt = { x: s.x, y: s.y }, b = a, t0 = 0, nxt = 1, mv = false

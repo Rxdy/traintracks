@@ -152,3 +152,13 @@ export function pointAt(route: Route, s: number): Pt & { angle: number } {
     angle: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI,
   }
 }
+
+// Le train ralentit dans les virages : la vue de la cabine tourne alors moins vite (on voit mieux le décor et on n'a pas le mal de mer).
+// 1 en ligne droite, environ 0,42 dans un virage serré à 90°. On regarde 1 case devant pour freiner AVANT d'y entrer.
+export function speedFactor(route: Route, s: number): number {
+  const a = pointAt(route, s).angle
+  const b = pointAt(route, s + 1).angle
+  let d = Math.abs(b - a) % 360
+  if (d > 180) d = 360 - d
+  return 1 / (1 + 1.4 * (Math.min(d, 90) / 90))
+}

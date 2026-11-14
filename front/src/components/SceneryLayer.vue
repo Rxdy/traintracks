@@ -19,6 +19,7 @@ import WindmillEl from './scenery/WindmillEl.vue'
 import CactusEl from './scenery/CactusEl.vue'
 import PalmEl from './scenery/PalmEl.vue'
 import CraterEl from './scenery/CraterEl.vue'
+import ObsidianEl from './scenery/ObsidianEl.vue'
 import VentEl from './scenery/VentEl.vue'
 import DeadTreeEl from './scenery/DeadTreeEl.vue'
 import SkullEl from './scenery/SkullEl.vue'
@@ -61,6 +62,25 @@ const standing = computed(() => items.value.filter((i) => i.kind !== 'field'))
 // la voie de la grille de jeu est donnée dans son propre repère : on la décale de la marge du décor
 const ballast = computed(() => (props.route ? 'M' + props.route.points.map((p) => `${p.x + props.scenery.margin.x} ${p.y + props.scenery.margin.y}`).join(' L') : ''))
 const extPaths = computed(() => props.scenery.ext.map((e) => 'M' + e.map((p) => `${p.x} ${p.y}`).join(' L')))
+// Prolongements : EXACTEMENT la géométrie d'un rail de la grille (rails.ts, case = 100) : deux rails à ±0,12 de l'axe
+// (épaisseur 0,06), traverses de 0,4 de long (épaisseur 0,07) tous les quarts de case, calées sur les cases entières.
+const extRails = computed(() => {
+  const sleepers: string[] = []
+  const rails: string[] = []
+  for (const e of props.scenery.ext) {
+    const [a, b] = e
+    const horiz = Math.abs(a.y - b.y) < 1e-9
+    const lo = horiz ? Math.min(a.x, b.x) : Math.min(a.y, b.y)
+    const hi = horiz ? Math.max(a.x, b.x) : Math.max(a.y, b.y)
+    const mid = horiz ? a.y : a.x
+    for (let t = Math.floor(lo * 4) / 4 + 0.125; t < hi; t += 0.25) {
+      if (t < lo) continue
+      sleepers.push(horiz ? `M ${t} ${mid - 0.2} L ${t} ${mid + 0.2}` : `M ${mid - 0.2} ${t} L ${mid + 0.2} ${t}`)
+    }
+    for (const o of [-0.12, 0.12]) rails.push(horiz ? `M ${lo} ${mid + o} L ${hi} ${mid + o}` : `M ${mid + o} ${lo} L ${mid + o} ${hi}`)
+  }
+  return { sleepers, rails }
+})
 const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ k, axis, rc: k.split(',').map(Number) })))
 </script>
 
@@ -81,6 +101,12 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
     <path v-if="ballast" :d="ballast" fill="none" :stroke="pal.bedEdge" stroke-width="0.68" stroke-linejoin="round" />
     <path v-if="ballast" :d="ballast" fill="none" :stroke="pal.bed" stroke-width="0.58" stroke-linejoin="round" />
 
+    <!-- le lit de la voie continue sous les prolongements, jusqu'au bord du décor (sinon il s'arrête avant la fin) -->
+    <template v-for="(d, i) in extPaths" :key="'xb' + i">
+      <path :d="d" fill="none" :stroke="pal.bedEdge" stroke-width="0.68" stroke-linejoin="round" />
+      <path :d="d" fill="none" :stroke="pal.bed" stroke-width="0.58" stroke-linejoin="round" />
+    </template>
+
     <RoadEl v-if="scenery.road" :road="scenery.road" :rows="rows" :cols="cols" :pal="pal" />
 
     <RiverEl :scenery="scenery" :pal="pal" />
@@ -88,11 +114,8 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
     <BridgeEl v-for="b in bridges" :key="'b' + b.k" :r="b.rc[0]" :c="b.rc[1]" :axis="b.axis" />
 
     <!-- prolongements de la voie hors de la grille de jeu (qui, elle, ne dessine que ses cases) : au-dessus des ponts -->
-    <template v-for="(d, i) in extPaths" :key="'x' + i">
-      <path :d="d" fill="none" :stroke="pal.rail.tie" stroke-width="0.4" stroke-dasharray="0.07 0.2" />
-      <path :d="d" fill="none" :stroke="pal.rail.rail" stroke-width="0.2" />
-      <path :d="d" fill="none" :stroke="pal.bed" stroke-width="0.1" />
-    </template>
+    <path v-for="(d, i) in extRails.sleepers" :key="'xs' + i" :d="d" fill="none" :stroke="pal.rail.tie" stroke-width="0.07" />
+    <path v-for="(d, i) in extRails.rails" :key="'xr' + i" :d="d" fill="none" :stroke="pal.rail.rail" stroke-width="0.06" stroke-linecap="round" />
 
     <g v-for="it in standing" :key="'s' + it.r + '-' + it.c" class="pop" :style="{ animationDelay: it.d + 'ms' }" :transform="`translate(${it.c} ${it.r}) scale(0.01)`">
       <GrassEl v-if="it.kind === 'grass'" :pal="palFor(it.r, it.c)" :v="it.v" />
@@ -106,6 +129,7 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
       <CactusEl v-else-if="it.kind === 'cactus'" :pal="palFor(it.r, it.c)" :v="it.v" />
       <PalmEl v-else-if="it.kind === 'palm'" :pal="palFor(it.r, it.c)" :v="it.v" />
       <CraterEl v-else-if="it.kind === 'crater'" :pal="palFor(it.r, it.c)" :v="it.v" />
+      <ObsidianEl v-else-if="it.kind === 'obsidian'" :pal="palFor(it.r, it.c)" :v="it.v" />
       <VentEl v-else-if="it.kind === 'vent'" :pal="palFor(it.r, it.c)" :v="it.v" />
       <DeadTreeEl v-else-if="it.kind === 'deadtree'" :pal="palFor(it.r, it.c)" :v="it.v" />
       <SkullEl v-else-if="it.kind === 'skull'" :pal="palFor(it.r, it.c)" :v="it.v" />

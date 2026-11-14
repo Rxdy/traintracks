@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { pointAt, type Route } from '../trainRoute'
+import { pointAt, speedFactor, type Route } from '../trainRoute'
 
 // Locomotive + wagons qui roulent le long du trajet, entrée → sortie.
-// `speed` : cases/s, CONSTANTE de l'apparition à la disparition (pas d'accélération hors de la grille).
+// `speed` : cases/s en ligne droite. Le train ralentit dans les virages (voir speedFactor) et change de vitesse en douceur (inertie).
 const props = withDefaults(
   // clip : zone (en cases) où le train est visible. Hors de cette zone (le décor), il disparaît : il ne roule jamais sur
   // l'interface (récapitulatif, pouvoirs, bouton Suivant).
   defineProps<{ route: Route; size: number; speed?: number; wagons?: number; clip?: { x: number; y: number; w: number; h: number } }>(),
-  { speed: 3.2, wagons: 3 },
+  { speed: 1.9, wagons: 3 },
 )
 const emit = defineEmits<{ (e: 'done'): void; (e: 'progress', s: number): void }>()
 
@@ -21,6 +21,7 @@ const total = computed(() => props.wagons * SPACING)
 const s = ref(total.value)
 let timer = 0
 let last = 0
+let v = props.speed // vitesse actuelle : rejoint doucement la vitesse voulue
 
 const cars = computed(() =>
   Array.from({ length: props.wagons + 1 }, (_, i) => ({
@@ -33,7 +34,9 @@ onMounted(() => {
   last = Date.now()
   timer = window.setInterval(() => {
     const now = Date.now()
-    s.value += ((now - last) / 1000) * props.speed
+    const dt = Math.min(0.1, (now - last) / 1000)
+    v += (props.speed * speedFactor(props.route, s.value) - v) * Math.min(1, dt * 3.5)
+    s.value += dt * v
     last = now
     emit('progress', s.value)
     // fini quand la locomotive atteint le bout du trajet, hors de l'écran :

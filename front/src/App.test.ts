@@ -205,7 +205,7 @@ describe('App', () => {
     await flushPromises()
     w.findComponent(TrainRun).vm.$emit('done')
     await flushPromises()
-    expect(w.find('[data-test=coming-soon]').text()).toContain('arrivent bientôt') // sous les bonus, à la place du bouton
+    expect(w.find('[data-test=coming-soon]').text()).toContain('arrivent bientôt') // sur le store, à la place du bouton
     expect(w.find('[data-test=next]').exists()).toBe(false)
     await w.find('[data-test=quit]').trigger('click')
     await flushPromises()
@@ -233,10 +233,17 @@ describe('App', () => {
     await flushPromises() // le faux serveur vérifie le tracé
     // 1) le train passe ; le résultat n'existe pas encore
     expect(w.find('[data-test=train]').exists()).toBe(true)
-    expect(w.find('[data-test=next]').attributes('disabled')).toBeDefined() // place réservée sous les bonus, inactive tant que le train roule
-    // 2) le train est arrivé : temps, gain et « Suivant » s'affichent au centre de la grille
+    expect(w.find('[data-test=next]').exists()).toBe(false) // « Niveau suivant » arrive avec le récapitulatif, sur le store
+    // la cabine montre la voie qui défile tant que le train roule ; le store est ouvert, le récapitulatif pas encore visible
+    expect(w.find('[data-test=cabin-windshield]').attributes('data-running')).toBe('true')
+    expect(w.find('[data-test=store]').classes()).not.toContain('down')
+    // 2) le train est arrivé : le store se ferme sur le pare-brise et porte le récapitulatif ; « Suivant » s'active
     w.findComponent(TrainRun).vm.$emit('done')
     await flushPromises()
+    expect(w.find('[data-test=cabin-windshield]').attributes('data-running')).toBe('false')
+    expect(w.find('[data-test=store]').classes()).toContain('down')
+    expect(w.find('[data-test=store] [data-test=finish]').exists()).toBe(true) // le récapitulatif est sur le store, pas sur le décor
+    expect(w.find('.finish--inline').exists()).toBe(false)
     expect(w.find('[data-test=finish] [data-test=result-time]').text()).toContain('0:01') // temps officiel du serveur (1000 ms)
     expect(w.find('[data-test=win]').exists()).toBe(true)
     expect(w.find('[data-test=coins-value]').text()).toBe('15') // pièces gagnées, d'après le serveur, visibles en partie
@@ -246,7 +253,8 @@ describe('App', () => {
     expect(w.find('[data-test=receipt-total]').text()).toBe('Total+15')
     expect(w.find('[data-test=receipt-total] [data-test=coin-icon]').exists()).toBe(true)
     expect(w.find('[data-test=finish]').text()).not.toMatch(/🎉|🏆|⏱/) // pas d'emoji de fête
-    expect(w.find('[data-test=next]').exists()).toBe(true)
+    expect(w.find('[data-test=store] [data-test=finish] [data-test=next]').exists()).toBe(true) // sous le récapitulatif
+    expect(w.find('.pupitre-wrap [data-test=next]').exists()).toBe(false) // plus sur le pupitre
     expect(w.find('.win-zone').element).toBe(zoneBefore.element) // même zone : pas de saut
     await w.find('[data-test=quit]').trigger('click')
     await flushPromises()

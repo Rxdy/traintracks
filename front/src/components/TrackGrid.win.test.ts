@@ -302,3 +302,85 @@ describe('TrackGrid : le train reste dans le décor', () => {
     w.unmount()
   })
 })
+
+describe('TrackGrid : récapitulatif externe et vue de la cabine', () => {
+  const tracer = async (w: ReturnType<typeof mount>) => {
+    const cell = (r: number, c: number) => w.find(`[data-r="${r}"][data-c="${c}"]`)
+    const [r0, c0] = sampleSolution[0]
+    await cell(r0, c0).trigger('pointerdown')
+    for (const [r, c] of sampleSolution.slice(1)) await cell(r, c).trigger('pointerenter')
+    window.dispatchEvent(new Event('pointerup'))
+    await w.vm.$nextTick()
+  }
+
+  it('annonce quand le train roule, puis quand il est arrivé (la cabine suit)', async () => {
+    const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
+    expect(w.emitted('train')).toBeUndefined()
+    await tracer(w)
+    expect(w.emitted('train')?.at(-1)).toEqual([true]) // la route existe : le train roule
+    w.findComponent(TrainRun).vm.$emit('done')
+    await w.vm.$nextTick()
+    expect(w.emitted('train')?.at(-1)).toEqual([false]) // arrivé
+    w.unmount()
+  })
+
+  it('avec external-recap, la grille ne dessine pas le récapitulatif (l\'écran de jeu l\'affiche ailleurs) mais annonce la fin', async () => {
+    const w = mount(TrackGrid, { props: { puzzle: samplePuzzle, externalRecap: true }, attachTo: document.body })
+    await tracer(w)
+    w.findComponent(TrainRun).vm.$emit('done')
+    await w.vm.$nextTick()
+    expect(w.emitted('finish')).toHaveLength(1)
+    expect(w.find('[data-test=finish]').exists()).toBe(false)
+    expect(w.find('[data-test=win]').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('par défaut (puzzle du jour), le récapitulatif reste sur la grille', async () => {
+    const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
+    await tracer(w)
+    w.findComponent(TrainRun).vm.$emit('done')
+    await w.vm.$nextTick()
+    expect(w.find('[data-test=finish]').exists()).toBe(true)
+    w.unmount()
+  })
+})
+
+describe('TrackGrid : accélérer le train', () => {
+  const tracer = async (w: ReturnType<typeof mount>) => {
+    const cell = (r: number, c: number) => w.find(`[data-r="${r}"][data-c="${c}"]`)
+    const [r0, c0] = sampleSolution[0]
+    await cell(r0, c0).trigger('pointerdown')
+    for (const [r, c] of sampleSolution.slice(1)) await cell(r, c).trigger('pointerenter')
+    window.dispatchEvent(new Event('pointerup'))
+    await w.vm.$nextTick()
+  }
+
+  it('un bouton à côté de « Relancer » accélère le train (4 fois), et on peut revenir à la vitesse normale', async () => {
+    const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
+    expect(w.find('[data-test=fast]').exists()).toBe(false) // pas avant la victoire
+    await tracer(w)
+    const fast = w.get('[data-test=fast]')
+    expect(fast.element.previousElementSibling).toBe(w.get('[data-test=replay]').element) // juste à côté du bouton ▷
+    expect(fast.attributes('aria-pressed')).toBe('false')
+    const vitesse = () => w.findComponent(TrainRun).props('speed') as number
+    const tranquille = vitesse() as number
+    await fast.trigger('click')
+    expect(w.get('[data-test=fast]').attributes('aria-pressed')).toBe('true')
+    expect(vitesse()).toBeCloseTo(tranquille * 4)
+    await fast.trigger('click')
+    expect(vitesse()).toBe(tranquille)
+    w.unmount()
+  })
+
+  it('le train est tranquille par défaut (moins de 2,5 cases par seconde), et le bouton est inactif une fois le train arrivé', async () => {
+    const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
+    await tracer(w)
+    expect(w.findComponent(TrainRun).props('speed')).toBeLessThan(2.5)
+    await w.get('[data-test=fast]').trigger('click')
+    w.findComponent(TrainRun).vm.$emit('done')
+    await w.vm.$nextTick()
+    expect(w.get('[data-test=fast]').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-test=fast]').attributes('aria-pressed')).toBe('false') // la prochaine fois, on repart tranquillement
+    w.unmount()
+  })
+})

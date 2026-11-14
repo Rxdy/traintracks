@@ -10,6 +10,7 @@ import { sound } from '../sound/director'
 // neige qui tombent. Les voitures s'arrêtent quand le train approche (`trainNear`) et repartent après son passage.
 // Même repère que le train : 1 case = 1×1, la grille occupe 0..size (le reste, c'est la colonne des indices).
 const props = defineProps<{ scenery: Scenery; trainNear: boolean }>()
+const emit = defineEmits<{ (e: 'frame', f: LandFrame): void }>()
 const cols = computed(() => props.scenery.cols)
 const board = computed(() => props.scenery.rows - props.scenery.margin.y - props.scenery.margin.b) // taille de la grille de jeu : le repère de la page
 const pal = computed(() => PAL[props.scenery.theme])
@@ -19,6 +20,7 @@ const frame = shallowRef<LandFrame>(empty)
 useClock((dt, t) => {
   frame.value = sim.step(dt, t, props.trainNear)
   frame.value.events.forEach((e) => sound.ambient(e))
+  emit('frame', frame.value) // la cabine du conducteur montre les mêmes voitures, barrières et animaux
 })
 
 // Repère de la route : x = en travers, y = le long (u). Une route horizontale est le même dessin « couché ».
@@ -124,6 +126,38 @@ const uc = computed(() => sim.uc ?? 0)
           <path v-for="x in [-0.04, -0.01, 0.02, 0.05]" :key="x" :d="`M${x} -0.05 l0.01 -0.03 M${x} 0.05 l0.01 0.03`" stroke="#3b2713" stroke-width="0.012" />
           <ellipse cx="0.085" cy="0" rx="0.035" ry="0.028" fill="#e8c9a0" stroke="#3b2713" stroke-width="0.01" />
           <circle cx="0.108" r="0.009" fill="#111827" />
+        </template>
+        <template v-else-if="a.kind === 'cat'">
+          <path :d="`M-0.07 0.01 q-0.1 -0.02 -0.09 -0.1 q0.02 -0.05 0.05 -0.02`" fill="none" stroke="#4b5563" stroke-width="0.022" stroke-linecap="round" :transform="`rotate(${Math.sin(a.t * 2) * 10} -0.07 0.01)`" />
+          <ellipse rx="0.08" ry="0.045" fill="#6b7280" stroke="#374151" stroke-width="0.012" />
+          <circle cx="0.085" cy="-0.015" r="0.035" fill="#6b7280" stroke="#374151" stroke-width="0.012" />
+          <path d="M0.065 -0.04 l0.005 -0.04 l0.025 0.025 M0.1 -0.04 l0.015 -0.035 l0.005 0.045" fill="#6b7280" stroke="#374151" stroke-width="0.01" />
+          <circle cx="0.098" cy="-0.02" r="0.007" fill="#facc15" />
+          <circle cx="0.075" cy="-0.02" r="0.007" fill="#facc15" />
+        </template>
+        <template v-else-if="a.kind === 'lizard'">
+          <path d="M-0.05 0 q-0.09 0.02 -0.14 -0.02" fill="none" :stroke="pal.snow ? '#f97316' : '#ea580c'" stroke-width="0.022" stroke-linecap="round" />
+          <ellipse rx="0.07" ry="0.025" :fill="pal.snow ? '#f97316' : '#ea580c'" stroke="#7c2d12" stroke-width="0.01" />
+          <ellipse cx="0.08" rx="0.03" ry="0.022" fill="#fb923c" stroke="#7c2d12" stroke-width="0.01" />
+          <circle cx="0.09" cy="-0.008" r="0.007" fill="#111827" />
+          <path d="M-0.03 0.02 l-0.03 0.03 M0.04 0.02 l0.03 0.03 M-0.03 -0.02 l-0.03 -0.03 M0.04 -0.02 l0.03 -0.03" stroke="#7c2d12" stroke-width="0.012" stroke-linecap="round" />
+        </template>
+        <template v-else-if="a.kind === 'scorpion'">
+          <path d="M-0.05 0 q-0.1 -0.03 -0.08 -0.12 q0.02 -0.05 0.07 -0.03" fill="none" stroke="#7f1d1d" stroke-width="0.02" stroke-linecap="round" :transform="`rotate(${Math.sin(a.t * 3) * 8} -0.05 0)`" />
+          <ellipse rx="0.065" ry="0.04" fill="#991b1b" stroke="#450a0a" stroke-width="0.012" />
+          <path d="M0.05 -0.02 q0.06 -0.04 0.08 0.01 M0.05 0.02 q0.06 0.04 0.08 -0.01" fill="none" stroke="#991b1b" stroke-width="0.02" stroke-linecap="round" />
+          <path d="M-0.02 0.035 l-0.015 0.04 M0.01 0.035 l0 0.045 M0.035 0.03 l0.02 0.04 M-0.02 -0.035 l-0.015 -0.04 M0.01 -0.035 l0 -0.045 M0.035 -0.03 l0.02 -0.04" stroke="#450a0a" stroke-width="0.01" stroke-linecap="round" />
+          <circle cx="0.05" cy="-0.012" r="0.006" fill="#fde047" />
+        </template>
+        <template v-else-if="a.kind === 'alien'">
+          <ellipse cx="0" cy="0.02" rx="0.055" ry="0.05" fill="#84cc16" stroke="#3f6212" stroke-width="0.012" />
+          <path d="M-0.02 -0.03 l-0.03 -0.07 M0.02 -0.03 l0.03 -0.07" stroke="#3f6212" stroke-width="0.012" stroke-linecap="round" />
+          <circle cx="-0.05" cy="-0.1" r="0.015" fill="#bef264" stroke="#3f6212" stroke-width="0.008" />
+          <circle cx="0.05" cy="-0.1" r="0.015" fill="#bef264" stroke="#3f6212" stroke-width="0.008" />
+          <circle cx="-0.02" cy="0.005" r="0.016" fill="#111827" />
+          <circle cx="0.025" cy="0.005" r="0.016" fill="#111827" />
+          <path d="M-0.02 0.04 q0.02 0.02 0.045 0" fill="none" stroke="#3f6212" stroke-width="0.01" stroke-linecap="round" />
+          <path :d="`M-0.03 0.065 l-0.015 ${0.03 + Math.sin(a.t * 6) * 0.01} M0.03 0.065 l0.015 ${0.03 - Math.sin(a.t * 6) * 0.01}`" stroke="#3f6212" stroke-width="0.014" stroke-linecap="round" />
         </template>
         <template v-else-if="a.kind === 'butterfly'">
           <g :transform="`rotate(${Math.cos(a.t * 0.7) * 40})`">

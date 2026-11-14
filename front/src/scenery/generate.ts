@@ -15,7 +15,7 @@ import { PARAMS, THEMES, type Theme } from './themes'
 export { THEMES, themeForLevel, LEVELS_PER_THEME, timing, type Theme } from './themes'
 
 
-export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'windmill' | 'cactus' | 'palm' | 'crater' | 'vent' | 'deadtree' | 'skull' | 'building' | 'mesa' | 'dune'
+export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'windmill' | 'cactus' | 'palm' | 'crater' | 'obsidian' | 'vent' | 'deadtree' | 'skull' | 'building' | 'mesa' | 'dune'
 
 export interface Tile {
   kind: TileKind
@@ -147,7 +147,7 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
     else if (pc === nc) straight.set(key(r, c), 'v')
   })
 
-  // --- Rivière : plus court chemin d'un bord à un autre, par cases libres ou ponts ---
+  // --- Rivière : d'un bord à un autre (côtés tirés au hasard), qui serpente, par cases libres ou ponts ---
   const water = new Set<string>()
   const bridges = new Map<string, 'h' | 'v'>()
   let river: Pt[] | null = null
@@ -156,58 +156,73 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
     const borders: { cell: Cell; out: Cell }[] = []
     for (let i = 0; i < cols; i++) borders.push({ cell: [0, i], out: [-1, 0] }, { cell: [rows - 1, i], out: [1, 0] })
     for (let i = 0; i < rows; i++) borders.push({ cell: [i, 0], out: [0, -1] }, { cell: [i, cols - 1], out: [0, 1] })
-    const starts = shuffle(borders.filter((b) => isFree(b.cell[0], b.cell[1])), rand)
-    let best: { cells: Cell[]; bridgeAt: string[]; s: (typeof starts)[0]; e: (typeof starts)[0] } | null = null
-    for (const s of starts.slice(0, 8)) {
-      // BFS depuis s.cell
+    // Départ et arrivée tirés au hasard sur deux côtés (le plus souvent opposés), puis un chemin qui serpente
+    // (chaque case a un « coût de détour » fixé par la graine) : la rivière ne coupe plus toujours le même coin.
+    const SIDES: Cell[] = [[-1, 0], [1, 0], [0, -1], [0, 1]]
+    const onSide = (o: Cell) => borders.filter((b) => b.out[0] === o[0] && b.out[1] === o[1] && isFree(b.cell[0], b.cell[1]))
+    const wob = new Map<string, number>()
+    const detour = (r: number, c: number) => {
+      const k = key(r, c)
+      if (!wob.has(k)) wob.set(k, rand() * 1.6)
+      return wob.get(k)!
+    }
+    type End = (typeof borders)[0]
+    let best: { cells: Cell[]; bridgeAt: string[]; s: End; e: End } | null = null
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const so = SIDES[Math.floor(rand() * 4)]
+      const opposite: Cell = [-so[0], -so[1]]
+      const adjacent = SIDES.filter((d) => d !== so && !(d[0] === opposite[0] && d[1] === opposite[1]))
+      const to = rand() < 0.55 ? opposite : adjacent[Math.floor(rand() * 2)]
+      const sc = onSide(so)
+      const ec = onSide(to)
+      if (!sc.length || !ec.length) continue
+      const s = sc[Math.floor(rand() * sc.length)]
+      const e = ec[Math.floor(rand() * ec.length)]
+      // Dijkstra sur les cases libres (+ ponts sur la voie droite), coût 1 + détour
+      const dist = new Map<string, number>([[key(...s.cell), 0]])
       const prev = new Map<string, { from: string; bridge?: string }>()
-      const seen = new Set([key(...s.cell)])
-      const queue: Cell[] = [s.cell]
-      let found: { cell: Cell; out: Cell } | null = null
-      while (queue.length && !found) {
-        const [r, c] = queue.shift()!
-        // arrivée : case de bord, sur un côté différent de celui du départ
-        const exits = borders.filter((b) => b.cell[0] === r && b.cell[1] === c && (b.out[0] !== s.out[0] || b.out[1] !== s.out[1]))
-        const dist = pathLen(prev, key(r, c), key(...s.cell))
-        if (exits.length && dist >= Math.max(2, n - 2)) {
-          found = exits[Math.floor(rand() * exits.length)]
-          break
+      const open: Cell[] = [s.cell]
+      const done = new Set<string>()
+      const relax = (from: Cell, to2: Cell, add: number, bridge?: string) => {
+        const k = key(...to2)
+        const d = dist.get(key(...from))! + add
+        if (d < (dist.get(k) ?? Infinity) && !done.has(k)) {
+          dist.set(k, d)
+          prev.set(k, { from: key(...from), bridge })
+          if (!open.some(([r, c]) => r === to2[0] && c === to2[1])) open.push(to2)
         }
+      }
+      const target = key(...e.cell)
+      while (open.length) {
+        let bi = 0
+        for (let i = 1; i < open.length; i++) if (dist.get(key(...open[i]))! < dist.get(key(...open[bi]))!) bi = i
+        const [r, c] = open.splice(bi, 1)[0]
+        done.add(key(r, c))
+        if (key(r, c) === target) break
         for (const [dr, dc] of DIRS) {
           const nr = r + dr
           const nc = c + dc
-          if (isFree(nr, nc) && !seen.has(key(nr, nc))) {
-            seen.add(key(nr, nc))
-            prev.set(key(nr, nc), { from: key(r, c) })
-            queue.push([nr, nc])
-          } else if (inside(nr, nc) && straight.has(key(nr, nc))) {
+          if (isFree(nr, nc)) relax([r, c], [nr, nc], 1 + detour(nr, nc))
+          else if (inside(nr, nc) && straight.has(key(nr, nc))) {
             const ax = straight.get(key(nr, nc))!
-            // la voie doit être perpendiculaire au sens du fleuve
-            if ((ax === 'h') !== (dr === 0) && isFree(r + 2 * dr, c + 2 * dc) && !seen.has(key(r + 2 * dr, c + 2 * dc))) {
-              const to: Cell = [r + 2 * dr, c + 2 * dc]
-              seen.add(key(...to))
-              prev.set(key(...to), { from: key(r, c), bridge: key(nr, nc) })
-              queue.push(to)
-            }
+            if ((ax === 'h') !== (dr === 0) && isFree(r + 2 * dr, c + 2 * dc)) relax([r, c], [r + 2 * dr, c + 2 * dc], 3, key(nr, nc))
           }
         }
       }
-      if (found) {
-        // reconstruction
-        const cells: Cell[] = []
-        const bridgeAt: string[] = []
-        let cur = key(...found.cell)
-        while (cur) {
-          const [r, c] = cur.split(',').map(Number)
-          cells.unshift([r, c])
-          const p = prev.get(cur)
-          if (!p) break
-          if (p.bridge) bridgeAt.push(p.bridge)
-          cur = p.from
-        }
-        if (!best || cells.length > best.cells.length) best = { cells, bridgeAt, s, e: found }
-        if (best.cells.length >= n) break
+      if (!done.has(target)) continue
+      const cells: Cell[] = []
+      const bridgeAt: string[] = []
+      let cur = target
+      while (cur) {
+        const [r, c] = cur.split(',').map(Number)
+        cells.unshift([r, c])
+        const p = prev.get(cur)
+        if (!p) break
+        if (p.bridge) bridgeAt.push(p.bridge)
+        cur = p.from
       }
+      if (!best || cells.length > best.cells.length) best = { cells, bridgeAt, s, e }
+      if (best.cells.length >= Math.max(3, n - 2)) break
     }
     if (best) {
       const pts: Pt[] = [{ x: best.s.cell[1] + 0.5 + best.s.out[1], y: best.s.cell[0] + 0.5 + best.s.out[0] }]
@@ -297,20 +312,26 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
   const nearPath = (r: number, c: number) => DIRS.some(([dr, dc]) => onPath.has(key(r + dr, c + dc)))
   const dense = P.houseKind === 'building' // la ville : de vrais quartiers
   const houseCount = Math.min(P.houseBase + Math.floor(freeCells.length * P.houseRatio * (dense ? 1 : 0.3)), freeCells.length)
-  const perHamlet = dense ? 9 : 3
   const houses: Cell[] = []
+  const touchesHouse = (r: number, c: number) => [-1, 0, 1].some((dr) => [-1, 0, 1].some((dc) => houses.some(([a, b]) => a === r + dr && b === c + dc)))
   for (let guard = 0; houses.length < houseCount && guard < 60; guard++) {
-    const seeds = freeCells.filter(([r, c]) => free(r, c))
+    // Hameaux de 1 à 3 maisons (la ville : quartiers de 9) ; deux hameaux ne se touchent jamais, sinon les maisons « se suivent ».
+    const seeds = freeCells.filter(([r, c]) => free(r, c) && (dense || !touchesHouse(r, c)))
     if (!seeds.length) break
     const cluster: Cell[] = [seeds[Math.floor(rand() * seeds.length)]]
+    const roll = rand()
+    const perHamlet = dense ? 9 : roll < 0.4 ? 1 : roll < 0.75 ? 2 : 3
     const want = Math.min(perHamlet, houseCount - houses.length)
     while (cluster.length < want) {
-      const around = cluster.flatMap(([r, c]) => DIRS.map(([dr, dc]) => [r + dr, c + dc] as Cell)).filter(([r, c]) => free(r, c) && !cluster.some(([a, b]) => a === r && b === c))
+      const around = cluster.flatMap(([r, c]) => DIRS.map(([dr, dc]) => [r + dr, c + dc] as Cell)).filter(([r, c]) => free(r, c) && (dense || !touchesHouse(r, c)) && !cluster.some(([a, b]) => a === r && b === c))
       if (!around.length) break
       cluster.push(around[Math.floor(rand() * around.length)])
     }
     for (const [r, c] of cluster) {
-      tiles[r][c] = { kind: P.houseKind ?? 'house', v: Math.floor(rand() * 4) }
+      // deux maisons voisines n'ont jamais le même aspect
+      const used = new Set(DIRS.map(([dr, dc]) => tiles[r + dr]?.[c + dc]).filter((t) => t && t.kind === (P.houseKind ?? 'house')).map((t) => t!.v))
+      const choices = [0, 1, 2, 3].filter((v) => !used.has(v))
+      tiles[r][c] = { kind: P.houseKind ?? 'house', v: (choices.length ? choices : [0, 1, 2, 3])[Math.floor(rand() * (choices.length || 4))] }
       taken.add(key(r, c))
       houses.push([r, c])
     }
@@ -375,6 +396,7 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
   const peakHeat = clumped(P.peaks, 3)
   const peakKind: TileKind = P.peakKind ?? 'mountain'
 
+  const touchesBoulder = (r: number, c: number) => [-1, 0, 1].some((dr) => [-1, 0, 1].some((dc) => tiles[r + dr]?.[c + dc]?.kind === 'boulder'))
   // --- Reste : montagnes d'arrière-plan, arbres, sapins, rochers, bonshommes de neige, herbe ---
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -385,24 +407,18 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
       const variant = Math.floor(rand() * 3)
       const pPeak = P.clump ? (peakHeat.get(key(r, c)) ?? 0) : P.peaks
       const pTree = P.clump ? (treeHeat.get(key(r, c)) ?? 0) : P.tree
-      if ((!nearPath(r, c) || P.peaks >= 0.3) && roll < pPeak) tiles[r][c] = { kind: peakKind, v: variant }
-      else if (nearRock && roll < 0.8) tiles[r][c] = { kind: pineKind, v: variant }
-      else if (nearHouse && rand() < P.snowmen) tiles[r][c] = { kind: 'snowman', v: variant }
-      else if (roll < pPeak + pTree) tiles[r][c] = { kind: rand() < P.pine ? pineKind : treeKind, v: variant }
-      else if (rand() < P.boulders) tiles[r][c] = { kind: 'boulder', v: variant }
-      else tiles[r][c] = { kind: 'grass', v: variant }
+      let kind: TileKind
+      if ((!nearPath(r, c) || P.peaks >= 0.3) && roll < pPeak) kind = peakKind
+      else if (nearRock && roll < 0.8) kind = pineKind
+      else if (nearHouse && rand() < P.snowmen) kind = 'snowman'
+      else if (roll < pPeak + pTree) kind = rand() < P.pine ? pineKind : treeKind
+      else if (rand() < P.boulders) kind = 'boulder'
+      else kind = 'grass'
+      // jamais deux pierres collées (même quand « pierre » tient lieu de sapin, comme sur la Lune) : pas d'amas
+      if (kind === 'boulder' && touchesBoulder(r, c)) kind = 'grass'
+      tiles[r][c] = { kind, v: variant }
     }
   }
 
   return { seed, road, margin: mg, frame, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges }
-}
-
-function pathLen(prev: Map<string, { from: string }>, from: string, start: string): number {
-  let n = 1
-  let cur = from
-  while (cur !== start && prev.has(cur)) {
-    cur = prev.get(cur)!.from
-    n++
-  }
-  return n
 }

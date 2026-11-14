@@ -23,6 +23,7 @@ import { buildScenery, distanceNear, PAL, sceneryMargin, seedOf, timing, type Sc
 import TrainRun from './TrainRun.vue'
 import SceneryLayer from './SceneryLayer.vue'
 import SceneryLife from './SceneryLife.vue'
+import type { LandFrame } from '../scenery/motion'
 import { sound, soundOn } from '../sound/director'
 import TrackCell from './TrackCell.vue'
 import ClueNumber from './ClueNumber.vue'
@@ -41,8 +42,10 @@ const props = defineProps<{
   theme?: Theme
   // Si fournie, la victoire n'est acquise que quand elle répond vrai (le serveur a vérifié le tracé).
   validate?: (ms: number, edges: string[]) => Promise<boolean>
+  // Vrai : le récapitulatif de victoire n'est pas dessiné ici, l'écran de jeu l'affiche ailleurs (store de la cabine).
+  externalRecap?: boolean
 }>()
-const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void }>()
+const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void; (e: 'train', running: boolean): void; (e: 'progress', s: number): void; (e: 'scene', v: { route: Route; scenery: Scenery } | null): void; (e: 'land', f: LandFrame): void }>()
 
 // Puzzle « effectif » : le puzzle + les rails révélés par les aides, qui se comportent comme des rails imposés
 // (verrouillés, dans le bon sens).
@@ -116,8 +119,21 @@ const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
 const trainDone = ref(false)
+// Vitesse du train (cases/s) : tranquille pour apprécier le décor, et un bouton à côté de « Relancer » pour passer la cinématique.
+const CRUISE_SPEED = 1.9
+const FAST_SPEED = 7.6
+const fast = ref(false)
+watch(trainDone, (v) => v && (fast.value = false)) // la prochaine fois, on repart tranquillement
 // Sons : la fin du trajet laisse la place au décor ; la barrière du passage à niveau a ses propres sons.
 watch(trainDone, (v) => v && sound.trainEnd())
+// L'écran de jeu suit le train (vue de la cabine) : il roule dès que sa route existe, jusqu'à son arrivée.
+watch([route, trainDone], () => emit('train', !!route.value && !trainDone.value))
+// ... et la cabine montre la VRAIE carte vue du train : elle reçoit le trajet, le décor et la position de la locomotive.
+watch([route, scenery], () => emit('scene', route.value && scenery.value ? { route: route.value, scenery: scenery.value } : null))
+function onTrainProgress(s: number): void {
+  trainS.value = s
+  emit('progress', s)
+}
 
 // Zone où le train est visible : exactement celle du décor (en cases de la grille de jeu).
 const trainClip = computed(() => {
@@ -531,7 +547,9 @@ onMounted(() => {
         <button type="button" class="btn btn--ghost tool" data-test="replay" @click="replayTrain" :disabled="!trainDone" aria-label="Relancer le train" title="Relancer le train">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z" /></svg>
         </button>
-        <span class="tool ghost" aria-hidden="true"></span>
+        <button type="button" class="btn btn--ghost tool" :class="{ on: fast }" data-test="fast" :disabled="trainDone" :aria-pressed="fast" aria-label="Accélérer le train" :title="fast ? 'Vitesse normale' : 'Accélérer le train'" @click="fast = !fast">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14l8-7zM12 5v14l8-7z" /></svg>
+        </button>
       </template>
       <span v-if="solved" class="tool ghost" aria-hidden="true"></span>
       <button type="button" class="btn btn--ghost tool sound" data-test="sound" :aria-pressed="soundOn" :aria-label="soundOn ? 'Couper le son' : 'Activer le son'" :title="soundOn ? 'Couper le son' : 'Activer le son'" @click="sound.setOn(!soundOn)">
@@ -586,14 +604,14 @@ onMounted(() => {
 
       <div class="corner"></div>
 
-      <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" />
+      <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" @frame="emit('land', $event)" />
 
-      <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" @progress="trainS = $event" @done="trainDone = true" />
+      <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" :speed="fast ? FAST_SPEED : CRUISE_SPEED" @progress="onTrainProgress" @done="trainDone = true" />
     </div>
 
-    <!-- Zone réservée dès le début : la victoire s'y affiche sans pousser la page. -->
+    <!-- La victoire s'affiche par-dessus le décor (position absolue) : elle ne pousse rien. -->
     <div class="win-zone win-zone--compact" :class="{ on: solved }">
-      <div v-if="solved && finished" class="finish finish--inline" data-test="finish">
+      <div v-if="solved && finished && !props.externalRecap" class="finish finish--inline" data-test="finish">
         <div class="head">
           <p class="win" data-test="win">Niveau terminé</p>
           <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? elapsed) }}</p>
@@ -611,6 +629,7 @@ onMounted(() => {
 
 <style scoped>
 .track {
+  position: relative; /* le récapitulatif de victoire se pose sur le décor, en bas */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -648,16 +667,30 @@ onMounted(() => {
   color: #dc2626;
 }
 
+.tool.on {
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
 .timer {
   align-self: center;
   font-variant-numeric: tabular-nums;
   color: #6b7280;
 }
 .win-zone.win-zone--compact {
+  /* Le récapitulatif se pose SUR l'écran du train (le décor), en bas : plus de place réservée sous la grille, la cabine remonte. */
+  position: absolute;
+  left: 50%;
+  bottom: 0.6rem;
+  transform: translateX(-50%);
+  z-index: 6; /* au-dessus du décor (.board : 5) ; il n'apparaît qu'une fois le train arrivé */
   display: grid;
-  place-items: start center;
-  min-height: 4.9rem; /* récapitulatif complet : la place est prise dès le début, rien ne bouge à la victoire */
-  margin-top: 0.1rem; /* le décor couvre maintenant toute la zone de la grille : petit espace avant le récapitulatif */
+  place-items: end center;
+  width: 100%;
+  min-height: 0;
+  pointer-events: none; /* le décor reste visible et cliquable tout autour de la carte */
+}
+.win-zone.win-zone--compact > * {
+  pointer-events: auto;
 }
 .win-zone.win-zone--compact > * {
   grid-area: 1 / 1;

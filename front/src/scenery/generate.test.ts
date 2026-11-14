@@ -171,3 +171,49 @@ describe('décor des niveaux gagnés', () => {
     }
   })
 })
+
+describe('variété du décor (pas de redondance)', () => {
+  const sample = levels.slice(0, 120)
+  const side = (p: { x: number; y: number }, s: { rows: number; cols: number }) => (p.x < 0 ? 'G' : p.x > s.cols ? 'D' : p.y < 0 ? 'H' : 'B')
+
+  it('la rivière change de côtés d\'un niveau à l\'autre (traversées gauche-droite et haut-bas, pas toujours le même coin)', () => {
+    const pairs = new Set<string>()
+    for (const lv of sample) {
+      const m = sceneryMargin(lv.puzzle.size)
+      const s = buildScenery(lv.puzzle, lv.solution, 'plaine', undefined, { x: m + 6, y: m })
+      if (s.river) pairs.add([side(s.river[0], s), side(s.river[s.river.length - 1], s)].sort().join(''))
+    }
+    expect(pairs.has('DG'), 'gauche-droite').toBe(true)
+    expect(pairs.has('BH'), 'haut-bas').toBe(true)
+    expect(pairs.size).toBeGreaterThanOrEqual(4)
+  })
+
+  it('jamais deux pierres collées, jamais deux hameaux qui se touchent', () => {
+    for (const th of THEMES) {
+      for (const lv of sample.slice(0, 40)) {
+        const s = buildScenery(lv.puzzle, lv.solution, th, undefined, { x: 6, y: sceneryMargin(lv.puzzle.size) })
+        s.tiles.forEach((row, r) =>
+          row.forEach((t, c) => {
+            if (t.kind !== 'boulder') return
+            for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) expect(s.tiles[r + dr]?.[c + dc]?.kind, `${th} niveau ${lv.id}`).not.toBe('boulder')
+          }),
+        )
+      }
+    }
+  })
+
+  it('deux maisons voisines n\'ont jamais le même aspect', () => {
+    for (const lv of sample) {
+      const s = buildScenery(lv.puzzle, lv.solution, 'plaine', undefined, { x: 6, y: 2 })
+      s.tiles.forEach((row, r) =>
+        row.forEach((t, c) => {
+          if (t.kind !== 'house') return
+          for (const [dr, dc] of [[0, 1], [1, 0]]) {
+            const o = s.tiles[r + dr]?.[c + dc]
+            if (o?.kind === 'house') expect(o.v, `niveau ${lv.id}`).not.toBe(t.v)
+          }
+        }),
+      )
+    }
+  })
+})

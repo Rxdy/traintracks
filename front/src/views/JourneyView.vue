@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import HeroArt from '../components/HeroArt.vue'
 import MenuIcon from '../components/MenuIcon.vue'
 import TrackGrid from '../components/TrackGrid.vue'
 import AidBar from '../components/AidBar.vue'
+import CabinDash from '../components/CabinDash.vue'
+import CabinWindshield from '../components/CabinWindshield.vue'
+import type { Route } from '../trainRoute'
+import type { LandFrame } from '../scenery/motion'
+import type { Scenery } from '../scenery'
 import CoinBadge from '../components/CoinBadge.vue'
 import WinReceipt from '../components/WinReceipt.vue'
-import { beginLevel, fetchStatus, startLevel, submitLevel, type JourneyStatus, type PlayLevel, type StartedLevel } from '../journey'
+import { beginLevel, fetchStatus, setHomeLevel, startLevel, submitLevel, type JourneyStatus, type PlayLevel, type StartedLevel } from '../journey'
 import { refreshWallet, setCoins } from '../wallet'
 import { user } from '../auth'
 import { themeForLevel } from '../scenery'
@@ -47,6 +52,7 @@ const loadError = ref('')
 
 async function refresh(): Promise<void> {
   status.value = await fetchStatus()
+  if (status.value) setHomeLevel(status.value.level)
 }
 onMounted(refresh)
 watch(user, refresh) // connexion / déconnexion : la progression change de propriétaire
@@ -57,7 +63,16 @@ const resume = ref<Pick<StartedLevel, 'reveals' | 'crosses'>>({ reveals: [], cro
 const grid = ref<InstanceType<typeof TrackGrid> | null>(null)
 const aidBar = ref<InstanceType<typeof AidBar> | null>(null)
 const picking = ref(false)
-const levelFinished = ref(false) // le train est passé : « Niveau suivant » (sous les aides, sur téléphone) devient actif
+const trainRunning = ref(false) // le train roule : la cabine montre la carte vue de la locomotive
+const trainS = ref(0) // position de la locomotive sur son trajet (cases)
+const landFrame = shallowRef<LandFrame | null>(null) // voitures, barrières, animaux : l'image du décor vivant, reprise par la cabine
+const cabScene = ref<{ route: Route; scenery: Scenery } | null>(null) // le trajet et le décor de la carte, pour la vue de la cabine
+const storeDown = computed(() => levelFinished.value && !trainRunning.value) // le store de la cabine se ferme sur le récapitulatif
+const fmt = (ms: number): string => {
+  const t = Math.floor(ms / 1000)
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`
+}
+const levelFinished = ref(false) // le train est passé : le récapitulatif et « Niveau suivant » apparaissent sur le store
 const colorHints = ref(false) // indicateurs de couleur : désactivés par défaut, l'aide « Couleurs » les active sur ce niveau
 // Une pièce sonne par ligne de gain, quand le récapitulatif apparaît (le décor se tait un instant).
 watch(levelFinished, (v) => {
@@ -85,6 +100,10 @@ async function play(): Promise<void> {
   colorHints.value = (r.usedAids ?? []).includes('colors') // reprise : les couleurs déjà payées restent actives
   picking.value = false
   levelFinished.value = false
+  trainRunning.value = false
+  trainS.value = 0
+  cabScene.value = null
+  landFrame.value = null
   earned.value = null
   officialMs.value = null
   current.value = r.level
@@ -139,7 +158,7 @@ function quit(): void {
 
       <div class="side">
         <button v-for="c in rightCubes" :key="c.id" type="button" class="mini" :data-test="'nav-' + c.id" :disabled="isLocked(c.id)" :title="isLocked(c.id) ? 'Connecte-toi (cube Compte) pour y accéder' : undefined" @click="emit('navigate', c.id)">
-          <span class="ico" aria-hidden="true"><MenuIcon :name="c.id" :initial="c.id === 'account' ? initial : undefined" /></span>
+          <span class="ico" aria-hidden="true"><MenuIcon :name="c.id" :initial="c.id === 'account' ? initial : undefined" :avatar="c.id === 'account' ? user?.avatar : undefined" /></span>
           <span class="lbl">{{ c.label }}</span>
           <span v-if="isLocked(c.id)" class="lock" data-test="lock" role="img" aria-label="Connexion requise">🔒</span>
         </button>
@@ -175,36 +194,57 @@ function quit(): void {
           :picking="picking"
           :color-hints="colorHints"
           @begin="beginLevel()"
+          external-recap
           @finish="levelFinished = true"
+          @train="trainRunning = $event"
+          @progress="trainS = $event"
+          @scene="cabScene = $event"
+          @land="landFrame = $event"
           :initial="{ givens: resume.reveals, crosses: resume.crosses }"
           @pick="(r, c) => aidBar?.onPick(r, c)"
-        >
-          <template #win>
-            <WinReceipt
-              v-if="earned"
-              :lines="[
-                { label: 'Victoire', amount: earned.base },
-                { label: 'Sans aide', amount: earned.bonus },
-              ]"
-            />
-          </template>
-        </TrackGrid>
-        <AidBar
-          ref="aidBar"
-          :key="'aids-' + current.id"
-          :size="current.puzzle.size"
-          :level="current.id"
-          :snapshot="() => grid?.snapshotForAid() ?? { edges: [], crosses: [], marks: 0 }"
-          @reveal="(g, c) => grid?.reveal(g, c)"
-          @colors="colorHints = true"
-          @picking="picking = $event"
         />
-        <!-- « Niveau suivant » sous les aides, à une place réservée (visible seulement en fin de partie) : rien ne bouge. -->
-        <div class="next-zone" :class="{ off: !levelFinished }">
-          <button v-if="hasNext" type="button" class="btn btn--big cta" data-test="next" :disabled="!levelFinished || loading" @click="play">
-            Niveau suivant
-          </button>
-          <p v-else class="trophy" data-test="coming-soon">Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt.</p>
+        <!-- Cabine sous la grille, collée au décor et sur toute la largeur. Pare-brise : la voie défile quand le train roule ; à l'arrivée un store
+             se ferme et porte le récapitulatif, avec « Niveau suivant » juste dessous. Pouvoirs : colonne à droite. -->
+        <div class="cabin" data-test="cabin">
+          <div class="cab">
+            <div class="windshield">
+              <CabinWindshield :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :theme="themeForLevel(current.id)" />
+              <div class="store" :class="{ down: storeDown }" data-test="store">
+                <div v-if="levelFinished" class="finish" data-test="finish">
+                  <template v-if="earned">
+                    <div class="head">
+                      <p class="win" data-test="win">Niveau terminé</p>
+                      <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? 0) }}</p>
+                    </div>
+                    <WinReceipt
+                      :lines="[
+                        { label: 'Victoire', amount: earned.base },
+                        { label: 'Sans aide', amount: earned.bonus },
+                      ]"
+                    />
+                  </template>
+                  <!-- « Niveau suivant » juste sous le récapitulatif, sur le store -->
+                  <button v-if="hasNext" type="button" class="btn cta next" data-test="next" :disabled="loading" @click="play">Niveau suivant</button>
+                  <p v-else class="trophy" data-test="coming-soon">Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt.</p>
+                </div>
+              </div>
+            </div>
+            <div class="pupitre-wrap">
+              <CabinDash />
+            </div>
+          </div>
+          <div class="bonus-col" data-test="bonus-col">
+            <AidBar
+              ref="aidBar"
+              :key="'aids-' + current.id"
+              :size="current.puzzle.size"
+              :level="current.id"
+              :snapshot="() => grid?.snapshotForAid() ?? { edges: [], crosses: [], marks: 0 }"
+              @reveal="(g, c) => grid?.reveal(g, c)"
+              @colors="colorHints = true"
+              @picking="picking = $event"
+            />
+          </div>
         </div>
       </div>
     </template>
@@ -230,13 +270,212 @@ section {
   justify-content: center;
   gap: 0.75rem;
 }
-.next-zone {
+/* Cabine sous la grille, collée au décor, sur toute la largeur de l'écran et jusqu'en bas (la page a une marge : on la débord). */
+.cabin {
+  flex: 1 1 auto;
   display: flex;
-  justify-content: center;
-  min-height: 2.9rem; /* place réservée : le bouton apparaît sans rien décaler */
+  align-items: stretch;
+  width: min(100vw, 92vh); /* téléphone : tout l'écran ; ordinateur : bornée par la hauteur pour que le pupitre ne devienne pas géant */
+  margin-top: -0.45rem;
+  margin-bottom: calc(-1 * clamp(1rem, 4vmin, 2rem));
 }
-.next-zone.off {
-  visibility: hidden;
+.cab {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0.4rem 0;
+  border-top: 3px solid #fff;
+  border-radius: 30px 0 0 0 / 22px 0 0 0; /* la colonne des pouvoirs prolonge la cabine à droite */
+  background: #1c2430;
+  box-shadow: var(--shadow);
+}
+/* Pare-brise : s'étire pour prendre la place libre au-dessus du pupitre. */
+.windshield {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 8.4rem; /* assez pour que le récapitulatif et « Niveau suivant » tiennent sur le store */
+  margin-bottom: 0.45rem;
+  overflow: hidden;
+  border: 3px solid #0b1220;
+  border-radius: 24px 24px 6px 6px / 16px 16px 6px 6px;
+}
+/* Le store : une fois le train arrivé, il se ferme comme un store de fenêtre (de haut en bas) et porte le récapitulatif. */
+.store {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0.3rem 0.4rem 0.9rem;
+  background: repeating-linear-gradient(#d6dde7 0 11px, #bcc6d3 11px 13px);
+  transform: translateY(-102%);
+  transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.25, 1);
+}
+.store.down {
+  transform: translateY(0);
+}
+.store::after {
+  /* lame du bas avec sa poignée */
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.55rem;
+  background: #475569;
+  border-top: 2px solid #64748b;
+}
+@media (prefers-reduced-motion: reduce) {
+  .store {
+    transition: none;
+  }
+}
+.store .finish {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  width: min(100%, 22rem);
+  padding: 0.45rem 0.8rem 0.5rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+.store .head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  width: 100%;
+}
+.store .win {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #15803d;
+}
+.store .time {
+  font-size: 1.1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #1f2937;
+}
+.store .time span {
+  margin-right: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+.store .finish :deep(.receipt) {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  padding-top: 0;
+}
+.store .finish :deep(.receipt .row) {
+  flex: none;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+}
+.store .finish :deep(.receipt .total) {
+  font-size: 0.85rem;
+}
+.store .finish :deep(.receipt .fill),
+.store .finish :deep(.receipt .rule) {
+  display: none;
+}
+
+/* Le pupitre (dessin de 340 × 116) garde ses proportions ; tout y est placé en pourcentages : il se réduit jusqu'au téléphone. */
+.pupitre-wrap {
+  flex: none;
+  position: relative;
+  container-type: inline-size; /* les tailles des touches suivent la largeur du pupitre (unité cqw) */
+}
+/* Les pouvoirs : une colonne à droite, à côté du tableau de bord, sur un fond clair qui dit « ce n'est pas la cabine ». Touches plus grosses. */
+.bonus-col {
+  position: relative;
+  flex: none;
+  width: 25%;
+  container-type: size;
+  display: grid;
+  place-items: center;
+  padding: 0.6rem 0;
+  border-top: 3px solid #fff;
+  border-radius: 0 30px 0 0 / 0 22px 0 0;
+  background: #e6edf6;
+  box-shadow: var(--shadow);
+}
+.bonus-col::before {
+  content: 'BONUS';
+  position: absolute;
+  top: 0.55rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #92400e;
+}
+.bonus-col :deep(.aids) {
+  width: auto;
+  gap: 0;
+  margin-top: 0.7rem;
+}
+.bonus-col :deep(.row) {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+.bonus-col :deep(.aid) {
+  --t: min(calc(100cqw - 1.1rem), calc((100cqh - 3.4rem) / 4));
+  width: var(--t);
+  height: var(--t);
+  border: 0.3rem solid #fbbf24;
+  border-radius: 16%;
+}
+.bonus-col :deep(.aid .badge) {
+  top: -0.45rem;
+  right: -0.5rem;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.85rem;
+}
+
+/* Messages des pouvoirs, choix d'une ligne ou d'une case, présentation d'un nouveau pouvoir : trop larges pour leur emplacement,
+   ils s'affichent juste au-dessus, sur le pare-brise. */
+.bonus-col :deep(.panel),
+.bonus-col :deep(.msg),
+.bonus-col :deep(.fresh) {
+  position: absolute;
+  bottom: calc(100% + 0.6rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  width: max-content;
+  max-width: min(92vw, 28rem);
+}
+.bonus-col :deep(.panel),
+.bonus-col :deep(.msg),
+.bonus-col :deep(.fresh) {
+  left: auto;
+  right: 0.4rem;
+  transform: none;
+}
+.store .next {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.45rem 0;
+  font-size: 1rem;
+  font-weight: 800;
+}
+.store .trophy {
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.25;
+  color: #374151;
 }
 .intro {
   display: flex;

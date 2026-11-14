@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { levels } from '../testLevels'
-import { buildScenery, type Scenery, type Road } from './generate'
+import { buildScenery, THEMES, type Scenery, type Road } from './generate'
 import { at, createLandSim, createWaterSim, distanceNear, sample } from './motion'
 import { buildRoute } from '../trainRoute'
 
@@ -146,5 +146,16 @@ describe('mouvement du décor', () => {
     // et sur de l'eau, ils sont là
     const eau = find((x) => !!x.river && x.theme === 'plaine').s
     expect(createWaterSim(eau).hasBoats).toBe(true)
+  })
+})
+
+describe('chaque environnement a ses animaux', () => {
+  it('aucun décor n\'est sans vie : au moins un animal, quel que soit le biome', () => {
+    for (const th of THEMES) {
+      for (const lv of levels.slice(0, 25)) {
+        const s = buildScenery(lv.puzzle, lv.solution, th, undefined, { x: 6, y: 2 }) // comme en jeu : avec la marge de paysage
+        expect(createLandSim(s).step(0.05, 1, false).animals.length, `${th} niveau ${lv.id}`).toBeGreaterThan(0)
+      }
+    }
   })
 })
