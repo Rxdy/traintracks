@@ -25,12 +25,12 @@ const hex = (h: string): [number, number, number] => {
 }
 const toHex = (c: number[]) => '#' + c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')
 const mix = (a: string, b: string, k: number) => toHex(hex(a).map((v, i) => v + (hex(b)[i] - v) * k))
-const light = (h: string, k: number) => mix(h, '#ffffff', k)
-const dark = (h: string, k: number) => mix(h, '#000000', k)
+export const light = (h: string, k: number) => mix(h, '#ffffff', k)
+export const dark = (h: string, k: number) => mix(h, '#000000', k)
 
 // ---------- textures générées ----------
 type Ctx = CanvasRenderingContext2D
-function canvasTex(w: number, h: number, draw: (g: Ctx, w: number, h: number) => void, repeat = true): THREE.CanvasTexture {
+export function canvasTex(w: number, h: number, draw: (g: Ctx, w: number, h: number) => void, repeat = true): THREE.CanvasTexture {
   const c = document.createElement('canvas')
   c.width = w
   c.height = h
@@ -41,7 +41,7 @@ function canvasTex(w: number, h: number, draw: (g: Ctx, w: number, h: number) =>
   return t
 }
 // Textures « multiplicatrices » : blanches avec des détails gris. La couleur vient du matériau (donc de la palette).
-function makeTextures(seed: number) {
+export function makeTextures(seed: number) {
   const r = rng(seed ^ 0x51ed)
   const speckle = canvasTex(64, 64, (g, w, h) => {
     g.fillStyle = '#fff'
@@ -127,7 +127,7 @@ type Texs = ReturnType<typeof makeTextures>
 const palAt = (sc: Scenery, r: number, c: number): Pal => (sc.theme === 'fusion' ? (r + c > (sc.rows + sc.cols) / 2 - 1 ? PAL.volcan : PAL.hiver) : PAL[sc.theme])
 
 // ---------- texture du sol (SVG → canvas) ----------
-function groundSvg(sc: Scenery, route: Route | null, pal: Pal): string {
+export function groundSvg(sc: Scenery, route: Route | null, pal: Pal): string {
   const W = sc.cols * 100
   const H = sc.rows * 100
   const a = hex(pal.a).map((v) => v / 255)
@@ -225,7 +225,7 @@ function pondBox(sc: Scenery) {
   const cs = cells.map((c) => c[1])
   return { x: Math.min(...cs) + 0.08, y: Math.min(...rs) + 0.08, w: Math.max(...cs) - Math.min(...cs) + 0.84, h: Math.max(...rs) - Math.min(...rs) + 0.84 }
 }
-function loadSvgTexture(svg: string, w: number, h: number, maxSide: number): Promise<THREE.CanvasTexture> {
+export function loadSvgTexture(svg: string, w: number, h: number, maxSide: number): Promise<THREE.CanvasTexture> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.onload = () => {
@@ -244,13 +244,13 @@ function loadSvgTexture(svg: string, w: number, h: number, maxSide: number): Pro
 }
 
 // ---------- objets debout ----------
-interface Anim {
+export interface Anim {
   g: THREE.Object3D
   delay: number // ms avant d'apparaître
   kind?: 'sway' | 'blades' | 'smoke'
   phase: number
 }
-function makeKit(texs: Texs) {
+export function makeKit(texs: Texs) {
   const mats = new Map<string, THREE.Material>()
   const geos = new Map<string, THREE.BufferGeometry>()
   const mat = (color: string, map?: THREE.Texture | null, o: THREE.MeshStandardMaterialParameters = {}) => {
@@ -274,9 +274,9 @@ function makeKit(texs: Texs) {
   }
   return { mat, geo, mesh, texs, dispose: () => { mats.forEach((m) => m.dispose()); geos.forEach((g) => g.dispose()) } }
 }
-type Kit = ReturnType<typeof makeKit>
+export type Kit = ReturnType<typeof makeKit>
 
-function build(kind: Tile['kind'], v: number, pal: Pal, kit: Kit, anims: Anim[], delay: number): THREE.Group | null {
+export function build(kind: Tile['kind'], v: number, pal: Pal, kit: Kit, anims: Anim[], delay: number): THREE.Group | null {
   const { mat, geo, mesh, texs } = kit
   const g = new THREE.Group()
   const trunk = pal.trunk ?? '#7a4e2d'
@@ -495,8 +495,28 @@ function build(kind: Tile['kind'], v: number, pal: Pal, kit: Kit, anims: Anim[],
   return g
 }
 
+// Fait vivre les objets : apparition avec un petit rebond, balancement, ailes de moulin, fumée (partagé par le décor et le menu).
+export function tickAnims(anims: Anim[], t: number, dt: number, still: boolean): void {
+  for (const a of anims) {
+    if (a.delay >= 0) {
+      const p = still ? 1 : Math.min(1, Math.max(0, (t - a.delay) / 700))
+      const e = p < 1 ? 1 + 2.2 * Math.pow(p - 1, 3) + 1.2 * Math.pow(p - 1, 2) : 1 // petit rebond à l'arrivée
+      const base = (a.g.userData.base as number | undefined) ?? 1
+      a.g.scale.setScalar(Math.max(0.001, e * base))
+      if (a.kind === 'sway' && !still) a.g.rotation.z = Math.sin(t / 900 + a.phase + a.g.position.x) * 0.03
+    } else if (!still && a.kind === 'blades') a.g.rotation.z -= dt * 1.4
+    else if (!still && a.kind === 'smoke')
+      a.g.children.forEach((p) => {
+        const k = ((t / 2600 + p.userData.i / 3 + a.phase) % 1 + 1) % 1
+        p.position.set(k * 0.12, 0.3 + k * 0.45, 0)
+        p.scale.setScalar(0.6 + k * 1.4)
+        ;((p as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity = 0.6 * (1 - k)
+      })
+  }
+}
+
 // ---------- le monde partagé ----------
-// Un niveau gagné = UN monde 3D, regardé par deux vues : le plateau (vu du dessus, ou incliné) et le pare-brise de la cabine.
+// Un niveau gagné = UN monde 3D, regardé par deux vues : le plateau (vu du dessus) et le pare-brise de la cabine.
 // Chaque vue a son propre rendu (son canvas) ; le monde, lui, n'est construit et animé qu'une fois.
 //   - 'top' : vue du dessus, monde cisaillé (vue cavalière) ; les rails sont ceux de la grille (DOM), cachés ici ;
 //   - 'cab' : depuis la locomotive ; rails 3D visibles, brume et ciel à l'horizon.
@@ -731,22 +751,7 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     const t = now - t0
     const dt = Math.min(0.1, (now - last) / 1000)
     last = now
-    for (const a of anims) {
-      if (a.delay >= 0) {
-        const p = still ? 1 : Math.min(1, Math.max(0, (t - a.delay) / 700))
-        const e = p < 1 ? 1 + 2.2 * Math.pow(p - 1, 3) + 1.2 * Math.pow(p - 1, 2) : 1 // petit rebond à l'arrivée
-        const base = (a.g.userData.base as number | undefined) ?? 1
-        a.g.scale.setScalar(Math.max(0.001, e * base))
-        if (a.kind === 'sway' && !still) a.g.rotation.z = Math.sin(t / 900 + a.phase + a.g.position.x) * 0.03
-      } else if (!still && a.kind === 'blades') a.g.rotation.z -= dt * 1.4
-      else if (!still && a.kind === 'smoke')
-        a.g.children.forEach((p) => {
-          const k = ((t / 2600 + p.userData.i / 3 + a.phase) % 1 + 1) % 1
-          p.position.set(k * 0.12, 0.3 + k * 0.45, 0)
-          p.scale.setScalar(0.6 + k * 1.4)
-          ;((p as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity = 0.6 * (1 - k)
-        })
-    }
+    tickAnims(anims, t, dt, still)
     if (shineTex && !still) shineTex.offset.y -= dt * 0.35
     views.forEach((draw) => draw(t, dt))
   }

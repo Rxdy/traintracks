@@ -23,7 +23,8 @@ import { buildScenery, distanceNear, PAL, sceneryMargin, seedOf, timing, type Sc
 import TrainRun from './TrainRun.vue'
 import SceneryLayer from './SceneryLayer.vue'
 import Scenery3D from './Scenery3D.vue'
-import { decorMode, webglAvailable } from '../decor'
+import { webglAvailable } from '../decor'
+import { isTouch } from '../platform'
 import SceneryLife from './SceneryLife.vue'
 import type { LandFrame } from '../scenery/motion'
 import { sound, soundOn } from '../sound/director'
@@ -118,7 +119,7 @@ const route = ref<Route | null>(null)
 // Décor : d'abord il se dévoile (voie posée), PUIS le train démarre.
 const scenery = ref<Scenery | null>(null)
 const failed3d = ref(false) // le décor 3D n'a pas pu s'afficher : décor classique jusqu'à la fin de la visite
-const use3d = computed(() => decorMode.value === '3d' && !failed3d.value && webglAvailable())
+const use3d = computed(() => !failed3d.value && webglAvailable())
 const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
@@ -212,11 +213,18 @@ async function checkWin(): Promise<void> {
 }
 // La voie prend l'allure de l'environnement : traverses grises sous la neige, acier plus sombre en forêt…
 const railStyle = computed(() => (scenery.value ? { '--won-rail': PAL[scenery.value.theme].rail.rail, '--won-tie': PAL[scenery.value.theme].rail.tie } : {}))
-// Marges de paysage autour de la grille : en hauteur, de quoi faire ~10 cases ; sur les côtés, la même chose. Le décor est
-// recadré (il ne couvre plus toute la largeur d'un grand écran) : même cadrage sur ordinateur que sur téléphone.
+// Marges de paysage autour de la grille : en hauteur, de quoi faire ~10 cases. Sur les côtés :
+//   - téléphone et tablette (les appareils visés) : de quoi couvrir toute la largeur de l'écran, jamais de blanc ;
+//   - ordinateur : autant qu'en hauteur, le décor est recadré (il ne s'étale pas sur tout un grand écran).
 function sceneryMargins(): { x: number; y: number } {
-  const y = sceneryMargin(puz.value.size)
-  return { x: y, y }
+  const n = puz.value.size
+  const y = sceneryMargin(n)
+  if (!isTouch()) return { x: y, y }
+  const rect = boardEl.value?.getBoundingClientRect()
+  if (!rect || !(rect.width > 0)) return { x: y, y }
+  const cell = rect.width / (n + 1) // taille d'une case à l'écran avant le rétrécissement (px)
+  const visible = window.innerWidth / (cell * (n / (n + 2 * y))) // cases de décor qu'il faut pour couvrir la largeur
+  return { x: Math.min(28, Math.max(y, Math.ceil((visible - n) / 2) + 1)), y }
 }
 function revealScenery(): void {
   const path = tracePath(connections.value, puz.value)

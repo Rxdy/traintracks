@@ -1,23 +1,31 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { PAL, type Theme } from '../scenery'
 import { SKY } from '../scenery/sky'
+import Home3D from './Home3D.vue'
+import { webglAvailable } from '../decor'
 
 // Paysage de l'accueil : ciel, soleil, nuages, collines, arbres et une voie
 // ferrée au premier plan. Tout en SVG (aucune image à charger).
 // Il prend les couleurs du biome du niveau en cours (sol, arbres, voie) et un ciel à son image.
+// Avec la 3D (presque partout), c'est un vrai paysage en volume (Home3D) ; ce dessin reste en attendant, et sans 3D.
 const props = withDefaults(defineProps<{ theme?: Theme }>(), { theme: 'plaine' })
 
 const trunk = computed(() => pal.value.trunk ?? '#7c5a3a')
 const sky = computed(() => SKY[props.theme] ?? SKY.plaine)
 const pal = computed(() => PAL[props.theme] ?? PAL.plaine)
 const vars = computed(() => ({ '--sky-top': sky.value.top, '--sky-mid': sky.value.mid, '--sky-low': sky.value.low }))
+const failed3d = ref(false)
+const ready3d = ref(false)
+const use3d = computed(() => !failed3d.value && webglAvailable())
+watch(() => props.theme, () => (ready3d.value = false)) // nouveau paysage : le dessin le temps qu'il se charge
 const STARS = [[30, 60], [90, 140], [150, 40], [210, 110], [260, 70], [350, 90], [60, 220], [180, 190], [300, 200], [380, 30], [120, 90], [240, 30]]
 </script>
 
 <template>
   <div class="landscape" data-test="landscape" :data-theme="theme" :style="vars" aria-hidden="true">
-    <svg viewBox="0 0 400 800" preserveAspectRatio="xMidYMax slice">
+    <Home3D v-if="use3d" :key="theme" :theme="theme" @ready="ready3d = true" @fail="failed3d = true" />
+    <svg v-show="!ready3d || !use3d" viewBox="0 0 400 800" preserveAspectRatio="xMidYMax slice">
       <defs>
         <radialGradient id="sun" cx="50%" cy="50%" r="50%">
           <stop offset="0" :stop-color="sky.sun" />

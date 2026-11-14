@@ -6,7 +6,7 @@ import type { Scenery } from '../scenery/generate'
 import type { Route } from '../trainRoute'
 import type { LandFrame } from '../scenery/motion'
 import Windshield3D from './Windshield3D.vue'
-import { decorMode, webglAvailable } from '../decor'
+import { webglAvailable } from '../decor'
 
 // Pare-brise de la cabine. Quand le train roule, c'est la VRAIE carte vue de la locomotive : le trajet, les arbres, les maisons, les
 // champs, l'eau et la route sont ceux du décor, projetés en perspective depuis la position du train (voir cabView.ts). Une maison à droite de
@@ -16,7 +16,7 @@ const props = defineProps<{ scene?: { route: Route; scenery: Scenery; rails?: Ro
 
 // Décor 3D choisi et possible : la vraie 3D vue de la locomotive, par-dessus le dessin (qui reste en secours).
 const failed3d = ref(false)
-const use3d = computed(() => !!props.scene && decorMode.value === '3d' && !failed3d.value && webglAvailable())
+const use3d = computed(() => !!props.scene && !failed3d.value && webglAvailable())
 
 const pal = computed(() => PAL[props.scene?.scenery.theme ?? props.theme ?? 'plaine'] ?? PAL.plaine)
 // Le cap de la caméra suit celui de la voie EN DOUCEUR (filtre + vitesse de rotation limitée) : dans un virage la vue pivote lentement, sans tournis.
