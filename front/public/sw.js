@@ -3,9 +3,9 @@
 //  - /api : jamais mis en cache ;
 //  - le reste (JS/CSS hachés, icônes) : cache d'abord, puis mise à jour.
 // Changer VERSION invalide l'ancien cache.
-const VERSION = 'v3'
+const VERSION = 'v4'
 const CACHE = `traintracks-${VERSION}`
-const PRECACHE = ['/', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png']
+const PRECACHE = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()))

@@ -10,16 +10,51 @@
   "orientation": "portrait",
   "background_color": "#a5d8ff",
   "theme_color": "#a5d8ff",
-  "categories": ["games", "puzzle"],
+  "categories": [
+    "games",
+    "puzzle"
+  ],
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "screenshots": [
-    { "src": "/screenshots/home.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Accueil : le Voyage" },
-    { "src": "/screenshots/game.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Tracer la voie" },
-    { "src": "/screenshots/tutorial.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Tutoriel animé" }
+    {
+      "src": "/screenshots/home.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Accueil : le Voyage"
+    },
+    {
+      "src": "/screenshots/game.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Tracer la voie"
+    },
+    {
+      "src": "/screenshots/tutorial.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Tutoriel animé"
+    }
   ]
 }
