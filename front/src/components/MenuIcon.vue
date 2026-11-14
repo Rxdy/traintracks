@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { AVATAR_ART, DEFAULT_AVATAR } from '../avatars'
 // Icônes illustrées des écrans du menu (même style que le jeu : formes
 // pleines, contours blancs, couleurs vives). Remplacent les emojis.
 //   daily   : calendrier avec la date du jour + chrono  → Puzzle du jour
@@ -7,8 +9,11 @@
 //   account : avatar ; initiale du joueur s'il est connecté → Compte
 const props = defineProps<{
   name: 'daily' | 'tuto' | 'stats' | 'ranking' | 'account'
-  initial?: string
+  initial?: string // repli : l'initiale du joueur connecté si son avatar n'est pas connu
+  avatar?: string // l'avatar du joueur connecté (liste fixe, voir avatars/)
 }>()
+const art = computed(() => (props.avatar ? (AVATAR_ART[props.avatar] ?? AVATAR_ART[DEFAULT_AVATAR]) : null))
+const artInner = computed(() => (art.value ? `<rect width="100" height="100" fill="${art.value.bg}"/>${art.value.body}` : ''))
 
 const day = new Date().getDate()
 </script>
@@ -61,6 +66,14 @@ const day = new Date().getDate()
 
     <!-- Compte : avatar (initiale si connecté) -->
     <g v-else>
+      <template v-if="art">
+        <clipPath id="menu-avatar-clip"><circle cx="32" cy="32" r="27" /></clipPath>
+        <g clip-path="url(#menu-avatar-clip)"><svg x="5" y="5" width="54" height="54" viewBox="0 0 100 100" data-test="menu-avatar" v-html="artInner" /></g>
+        <circle cx="32" cy="32" r="27" fill="none" stroke="#fff" stroke-width="3" />
+        <circle cx="52" cy="50" r="9" fill="#22c55e" stroke="#fff" stroke-width="3" />
+        <path d="M48 50 L51 53 L56 47" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+      </template>
+      <template v-else>
       <circle cx="32" cy="32" r="27" fill="#3b82f6" stroke="#fff" stroke-width="3" />
       <template v-if="props.initial">
         <text x="32" y="42" text-anchor="middle" font-size="28" font-weight="800" fill="#fff" font-family="system-ui, sans-serif" data-test="initial">{{ props.initial }}</text>
@@ -72,6 +85,7 @@ const day = new Date().getDate()
         <path d="M14 50 Q14 35 32 35 Q50 35 50 50 Q42 56 32 56 Q22 56 14 50 Z" fill="#fff" />
         <circle cx="51" cy="51" r="10" fill="#22c55e" stroke="#fff" stroke-width="3" />
         <path d="M51 46 V56 M46 51 H56" stroke="#fff" stroke-width="3" stroke-linecap="round" />
+      </template>
       </template>
     </g>
   </svg>
