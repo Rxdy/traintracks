@@ -119,45 +119,6 @@ const route = ref<Route | null>(null)
 const scenery = ref<Scenery | null>(null)
 const failed3d = ref(false) // le décor 3D n'a pas pu s'afficher : décor classique jusqu'à la fin de la visite
 const use3d = computed(() => decorMode.value === '3d' && !failed3d.value && webglAvailable())
-// Plateau incliné (décor 3D, après la victoire) : on fait glisser le décor pour le basculer (haut/bas) et le tourner (gauche/droite).
-// Incliné, la grille (rails, indices, train, animaux) est cachée : ce sont les rails et le train 3D qu'on voit.
-const tilt = ref(0) // degrés depuis la verticale
-const yaw = ref(0)
-const tilted = computed(() => use3d.value && !!scenery.value && tilt.value >= 1)
-watch(scenery, () => {
-  tilt.value = 0
-  yaw.value = 0
-})
-let drag: { x: number; y: number; t: number; w: number } | null = null
-let tween = 0
-function tiltDown(ev: PointerEvent): void {
-  cancelAnimationFrame(tween)
-  drag = { x: ev.clientX, y: ev.clientY, t: tilt.value, w: yaw.value }
-  ;(ev.currentTarget as Element).setPointerCapture?.(ev.pointerId)
-}
-function tiltMove(ev: PointerEvent): void {
-  if (!drag) return
-  tilt.value = Math.max(0, Math.min(65, drag.t + (ev.clientY - drag.y) * 0.35))
-  yaw.value = Math.max(-80, Math.min(80, drag.w - (ev.clientX - drag.x) * 0.35))
-}
-function tiltUp(): void {
-  drag = null
-  if (tilt.value < 4) tiltTo(0) // presque à plat : on revient pile sur la grille
-}
-function tiltTo(t: number): void {
-  cancelAnimationFrame(tween)
-  const t0 = performance.now()
-  const from = { t: tilt.value, w: yaw.value }
-  const to = { t, w: t === 0 ? 0 : yaw.value }
-  const step = (now: number) => {
-    const k = Math.min(1, (now - t0) / 600)
-    const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2
-    tilt.value = from.t + (to.t - from.t) * e
-    yaw.value = from.w + (to.w - from.w) * e
-    if (k < 1) tween = requestAnimationFrame(step)
-  }
-  tween = requestAnimationFrame(step)
-}
 const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
@@ -251,16 +212,11 @@ async function checkWin(): Promise<void> {
 }
 // La voie prend l'allure de l'environnement : traverses grises sous la neige, acier plus sombre en forêt…
 const railStyle = computed(() => (scenery.value ? { '--won-rail': PAL[scenery.value.theme].rail.rail, '--won-tie': PAL[scenery.value.theme].rail.tie } : {}))
-// Marges de paysage autour de la grille : en hauteur, de quoi faire ~10 cases ; en largeur, de quoi couvrir tout l'écran
-// (sinon le train roulerait dans du blanc de part et d'autre du décor).
+// Marges de paysage autour de la grille : en hauteur, de quoi faire ~10 cases ; sur les côtés, la même chose. Le décor est
+// recadré (il ne couvre plus toute la largeur d'un grand écran) : même cadrage sur ordinateur que sur téléphone.
 function sceneryMargins(): { x: number; y: number } {
-  const n = puz.value.size
-  const y = sceneryMargin(n)
-  const rect = boardEl.value?.getBoundingClientRect()
-  if (!rect || !(rect.width > 0)) return { x: y, y }
-  const cell = rect.width / (n + 1) // taille d'une case à l'écran avant le rétrécissement (px)
-  const visible = window.innerWidth / (cell * (n / (n + 2 * y))) // cases de décor qu'il faut pour couvrir la largeur
-  return { x: Math.min(28, Math.max(y, Math.ceil((visible - n) / 2) + 1)), y }
+  const y = sceneryMargin(puz.value.size)
+  return { x: y, y }
 }
 function revealScenery(): void {
   const path = tracePath(connections.value, puz.value)
@@ -608,14 +564,14 @@ onMounted(() => {
     <div
       ref="boardEl"
       class="board"
-      :class="{ picking, 'board--won': scenery, 'board--tilted': tilted }"
+      :class="{ picking, 'board--won': scenery}"
       :style="{ '--size': puzzle.size, '--k': scenery ? scenery.frame.k : 1, ...railStyle }"
       role="grid"
       aria-label="Grille de jeu"
       @pointermove="onMove"
     >
       <!-- Décor : en 3D si le joueur le veut et que l'appareil sait le faire ; sinon (ou en cas d'échec) le décor classique en SVG. -->
-      <Scenery3D v-if="scenery && use3d" :key="'3d-' + scenery.seed" :scenery="scenery" :route="sceneryRoute" :train-route="route" :train-s="trainS" :tilt="tilt" :yaw="yaw" @fail="failed3d = true" />
+      <Scenery3D v-if="scenery && use3d" :key="'3d-' + scenery.seed" :scenery="scenery" :route="sceneryRoute" @fail="failed3d = true" />
       <SceneryLayer v-else-if="scenery" :scenery="scenery" :route="sceneryRoute" />
 
       <template v-for="r in indices" :key="'row-' + r">
@@ -650,10 +606,6 @@ onMounted(() => {
       <div class="corner"></div>
 
       <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" @frame="emit('land', $event)" />
-
-      <!-- décor 3D gagné : on le fait glisser pour l'incliner ; le bouton le bascule ou le remet à plat -->
-      <div v-if="scenery && use3d" class="tilt-pad" data-test="tilt-pad" @pointerdown="tiltDown" @pointermove="tiltMove" @pointerup="tiltUp" @pointercancel="tiltUp" />
-      <button v-if="scenery && use3d" type="button" class="tilt-btn" data-test="tilt-btn" @click="tiltTo(tilted ? 0 : 50)">{{ tilted ? 'À plat' : 'Incliner' }}</button>
 
       <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" :speed="fast ? FAST_SPEED : CRUISE_SPEED" @progress="onTrainProgress" @done="trainDone = true" />
     </div>
@@ -866,38 +818,6 @@ onMounted(() => {
 .board--won :deep(.rail) {
   --rail-color: var(--won-rail, #475569);
   --tie-color: var(--won-tie, #7a4e2d);
-}
-.tilt-pad {
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  aspect-ratio: auto;
-  cursor: grab;
-  touch-action: none;
-}
-.tilt-pad:active {
-  cursor: grabbing;
-}
-.tilt-btn {
-  position: absolute;
-  top: calc(0.4rem / var(--k, 1));
-  right: calc(0.4rem / var(--k, 1));
-  z-index: 7;
-  aspect-ratio: auto;
-  padding: calc(0.3rem / var(--k, 1)) calc(0.7rem / var(--k, 1));
-  border: calc(2px / var(--k, 1)) solid #fff;
-  border-radius: calc(999px / var(--k, 1));
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--shadow);
-  font: inherit;
-  font-size: calc(0.8rem / var(--k, 1));
-  font-weight: 800;
-  color: #1f2937;
-  cursor: pointer;
-}
-/* incliné : seule la 3D se voit (la grille, ses rails, son train et ses animaux ne suivraient pas la perspective) */
-.board--tilted > :not(.scenery3d):not(.tilt-pad):not(.tilt-btn) {
-  visibility: hidden;
 }
 .board.picking {
   cursor: crosshair;

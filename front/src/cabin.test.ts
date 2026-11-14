@@ -57,6 +57,23 @@ describe('Pare-brise : la carte vue de la locomotive', () => {
     expect(x('tree')).toBeLessThan(170)
   })
 
+  it('nouveau départ (niveau suivant, train relancé) : la caméra est tout de suite dans l\'axe de la voie, elle ne pivote pas', async () => {
+    // une voie qui part vers l'est puis tourne vers le sud
+    const c = carte([])
+    c.route = { points: [{ x: 0.5, y: 5.5 }, { x: 6.5, y: 5.5 }, { x: 6.5, y: 13.5 }], cum: [0, 6, 14], length: 14, gridStart: 0, gridEnd: 14 }
+    const w = mount(CabinWindshield, { props: { scene: c, progress: 13, running: true } }) // fin du trajet : cap au sud
+    expect(Number(w.get('svg').attributes('data-heading'))).toBeCloseTo(Math.PI / 2, 1)
+    await new Promise((r) => setTimeout(r, 30)) // un peu de temps passe, comme entre deux images
+    await w.setProps({ progress: 0 }) // le train repart du début
+    expect(Number(w.get('svg').attributes('data-heading'))).toBeCloseTo(0, 2) // vers l'est, sans transition
+    // même chose avec un nouveau trajet (niveau suivant) alors que la position est restée celle de la fin du précédent
+    await w.setProps({ progress: 13 })
+    const autre = carte([])
+    await new Promise((r) => setTimeout(r, 30))
+    await w.setProps({ scene: autre, progress: 13 })
+    expect(Number(w.get('svg').attributes('data-heading'))).toBeCloseTo(0, 2)
+  })
+
   it('la vue suit la position du train : la maison grossit et passe à droite, puis disparaît derrière lui', async () => {
     const w = mount(CabinWindshield, { props: { scene: carte([{ r: 6, c: 5, kind: 'house' }]), progress: 2, running: true } })
     const lire = () => {

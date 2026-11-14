@@ -22,6 +22,8 @@ const pal = computed(() => PAL[props.scene?.scenery.theme ?? props.theme ?? 'pla
 // Le cap de la caméra suit celui de la voie EN DOUCEUR (filtre + vitesse de rotation limitée) : dans un virage la vue pivote lentement, sans tournis.
 const heading = ref<number | null>(null)
 let lastTick: number | null = null
+let lastRoute: Route | null = null
+let lastProgress = 0
 watch(
   () => [props.scene, props.progress] as const,
   () => {
@@ -30,11 +32,17 @@ watch(
       lastTick = null
       return
     }
-    const target = trackHeading(props.scene.route, props.progress ?? 0)
+    const p = props.progress ?? 0
+    const target = trackHeading(props.scene.route, p)
     const now = performance.now()
     const dt = lastTick === null ? 0 : Math.min(0.1, (now - lastTick) / 1000)
     lastTick = now
-    if (heading.value === null || dt === 0) {
+    // Nouveau trajet ou train reparti en arrière (niveau suivant, train relancé) : on se cale tout de suite dans l'axe de la
+    // voie. Sinon la caméra partirait du cap de la fin du trajet précédent et pivoterait au départ, sans raison visible.
+    const restart = props.scene.route !== lastRoute || p < lastProgress - 0.5
+    lastRoute = props.scene.route
+    lastProgress = p
+    if (heading.value === null || dt === 0 || restart) {
       heading.value = target
       return
     }

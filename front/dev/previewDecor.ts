@@ -13,13 +13,11 @@ const theme = (THEMES as string[]).includes(q.get('theme') ?? '') ? (q.get('them
 const lv = levels[Math.min(levels.length, Math.max(1, Number(q.get('level') ?? 8))) - 1]
 const n = lv.puzzle.size
 const my = sceneryMargin(n)
-const mg = { x: my + 2, y: my }
+const mg = { x: my, y: my }
 const sc = buildScenery(lv.puzzle, lv.solution, theme, seedOf(lv.puzzle), mg)
 const horiz = (d: string) => d === 'left' || d === 'right'
 const route = buildRoute(lv.solution, lv.puzzle, { entry: horiz(lv.puzzle.entry.dir) ? mg.x : mg.y, exit: horiz(lv.puzzle.exit.dir) ? mg.x : mg.y })
 const pal = PAL[theme]
-const tilt = Number(q.get('tilt') ?? 50)
-const yaw = Number(q.get('yaw') ?? 25)
 const s = Number(q.get('s') ?? 6)
 
 // Les rails de la voie, comme la grille les dessine par-dessus le décor (deux rails, traverses tous les quarts de case).
@@ -55,7 +53,6 @@ createApp({
       ]),
       panel('Décor 3D', h(Scenery3D, { scenery: sc, route })),
       panel('Décor classique', h(SceneryLayer, { scenery: sc, route })),
-      panel(`Plateau incliné (${tilt}°, rotation ${yaw}°)`, h(Scenery3D, { scenery: sc, route, trainRoute: route, trainS: s, tilt, yaw }), false),
       h('section', { style: { display: 'inline-block', verticalAlign: 'top', margin: '12px' } }, [
         h('h2', { style: { font: '600 15px system-ui', margin: '0 0 8px' } }, `Vue cabine (à ${s} cases du départ)`),
         h('div', { style: { position: 'relative', width: '680px', height: '240px', borderRadius: '16px', overflow: 'hidden', background: '#000' } }, [h(Windshield3D, { scenery: sc, route, rails: route, progress: s })]),

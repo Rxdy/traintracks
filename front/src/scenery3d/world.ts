@@ -498,19 +498,15 @@ function build(kind: Tile['kind'], v: number, pal: Pal, kit: Kit, anims: Anim[],
 // ---------- le monde partagé ----------
 // Un niveau gagné = UN monde 3D, regardé par deux vues : le plateau (vu du dessus, ou incliné) et le pare-brise de la cabine.
 // Chaque vue a son propre rendu (son canvas) ; le monde, lui, n'est construit et animé qu'une fois.
-//   - 'top'  : vue du dessus, monde cisaillé (vue cavalière) ; rails et train sont ceux de la grille (DOM), cachés ici ;
-//   - 'free' : plateau incliné, vraie perspective ; la grille est cachée, rails et train 3D visibles ;
-//   - 'cab'  : depuis la locomotive ; rails visibles, train caché (on est dedans), brume et ciel à l'horizon.
-export type Mode = 'top' | 'free' | 'cab'
+//   - 'top' : vue du dessus, monde cisaillé (vue cavalière) ; les rails sont ceux de la grille (DOM), cachés ici ;
+//   - 'cab' : depuis la locomotive ; rails 3D visibles, brume et ciel à l'horizon.
+export type Mode = 'top' | 'cab'
 export interface World {
   scene: THREE.Scene
   sc: Scenery
   setMode(m: Mode): void
-  setTrain(route: Route | null, s: number): void
   addView(draw: (t: number, dt: number) => void): () => void
 }
-
-const CAR = 0.6 // longueur d'une voiture + attelage, en cases (le train de la grille fait 2,4 cases : 4 voitures)
 
 function along(route: Route, s: number, mg: { x: number; y: number }) {
   const p = pointAt(route, s)
@@ -538,7 +534,7 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
   sun.shadow.normalBias = 0.02
   scene.add(sun, sun.target)
 
-  // horizon : ciel en dégradé et brume de la couleur du bas du ciel (vues 'free' et 'cab')
+  // horizon : ciel en dégradé et brume de la couleur du bas du ciel (vue de la cabine)
   const skyTex = canvasTex(4, 256, (g, w, h) => {
     const gr = g.createLinearGradient(0, 0, 0, h)
     gr.addColorStop(0, sky.top)
@@ -547,7 +543,6 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     g.fillStyle = gr
     g.fillRect(0, 0, w, h)
   }, false)
-  const fogFree = new THREE.Fog(sky.low, 18, 60)
   const fogCab = new THREE.Fog(sky.low, 4, 22)
 
   const world = new THREE.Group()
@@ -567,7 +562,7 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
   ground.receiveShadow = true
   world.add(ground)
   disposables.push(ground.geometry, groundMat)
-  // au-delà du décor : la même herbe qui continue jusqu'à l'horizon (on ne la voit que plateau incliné ou depuis la cabine)
+  // au-delà du décor : la même herbe qui continue jusqu'à l'horizon (on ne la voit que depuis la cabine)
   const farMat = new THREE.MeshStandardMaterial({ color: pal.a, roughness: 1 })
   const far = new THREE.Mesh(new THREE.PlaneGeometry(160, 160).rotateX(-Math.PI / 2), farMat)
   far.position.set(cx, -0.004, cz)
@@ -666,7 +661,7 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     world.add(deck)
   }
 
-  // rails 3D le long de toute la voie (grille comprise) : visibles seulement quand la grille n'est pas affichée
+  // rails 3D le long de toute la voie (grille comprise) : seulement pour la vue de la cabine (vue du dessus : ceux de la grille)
   const track = new THREE.Group()
   track.visible = false
   world.add(track)
@@ -698,23 +693,6 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     }
   }
 
-  // le train 3D (vue inclinée) : locomotive rouge, trois voitures
-  const train = new THREE.Group()
-  train.visible = false
-  world.add(train)
-  const cars = ['#dc2626', '#2563eb', '#f59e0b', '#16a34a'].map((c, i) => {
-    const g = new THREE.Group()
-    kit.mesh(kit.geo('carbody', () => new THREE.BoxGeometry(0.5, 0.2, 0.3)), kit.mat(c, texs.plaster, { roughness: 0.5 }), 0, 0.17, 0, g)
-    if (i === 0) {
-      kit.mesh(kit.geo('cabin', () => new THREE.BoxGeometry(0.18, 0.16, 0.3)), kit.mat(dark(c, 0.3)), -0.16, 0.35, 0, g)
-      kit.mesh(kit.geo('chimney', () => new THREE.CylinderGeometry(0.04, 0.04, 0.12, 10)), kit.mat('#1f2937'), 0.16, 0.33, 0, g)
-      kit.mesh(kit.geo('lamp', () => new THREE.SphereGeometry(0.035, 8, 6)), new THREE.MeshBasicMaterial({ color: '#fde68a' }), 0.26, 0.2, 0, g)
-    } else kit.mesh(kit.geo('carroof', () => new THREE.BoxGeometry(0.48, 0.03, 0.28)), kit.mat(light(c, 0.3)), 0, 0.285, 0, g)
-    for (const x of [-0.15, 0.15]) for (const z of [-0.15, 0.15]) kit.mesh(kit.geo('wheel', () => new THREE.CylinderGeometry(0.06, 0.06, 0.03, 12).rotateX(Math.PI / 2)), kit.mat('#1f2937'), x, 0.07, z, g)
-    train.add(g)
-    return g
-  })
-
   // objets debout, qui poussent l'un après l'autre (même rythme que le décor SVG)
   const anims: Anim[] = []
   sc.tiles.forEach((row, r) =>
@@ -731,33 +709,15 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
 
   await Promise.all([groundReady, farReady])
 
-  let mode: Mode = 'top'
   function setMode(m: Mode): void {
-    mode = m
-    world.matrix.copy(m === 'top' ? shear : flat)
-    track.visible = m !== 'top'
-    train.visible = m === 'free'
-    far.visible = m !== 'top'
-    scene.fog = m === 'cab' ? fogCab : m === 'free' ? fogFree : null
-    scene.background = m === 'cab' ? skyTex : null
+    const cab = m === 'cab'
+    world.matrix.copy(cab ? flat : shear)
+    track.visible = cab
+    far.visible = cab
+    scene.fog = cab ? fogCab : null
+    scene.background = cab ? skyTex : null
   }
   setMode('top')
-  void mode
-
-  function setTrain(route: Route | null, s: number): void {
-    if (!route || s < 0) {
-      cars.forEach((g) => (g.visible = false))
-      return
-    }
-    cars.forEach((g, i) => {
-      const d = s - i * CAR
-      g.visible = d >= 0 && d <= route.length
-      if (!g.visible) return
-      const q = along(route, d, sc.margin)
-      g.position.set(q.x, 0, q.z)
-      g.rotation.y = Math.atan2(-q.tz, q.tx)
-    })
-  }
 
   // une seule boucle d'animation pour le monde ; chaque vue y dessine à son tour
   const views = new Set<(t: number, dt: number) => void>()
@@ -796,7 +756,6 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     scene,
     sc,
     setMode,
-    setTrain,
     addView(draw) {
       views.add(draw)
       return () => views.delete(draw)
