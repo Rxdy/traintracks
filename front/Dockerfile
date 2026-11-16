@@ -16,7 +16,7 @@ ENV APP_VERSION=$APP_VERSION APP_COMMIT=$APP_COMMIT
 RUN npm run build
 
 # --- Étape 2 : image finale légère (nginx alpine) ---
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.31-alpine AS runtime
 COPY front/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/front/dist /usr/share/nginx/html
 EXPOSE 80
