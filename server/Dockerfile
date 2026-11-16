@@ -2,6 +2,9 @@
 FROM node:22-alpine
 WORKDIR /app/server
 ENV NODE_ENV=production
+ARG APP_VERSION=dev
+ARG APP_COMMIT=
+ENV APP_VERSION=$APP_VERSION APP_COMMIT=$APP_COMMIT
 
 COPY server/package.json server/package-lock.json ./
 RUN npm ci --omit=dev

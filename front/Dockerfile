@@ -10,6 +10,9 @@ COPY shared /app/shared
 # Données des niveaux : lues par les TESTS seulement (vérification de types du build) ; absentes de l'image finale.
 COPY server/data /app/server/data
 COPY front ./
+ARG APP_VERSION=dev
+ARG APP_COMMIT=
+ENV APP_VERSION=$APP_VERSION APP_COMMIT=$APP_COMMIT
 RUN npm run build
 
 # --- Étape 2 : image finale légère (nginx alpine) ---

@@ -51,6 +51,8 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     })
 
   app.get('/api/health', async () => ({ ok: true }))
+  // Version du build, posée par la CI dans l'image (APP_VERSION = tag vX.Y.Z, APP_COMMIT) ; « dev » en local.
+  app.get('/api/version', async () => ({ version: process.env.APP_VERSION || 'dev', commit: process.env.APP_COMMIT || '' }))
 
   app.post('/api/auth/register', async (req, reply) => {
     const b = (req.body ?? {}) as Body

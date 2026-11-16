@@ -3,7 +3,8 @@
 //  - /api : jamais mis en cache ;
 //  - le reste (JS/CSS hachés, icônes) : cache d'abord, puis mise à jour.
 // Changer VERSION invalide l'ancien cache.
-const VERSION = 'v4'
+// La version vient de l'adresse d'enregistrement (/sw.js?v=vX.Y.Z, voir src/pwa.ts) : une nouvelle version = un nouveau cache.
+const VERSION = new URL(self.location.href).searchParams.get('v') || 'dev'
 const CACHE = `traintracks-${VERSION}`
 const PRECACHE = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 

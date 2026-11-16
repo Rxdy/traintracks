@@ -53,7 +53,7 @@ describe('service worker : l\'API ne passe jamais par le cache', () => {
   // Exécute sw.js avec un faux `self` pour observer ce qu'il intercepte.
   function load() {
     const handlers: Record<string, (e: unknown) => void> = {}
-    const self = { location: { origin: 'http://site.test' }, addEventListener: (t: string, h: (e: unknown) => void) => (handlers[t] = h), skipWaiting: vi.fn(), clients: { claim: vi.fn() } }
+    const self = { location: { origin: 'http://site.test', href: 'http://site.test/sw.js?v=test' }, addEventListener: (t: string, h: (e: unknown) => void) => (handlers[t] = h), skipWaiting: vi.fn(), clients: { claim: vi.fn() } }
     new Function('self', 'caches', 'fetch', swRaw)(self, { match: vi.fn(async () => undefined), open: vi.fn(async () => ({ put: vi.fn() })), keys: vi.fn(async () => []) }, vi.fn(async () => ({ ok: true, clone: () => ({}) })))
     const intercepts = (url: string, mode = 'cors') => {
       const respondWith = vi.fn()

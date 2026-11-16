@@ -10,6 +10,7 @@ onMounted(async () => {
   if (r?.status === 200) legal.value = r.data as typeof legal.value
 })
 const todo = 'à renseigner'
+const version = __APP_VERSION__ + (__APP_COMMIT__ ? ` (${__APP_COMMIT__})` : '')
 </script>
 
 <template>
@@ -18,7 +19,7 @@ const todo = 'à renseigner'
     <p><b>Éditeur et responsable de la publication :</b> <span data-test="legal-name">{{ legal.name || todo }}</span>.</p>
     <p><b>Contact :</b> <span data-test="legal-contact">{{ legal.contact || todo }}</span>.</p>
     <p><b>Hébergement :</b> <span data-test="legal-host">{{ legal.host || todo }}</span>.</p>
-    <p>Train Tracks est un jeu de logique gratuit, sans publicité.</p>
+    <p>Train Tracks est un jeu de logique gratuit, sans publicité. <span data-test="app-version">Version {{ version }}</span>.</p>
 
     <h2>Politique de confidentialité</h2>
     <h3>Ce que nous gardons</h3>
