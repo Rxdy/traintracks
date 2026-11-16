@@ -23,7 +23,7 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
   const night = NIGHT.has(theme)
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.shadowMap.type = THREE.PCFShadowMap
   const fin = finish(renderer)
   const scene = new THREE.Scene()
   const texs = makeTextures(7)

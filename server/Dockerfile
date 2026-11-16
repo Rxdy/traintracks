@@ -1,5 +1,5 @@
 # Contexte de build = racine du dépôt (le serveur importe le dossier shared/).
-FROM node:22-alpine
+FROM node:26-alpine
 WORKDIR /app/server
 ENV NODE_ENV=production
 ARG APP_VERSION=dev

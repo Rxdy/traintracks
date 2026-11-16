@@ -851,7 +851,7 @@ export function finish(renderer: THREE.WebGLRenderer) {
 export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: !opaque })
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.shadowMap.autoUpdate = true
   const fin = finish(renderer)
   const { draw } = fin
