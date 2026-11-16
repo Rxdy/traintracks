@@ -132,12 +132,13 @@ watch(trainDone, (v) => v && (fast.value = false)) // la prochaine fois, on repa
 // Sons : la fin du trajet laisse la place au décor ; la barrière du passage à niveau a ses propres sons.
 watch(trainDone, (v) => v && sound.trainEnd())
 // L'écran de jeu suit le train (vue de la cabine) : il roule dès que sa route existe, jusqu'à son arrivée.
-watch([route, trainDone], () => emit('train', !!route.value && !trainDone.value))
 // ... et la cabine montre la VRAIE carte vue du train : elle reçoit le trajet, le décor et la position de la locomotive.
 watch([route, scenery], () => emit('scene', route.value && scenery.value ? { route: route.value, scenery: scenery.value, rails: sceneryRoute.value } : null))
 function onTrainProgress(s: number): void {
   trainS.value = s
-  emit('progress', s)
+  // La cabine s'arrête quand la locomotive sort du décor : au-delà, le pare-brise ne montrerait plus que du vide (la voie dépasse
+  // le bord de la longueur du train, pour que les wagons sortent aussi).
+  emit('progress', route.value ? Math.min(s, route.value.length - exitLead.value) : s)
 }
 
 // Zone où le train est visible : exactement celle du décor (en cases de la grille de jeu).
@@ -149,6 +150,10 @@ const trainClip = computed(() => {
 // Position de la locomotive sur son trajet : les barrières du passage à niveau se baissent quand elle approche.
 const trainS = ref(-1)
 const TRAIN_LENGTH = 2.4
+const exitLead = computed(() => (scenery.value ? TRAIN_LENGTH + 1 : 0)) // longueur de voie au-delà du bord du décor
+// Vrai quand la locomotive a quitté le décor : le trajet vu de la cabine est fini (les wagons finissent de sortir de la carte).
+const locoOut = computed(() => !!route.value && trainS.value >= route.value.length - exitLead.value)
+watch([route, trainDone, locoOut], () => emit('train', !!route.value && !trainDone.value && !locoOut.value))
 const trainNear = computed(() => {
   const x = scenery.value?.road?.crossing
   const rt = route.value
@@ -163,13 +168,14 @@ watch(trainNear, (v) => sound.crossing(v))
 // place est RÉSERVÉE dès le début (rien ne bouge à la victoire), entre la grille et les aides.
 // Vrai dès que le train est passé une première fois : sur téléphone le récapitulatif reste affiché quand on le relance.
 const finished = ref(false)
-watch(trainDone, (v) => {
-  if (v && !finished.value) {
+watch([trainDone, locoOut], ([done, out]) => {
+  if ((done || out) && !finished.value) {
     finished.value = true
     emit('finish')
   }
 })
 const boardEl = ref<HTMLElement | null>(null)
+const toolbarEl = ref<HTMLElement | null>(null)
 let startedAt = 0
 let clock = 0
 
@@ -215,7 +221,7 @@ async function checkWin(): Promise<void> {
 const railStyle = computed(() => (scenery.value ? { '--won-rail': PAL[scenery.value.theme].rail.rail, '--won-tie': PAL[scenery.value.theme].rail.tie } : {}))
 // Marges de paysage autour de la grille : en hauteur, de quoi faire ~10 cases.
 //   - téléphone et tablette (les appareils visés), ou fenêtre étroite : le décor couvre TOUT l'écran autour de la grille, sans
-//     bande vide : toute la largeur, jusqu'en haut de l'écran (sous l'en-tête et la barre d'outils) et jusqu'à la cabine ;
+//     bande vide : toute la largeur, jusque sous la barre d'outils (qui reste libre, sans décor derrière) et jusqu'à la cabine ;
 //   - ordinateur : autant sur les côtés qu'en hauteur, le décor est recadré (il ne s'étale pas sur tout un grand écran).
 const FULL_MAX_WIDTH = 1100 // px : au-delà, et sans écran tactile, c'est un ordinateur
 function sceneryMargins(): { x: number; y: number; top?: number; below?: number } {
@@ -235,7 +241,10 @@ function sceneryMargins(): { x: number; y: number; top?: number; below?: number 
   const decorTop = oy - (y + n / 2) * unit
   const decorBottom = rect.bottom
   const cabin = document.querySelector<HTMLElement>('[data-test=cabin]')?.getBoundingClientRect().top
-  const top = Math.max(0, decorTop / unit) // jusqu'en haut de l'écran
+  // Le décor ne monte que jusque sous la barre d'outils : Quitter, Niveau, pièces, Relancer le train… restent sur le fond de la page,
+  // jamais posés sur le décor (issue #17). Sans barre d'outils mesurable, on garde le bord de la grille.
+  const limit = toolbarEl.value?.getBoundingClientRect().bottom ?? rect.top
+  const top = Math.max(0, (decorTop - Math.max(0, limit) - 4) / unit)
   const below = cabin !== undefined && cabin > decorBottom ? (cabin - decorBottom) / unit + 0.05 : 0 // jusqu'à la cabine
   return { x, y, top, below }
 }
@@ -551,7 +560,7 @@ onMounted(() => {
 
 <template>
   <div class="track">
-    <div class="toolbar">
+    <div ref="toolbarEl" class="toolbar">
       <template v-if="!solved">
         <button type="button" class="btn btn--ghost tool" data-test="undo" @click="undo" :disabled="!canUndo" aria-label="Annuler" title="Annuler (Ctrl+Z)">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" /></svg>

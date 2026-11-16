@@ -175,7 +175,7 @@ export function cabView(scenery: Scenery, route: Route, s: number, opts: { headi
 // ---------- le décor vivant ----------
 // Les positions du décor vivant sont dans le repère du décor (case (r, c) = [c, c+1] × [r, r+1]) ; la carte du train est décalée de la marge.
 const CAR_SCALE = 1.5 // les voitures sont minuscules sur la carte (0,3 case) : un peu plus grosses pour qu'on les voie
-const ANIMAL_SCALE = 1.9 // idem pour les animaux : on veut les apercevoir
+const ANIMAL_SCALE = 1 // à l'échelle de la carte : un animal fait la taille d'un animal à côté des arbres et des maisons
 
 function liveItems(scenery: Scenery, cam: Camera, land: LandFrame): Live[] {
   const mg = scenery.margin
