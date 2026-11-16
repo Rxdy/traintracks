@@ -21,7 +21,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDraw
 renderer.setPixelRatio(1)
 renderer.setSize(innerWidth, innerHeight, false)
 renderer.shadowMap.enabled = true
-renderer.shadowMap.type = THREE.PCFSoftShadowMap
+renderer.shadowMap.type = THREE.PCFShadowMap
 const scene = new THREE.Scene()
 const texs = makeTextures(3)
 const kit = makeKit(texs)
