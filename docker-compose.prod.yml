@@ -48,7 +48,8 @@ services:
       db:
         condition: service_healthy
     networks:
-      - default
+      default:
+        aliases: [traintracks-api] # nom unique pour le nginx du front (« api » existe ailleurs sur le Pi)
 
   db:
     image: postgres:17-alpine

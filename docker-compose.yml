@@ -37,6 +37,9 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      default:
+        aliases: [traintracks-api] # nom unique pour le nginx du front
 
   db:
     image: postgres:17-alpine
