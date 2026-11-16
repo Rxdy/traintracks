@@ -4,8 +4,7 @@ import HeroArt from '../components/HeroArt.vue'
 import MenuIcon from '../components/MenuIcon.vue'
 import TrackGrid from '../components/TrackGrid.vue'
 import AidBar from '../components/AidBar.vue'
-import CabinDash from '../components/CabinDash.vue'
-import CabinWindshield from '../components/CabinWindshield.vue'
+import CabinFrame from '../components/CabinFrame.vue'
 import type { Route } from '../trainRoute'
 import type { LandFrame } from '../scenery/motion'
 import type { Scenery } from '../scenery'
@@ -205,47 +204,41 @@ function quit(): void {
         />
         <!-- Cabine sous la grille, collée au décor et sur toute la largeur. Pare-brise : la voie défile quand le train roule ; à l'arrivée un store
              se ferme et porte le récapitulatif, avec « Niveau suivant » juste dessous. Pouvoirs : colonne à droite. -->
-        <div class="cabin" data-test="cabin">
-          <div class="cab">
-            <div class="windshield">
-              <CabinWindshield :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :theme="themeForLevel(current.id)" />
-              <div class="store" :class="{ down: storeDown }" data-test="store">
-                <div v-if="levelFinished" class="finish" data-test="finish">
-                  <template v-if="earned">
-                    <div class="head">
-                      <p class="win" data-test="win">Niveau terminé</p>
-                      <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? 0) }}</p>
-                    </div>
-                    <WinReceipt
-                      :lines="[
-                        { label: 'Victoire', amount: earned.base },
-                        { label: 'Sans aide', amount: earned.bonus },
-                      ]"
-                    />
-                  </template>
-                  <!-- « Niveau suivant » juste sous le récapitulatif, sur le store -->
-                  <button v-if="hasNext" type="button" class="btn cta next" data-test="next" :disabled="loading" @click="play">Niveau suivant</button>
-                  <p v-else class="trophy" data-test="coming-soon">Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt.</p>
+        <CabinFrame :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :theme="themeForLevel(current.id)" :store-down="storeDown">
+          <template #store>
+            <div v-if="levelFinished" class="finish" data-test="finish">
+              <template v-if="earned">
+                <div class="head">
+                  <p class="win" data-test="win">Niveau terminé</p>
+                  <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? 0) }}</p>
                 </div>
-              </div>
+                <WinReceipt
+                  :lines="[
+                    { label: 'Victoire', amount: earned.base },
+                    { label: 'Sans aide', amount: earned.bonus },
+                  ]"
+                />
+              </template>
+              <!-- « Niveau suivant » juste sous le récapitulatif, sur le store -->
+              <button v-if="hasNext" type="button" class="btn cta next" data-test="next" :disabled="loading" @click="play">Niveau suivant</button>
+              <p v-else class="trophy" data-test="coming-soon">Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt.</p>
             </div>
-            <div class="pupitre-wrap">
-              <CabinDash />
+          </template>
+          <template #side>
+            <div class="bonus-col" data-test="bonus-col">
+              <AidBar
+                ref="aidBar"
+                :key="'aids-' + current.id"
+                :size="current.puzzle.size"
+                :level="current.id"
+                :snapshot="() => grid?.snapshotForAid() ?? { edges: [], crosses: [], marks: 0 }"
+                @reveal="(g, c) => grid?.reveal(g, c)"
+                @colors="colorHints = true"
+                @picking="picking = $event"
+              />
             </div>
-          </div>
-          <div class="bonus-col" data-test="bonus-col">
-            <AidBar
-              ref="aidBar"
-              :key="'aids-' + current.id"
-              :size="current.puzzle.size"
-              :level="current.id"
-              :snapshot="() => grid?.snapshotForAid() ?? { edges: [], crosses: [], marks: 0 }"
-              @reveal="(g, c) => grid?.reveal(g, c)"
-              @colors="colorHints = true"
-              @picking="picking = $event"
-            />
-          </div>
-        </div>
+          </template>
+        </CabinFrame>
       </div>
     </template>
   </section>
@@ -269,66 +262,6 @@ section {
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-}
-/* Cabine sous la grille, collée au décor, sur toute la largeur de l'écran et jusqu'en bas (la page a une marge : on la débord). */
-.cabin {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: stretch;
-  width: min(100vw, 92vh); /* téléphone : tout l'écran ; ordinateur : bornée par la hauteur pour que le pupitre ne devienne pas géant */
-  margin-top: -0.45rem;
-  margin-bottom: calc(-1 * clamp(1rem, 4vmin, 2rem));
-}
-.cab {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 0.5rem 0.4rem 0;
-  border-top: 3px solid #fff;
-  border-radius: 30px 0 0 0 / 22px 0 0 0; /* la colonne des pouvoirs prolonge la cabine à droite */
-  background: #1c2430;
-  box-shadow: var(--shadow);
-}
-/* Pare-brise : s'étire pour prendre la place libre au-dessus du pupitre. */
-.windshield {
-  position: relative;
-  flex: 1 1 0;
-  min-height: 8.4rem; /* assez pour que le récapitulatif et « Niveau suivant » tiennent sur le store */
-  margin-bottom: 0.45rem;
-  overflow: hidden;
-  border: 3px solid #0b1220;
-  border-radius: 24px 24px 6px 6px / 16px 16px 6px 6px;
-}
-/* Le store : une fois le train arrivé, il se ferme comme un store de fenêtre (de haut en bas) et porte le récapitulatif. */
-.store {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 0.3rem 0.4rem 0.9rem;
-  background: repeating-linear-gradient(#d6dde7 0 11px, #bcc6d3 11px 13px);
-  transform: translateY(-102%);
-  transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.25, 1);
-}
-.store.down {
-  transform: translateY(0);
-}
-.store::after {
-  /* lame du bas avec sa poignée */
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 0.55rem;
-  background: #475569;
-  border-top: 2px solid #64748b;
-}
-@media (prefers-reduced-motion: reduce) {
-  .store {
-    transition: none;
-  }
 }
 .store .finish {
   display: flex;
@@ -386,12 +319,6 @@ section {
   display: none;
 }
 
-/* Le pupitre (dessin de 340 × 116) garde ses proportions ; tout y est placé en pourcentages : il se réduit jusqu'au téléphone. */
-.pupitre-wrap {
-  flex: none;
-  position: relative;
-  container-type: inline-size; /* les tailles des touches suivent la largeur du pupitre (unité cqw) */
-}
 /* Les pouvoirs : une colonne à droite, à côté du tableau de bord, sur un fond clair qui dit « ce n'est pas la cabine ». Touches plus grosses. */
 .bonus-col {
   position: relative;

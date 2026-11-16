@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import TrackGrid from '../components/TrackGrid.vue'
 import AuthPanel from '../components/AuthPanel.vue'
 import CoinBadge from '../components/CoinBadge.vue'
 import WinReceipt from '../components/WinReceipt.vue'
+import CabinFrame from '../components/CabinFrame.vue'
+import type { Route } from '../trainRoute'
+import type { Scenery } from '../scenery/generate'
+import type { LandFrame } from '../scenery/motion'
 import type { Puzzle } from '../puzzle'
 import { user, logout } from '../auth'
 import { beginDaily, fetchDaily, startDaily, submitDaily, type DailyResult, type DailyStatus } from '../daily'
@@ -23,6 +27,13 @@ const date = ref('')
 const outcome = ref<DailyResult | null>(null)
 const loading = ref(false)
 const error = ref('')
+// Cabine : comme au Voyage, le pare-brise suit le train et le store porte le récapitulatif à l'arrivée.
+const trainRunning = ref(false)
+const trainS = ref(0)
+const landFrame = shallowRef<LandFrame | null>(null)
+const cabScene = ref<{ route: Route; scenery: Scenery; rails: Route | null } | null>(null)
+const finished = ref(false)
+const storeDown = computed(() => finished.value && !trainRunning.value)
 
 async function refresh(): Promise<void> {
   status.value = user.value ? await fetchDaily() : null
@@ -42,6 +53,11 @@ async function start(): Promise<void> {
   puzzle.value = r.puzzle
   date.value = r.date
   outcome.value = null
+  finished.value = false
+  trainRunning.value = false
+  trainS.value = 0
+  cabScene.value = null
+  landFrame.value = null
   playing.value = true
 }
 
@@ -72,17 +88,41 @@ function quit(): void {
         <CoinBadge />
       </div>
       <div class="play-area">
-        <TrackGrid :key="date" :puzzle="puzzle" :validate="validate" :official-ms="outcome?.timeMs ?? null" @begin="beginDaily()">
-          <template #win>
-            <template v-if="outcome && outcome.counted">
-              <p class="note" data-test="saved">Temps enregistré<template v-if="outcome.streak > 1"> · série de {{ outcome.streak }} jours</template></p>
-              <WinReceipt :lines="[{ label: 'Puzzle du jour', amount: outcome.earned.base }, { label: 'Série de ' + outcome.streak + ' jours', amount: outcome.earned.streakBonus }]" />
-            </template>
-            <p v-else-if="outcome" class="note halo" data-test="not-counted">
-              Temps non retenu : seul le premier essai du jour compte.
-            </p>
+        <TrackGrid
+          :key="date"
+          :puzzle="puzzle"
+          :validate="validate"
+          :official-ms="outcome?.timeMs ?? null"
+          external-recap
+          @begin="beginDaily()"
+          @finish="finished = true"
+          @train="trainRunning = $event"
+          @progress="trainS = $event"
+          @scene="cabScene = $event"
+          @land="landFrame = $event"
+        />
+        <CabinFrame :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :store-down="storeDown">
+          <template #store>
+            <div v-if="finished" class="finish" data-test="finish">
+              <template v-if="outcome && outcome.counted">
+                <div class="head">
+                  <p class="win" data-test="win">Niveau terminé</p>
+                  <p class="time" data-test="result-time"><span>Temps</span> {{ formatTime(outcome.timeMs) }}</p>
+                </div>
+                <p class="note" data-test="saved">Temps enregistré<template v-if="outcome.streak > 1"> · série de {{ outcome.streak }} jours</template></p>
+                <WinReceipt :lines="[{ label: 'Puzzle du jour', amount: outcome.earned.base }, { label: 'Série de ' + outcome.streak + ' jours', amount: outcome.earned.streakBonus }]" />
+              </template>
+              <template v-else-if="outcome">
+                <div class="head">
+                  <p class="win" data-test="win">Niveau terminé</p>
+                  <p class="time" data-test="result-time"><span>Temps</span> {{ formatTime(outcome.timeMs) }}</p>
+                </div>
+                <p class="note" data-test="not-counted">Temps non retenu : seul le premier essai du jour compte.</p>
+              </template>
+              <button type="button" class="btn cta next" data-test="quit-end" @click="quit">Retour</button>
+            </div>
           </template>
-        </TrackGrid>
+        </CabinFrame>
       </div>
     </template>
 
@@ -123,8 +163,10 @@ section {
 .play-area {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 0.75rem;
 }
 .lobby {
   width: min(26rem, 100%);
@@ -185,6 +227,8 @@ h2 {
   margin-left: 0.5rem;
 }
 .bar {
+  position: relative;
+  z-index: 6; /* au-dessus du décor de fin de niveau, qui monte jusqu'en haut de l'écran */
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -194,7 +238,78 @@ h2 {
   justify-self: start;
 }
 .title {
+  justify-self: center;
+  padding: 0.3rem 0.9rem;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92); /* lisible sur le décor */
+  box-shadow: var(--shadow);
   font-weight: 800;
   color: #374151;
+}
+/* Récapitulatif sur le store de la cabine (même présentation qu'au Voyage). */
+.finish {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  width: min(100%, 22rem);
+  padding: 0.45rem 0.8rem 0.5rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  width: 100%;
+}
+.win {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #15803d;
+}
+.time {
+  font-size: 1.1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #1f2937;
+}
+.time span {
+  margin-right: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+.note {
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+.finish :deep(.receipt) {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  padding-top: 0;
+}
+.finish :deep(.receipt .row) {
+  flex: none;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+}
+.finish :deep(.receipt .total) {
+  font-size: 0.85rem;
+}
+.finish :deep(.receipt .fill),
+.finish :deep(.receipt .rule) {
+  display: none;
+}
+.next {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.45rem 0;
 }
 </style>
