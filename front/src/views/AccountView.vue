@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, onUnmounted, ref, watch } from 'vue'
 import AuthPanel from '../components/AuthPanel.vue'
 import PasswordMeter from '../components/PasswordMeter.vue'
 import Avatar from '../components/Avatar.vue'
@@ -86,7 +86,23 @@ async function submitPassword(): Promise<void> {
 
 // Avatars : la même liste pour tout le monde, sans libellé. Les gratuits et ceux déjà achetés se choisissent d'un clic ;
 // un avatar payant ouvre une confirmation avec son prix (le serveur fait foi : prix, possession, solde).
+const picker = ref(false) // la feuille des avatars : fermée par défaut (la page Compte reste courte, surtout sur téléphone)
 const buying = ref<string | null>(null) // avatar payant en cours de confirmation
+const onEsc = (e: KeyboardEvent): void => {
+  if (e.key === 'Escape') closePicker()
+}
+function openPicker(): void {
+  avatarMsg.value = null
+  buying.value = null
+  picker.value = true
+  window.addEventListener('keydown', onEsc)
+}
+function closePicker(): void {
+  picker.value = false
+  buying.value = null
+  window.removeEventListener('keydown', onEsc)
+}
+onUnmounted(() => window.removeEventListener('keydown', onEsc))
 const avatarMsg = ref<{ ok: boolean; text: string } | null>(null)
 const coins = computed(() => avatars.value?.coins ?? 0)
 const owns = (id: string): boolean => (avatarOf(id)?.price ?? 1) === 0 || (avatars.value?.owned.includes(id) ?? false)
@@ -100,7 +116,8 @@ async function pick(id: string): Promise<void> {
   }
   buying.value = null
   const r = await selectAvatar(id)
-  if (!r.ok) avatarMsg.value = { ok: false, text: r.error }
+  if (r.ok) closePicker()
+  else avatarMsg.value = { ok: false, text: r.error }
 }
 async function confirmBuy(): Promise<void> {
   const id = buying.value
@@ -110,7 +127,7 @@ async function confirmBuy(): Promise<void> {
   busy.value = false
   if (r.ok) {
     await selectAvatar(id) // on l'adopte tout de suite
-    buying.value = null
+    closePicker()
     return
   }
   avatarMsg.value = { ok: false, text: r.error }
@@ -180,43 +197,58 @@ function cancel(): void {
     <div v-else class="me">
       <!-- profil -->
       <div class="card profile">
-        <Avatar :id="user.avatar" class="me-avatar" data-test="my-avatar" />
+        <button type="button" class="me-btn" data-test="avatar-change" aria-label="Changer d'avatar" :aria-expanded="picker" @click="openPicker">
+          <Avatar :id="user.avatar" class="me-avatar" data-test="my-avatar" />
+          <span class="edit" aria-hidden="true">✎</span>
+        </button>
         <h2 data-test="pseudo">{{ user.name }}</h2>
         <p class="mail">{{ user.email }}</p>
         <p class="tag">Compte {{ user.provider === 'google' ? 'Google' : 'e-mail' }}</p>
         <button type="button" class="btn btn--ghost btn--small" data-test="logout" @click="logout">Se déconnecter</button>
       </div>
 
-      <section class="card" data-test="avatar-block">
-        <h3>Avatar</h3>
-        <p class="coins" data-test="avatar-coins">{{ coins }} pièces</p>
-        <div class="avatars" role="group" aria-label="Avatars">
-          <button
-            v-for="a in AVATARS"
-            :key="a.id"
-            type="button"
-            class="av"
-            :class="{ on: user.avatar === a.id, locked: !owns(a.id), asking: buying === a.id }"
-            :aria-pressed="user.avatar === a.id"
-            :aria-label="owns(a.id) ? 'Avatar' : 'Avatar à débloquer, ' + a.price + ' pièces'"
-            :data-test="'avatar-' + a.id"
-            @click="pick(a.id)"
-          >
-            <Avatar :id="a.id" />
-            <span v-if="!owns(a.id)" class="price" data-test="avatar-price">{{ a.price }}</span>
-          </button>
-        </div>
-        <div v-if="buying" class="buy" data-test="avatar-buy">
-          <Avatar :id="buying" class="buy-pic" />
-          <p v-if="missing > 0" class="hint" data-test="avatar-missing">Il te manque {{ missing }} pièce{{ missing > 1 ? 's' : '' }}.</p>
-          <p v-else class="hint">{{ avatarOf(buying)?.price }} pièces, il t'en restera {{ coins - (avatarOf(buying)?.price ?? 0) }}.</p>
-          <div class="row">
-            <button type="button" class="btn btn--ghost btn--small" data-test="avatar-cancel" @click="buying = null">Annuler</button>
-            <button type="button" class="btn btn--small" :disabled="busy || missing > 0" data-test="avatar-confirm" @click="confirmBuy">Débloquer</button>
+      <!-- Feuille des avatars : sur téléphone elle monte du bas de l'écran (liste qui défile), sur grand écran elle est centrée -->
+      <div v-if="picker" class="sheet-back" data-test="avatar-sheet" @click.self="closePicker">
+        <section class="sheet" role="dialog" aria-modal="true" aria-label="Choisir un avatar">
+          <header class="sheet-head">
+            <h3>Choisis ton avatar</h3>
+            <p class="coins" data-test="avatar-coins">{{ coins }} pièces</p>
+            <button type="button" class="close" data-test="avatar-close" aria-label="Fermer" @click="closePicker">✕</button>
+          </header>
+          <div class="sheet-body" data-test="avatar-block">
+            <div class="avatars" role="group" aria-label="Avatars">
+              <button
+                v-for="a in AVATARS"
+                :key="a.id"
+                type="button"
+                class="av"
+                :class="{ on: user.avatar === a.id, locked: !owns(a.id), asking: buying === a.id }"
+                :aria-pressed="user.avatar === a.id"
+                :aria-label="owns(a.id) ? 'Avatar' : 'Avatar à débloquer, ' + a.price + ' pièces'"
+                :data-test="'avatar-' + a.id"
+                @click="pick(a.id)"
+              >
+                <Avatar :id="a.id" />
+                <span v-if="!owns(a.id)" class="price" data-test="avatar-price">{{ a.price }}</span>
+              </button>
+            </div>
           </div>
-        </div>
-        <p v-if="avatarMsg" :class="avatarMsg.ok ? 'ok' : 'err'" data-test="avatar-msg">{{ avatarMsg.text }}</p>
-      </section>
+          <footer v-if="buying || avatarMsg" class="sheet-foot">
+            <div v-if="buying" class="buy" data-test="avatar-buy">
+              <Avatar :id="buying" class="buy-pic" />
+              <div class="buy-text">
+                <p v-if="missing > 0" class="hint" data-test="avatar-missing">Il te manque {{ missing }} pièce{{ missing > 1 ? 's' : '' }}.</p>
+                <p v-else class="hint">{{ avatarOf(buying)?.price }} pièces, il t'en restera {{ coins - (avatarOf(buying)?.price ?? 0) }}.</p>
+                <div class="row">
+                  <button type="button" class="btn btn--ghost btn--small" data-test="avatar-cancel" @click="buying = null">Annuler</button>
+                  <button type="button" class="btn btn--small" :disabled="busy || missing > 0" data-test="avatar-confirm" @click="confirmBuy">Débloquer</button>
+                </div>
+              </div>
+            </div>
+            <p v-if="avatarMsg" :class="avatarMsg.ok ? 'ok' : 'err'" data-test="avatar-msg">{{ avatarMsg.text }}</p>
+          </footer>
+        </section>
+      </div>
 
       <section class="card" data-test="email-block">
         <h3>Adresse e-mail</h3>
@@ -329,8 +361,92 @@ h3 {
   gap: 0.25rem;
   padding-top: 1.1rem;
 }
+.me-btn {
+  position: relative;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.me-btn .edit {
+  position: absolute;
+  right: -0.2rem;
+  bottom: -0.1rem;
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.8rem;
+  box-shadow: var(--shadow);
+}
 .me-avatar {
   --avatar: 4.2rem;
+}
+/* La feuille des avatars */
+.sheet-back {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end; /* téléphone : collée en bas */
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.5);
+}
+.sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 30rem);
+  max-height: 85dvh;
+  border-radius: 22px 22px 0 0;
+  background: #fff;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.3);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@media (min-width: 640px) {
+  .sheet-back {
+    align-items: center;
+  }
+  .sheet {
+    max-height: min(85dvh, 36rem);
+    border-radius: 22px;
+  }
+}
+.sheet-head {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.1rem;
+  padding: 0.9rem 3rem 0.5rem;
+}
+.close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 2.4rem;
+  height: 2.4rem; /* assez grand pour le doigt */
+  border: 0;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #374151;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.3rem 0.9rem 0.9rem;
+}
+.sheet-foot {
+  padding: 0.6rem 0.9rem 0.8rem;
+  border-top: 1px solid #e5e7eb;
+  background: #fffbeb;
 }
 .coins {
   font-size: 0.85rem;
@@ -381,12 +497,16 @@ h3 {
   line-height: 1.2rem;
 }
 .buy {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.buy-text {
   display: grid;
-  gap: 0.5rem;
-  justify-items: center;
+  gap: 0.4rem;
 }
 .buy-pic {
-  --avatar: 4.2rem;
+  --avatar: 3.4rem;
 }
 h2 {
   font-size: 1.5rem;

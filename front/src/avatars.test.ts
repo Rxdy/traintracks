@@ -26,10 +26,11 @@ beforeEach(() => {
   user.value = { ...alice }
   avatars.value = null
 })
-const monter = async (state: { current: string; owned: string[]; coins: number }, extra: Record<string, { status: number; body?: object }> = {}) => {
+const monter = async (state: { current: string; owned: string[]; coins: number }, extra: Record<string, { status: number; body?: object }> = {}, ouvrir = true) => {
   const calls = route({ 'GET /api/avatars': { status: 200, body: state }, ...extra })
   const w = mount(AccountView)
   await flushPromises()
+  if (ouvrir) await w.find('[data-test=avatar-change]').trigger('click') // la liste n'apparaît qu'en cliquant sur son avatar
   return { w, calls }
 }
 
@@ -65,6 +66,16 @@ describe('les dessins', () => {
 })
 
 describe('Compte : choisir et acheter un avatar', () => {
+  it('la page Compte ne montre pas toute la liste : seulement mon avatar, la liste s\'ouvre en cliquant dessus et se ferme', async () => {
+    const { w } = await monter({ current: 'loco', owned: [], coins: 100 }, {}, false)
+    expect(w.find('[data-test=my-avatar]').exists()).toBe(true)
+    expect(w.findAll('[data-test=avatar-block] .av')).toHaveLength(0)
+    await w.find('[data-test=avatar-change]').trigger('click')
+    expect(w.findAll('[data-test=avatar-block] .av')).toHaveLength(40)
+    await w.find('[data-test=avatar-close]').trigger('click')
+    expect(w.find('[data-test=avatar-sheet]').exists()).toBe(false)
+  })
+
   it('toute la liste est montrée sans aucun nom : seulement des images, et le prix sur ceux qui se paient', async () => {
     const { w } = await monter({ current: 'loco', owned: [], coins: 100 })
     const boutons = w.findAll('[data-test=avatar-block] .av')
@@ -81,7 +92,7 @@ describe('Compte : choisir et acheter un avatar', () => {
     await flushPromises()
     expect(calls.at(-1)).toEqual({ key: 'POST /api/avatars/select', body: { id: 'canard' } })
     expect(user.value?.avatar).toBe('canard')
-    expect(w.find('[data-test=avatar-canard]').attributes('aria-pressed')).toBe('true')
+    expect(w.find('[data-test=avatar-sheet]').exists()).toBe(false) // la feuille se referme une fois choisi
   })
 
   it('un avatar payant ne s\'achète pas d\'un clic : il demande confirmation avec le prix', async () => {
@@ -114,7 +125,8 @@ describe('Compte : choisir et acheter un avatar', () => {
     await flushPromises()
     expect(calls.map((c) => c.key).slice(-2)).toEqual(['POST /api/avatars/buy', 'POST /api/avatars/select'])
     expect(user.value?.avatar).toBe('cerf')
-    expect(w.find('[data-test=avatar-buy]').exists()).toBe(false)
+    expect(w.find('[data-test=avatar-sheet]').exists()).toBe(false)
+    await w.find('[data-test=avatar-change]').trigger('click') // on rouvre : le solde est à jour et il n'a plus de prix
     expect(w.find('[data-test=avatar-coins]').text()).toBe('100 pièces')
     expect(w.find('[data-test=avatar-cerf] [data-test=avatar-price]').exists()).toBe(false) // plus de prix : il est à moi
   })
