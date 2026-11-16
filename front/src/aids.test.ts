@@ -99,6 +99,22 @@ describe('barre des aides', () => {
     expect(w.find('[data-test=aid-message]').text()).toBe('Ce pouvoir se débloque au niveau 50.')
     expect(server_).toHaveLength(0) // aucun appel au serveur
   })
+
+  it('le message d\'un pouvoir ne reste pas sur l\'écran : il se ferme au toucher, sinon tout seul au bout de 4 s', async () => {
+    vi.useFakeTimers()
+    aids.value = (['colors', 'cell', 'cannon', 'line'] as const).map((id, i) => aid(id, { unlocked: false, stock: 0, unlockLevel: [20, 50, 80, 110][i] }))
+    server()
+    const w = bar()
+    await w.find('[data-test=aid-cell]').trigger('click')
+    await w.find('[data-test=aid-message]').trigger('click')
+    expect(w.find('[data-test=aid-message]').exists()).toBe(false)
+    await w.find('[data-test=aid-cell]').trigger('click')
+    expect(w.find('[data-test=aid-message]').exists()).toBe(true)
+    vi.advanceTimersByTime(4100)
+    await w.vm.$nextTick()
+    expect(w.find('[data-test=aid-message]').exists()).toBe(false)
+    vi.useRealTimers()
+  })
   it('un pouvoir qui se débloque prend la place de son emplacement vide', async () => {
     aids.value = [aid('colors', { unlocked: false, stock: 0 }), aid('cell', { unlocked: false, stock: 0 })]
     const w = bar()

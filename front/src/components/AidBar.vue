@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { Given } from '../puzzle'
 import { aids, buyAid, useAid, type AidId, type AidInfo, type AidTarget } from '../wallet'
 import AidIcon from './AidIcon.vue'
@@ -33,6 +33,13 @@ const dismissed = ref(false)
 const fresh = computed(() => (props.level ? slots.value.find((a) => a.unlocked && a.unlockLevel === props.level) : undefined))
 const mode = ref<{ aid: AidInfo; step: 'buy' | 'pick' | 'line' } | null>(null)
 const message = ref('')
+// Le message s'efface tout seul (4 s) ou au toucher : il ne doit jamais rester sur l'écran de jeu.
+let messageTimer = 0
+watch(message, (m) => {
+  clearTimeout(messageTimer)
+  if (m) messageTimer = window.setTimeout(() => (message.value = ''), 4000)
+})
+onBeforeUnmount(() => clearTimeout(messageTimer))
 const busy = ref(false)
 
 function cancel(): void {
@@ -105,7 +112,7 @@ defineExpose({ onPick })
 
 <template>
   <div v-if="slots.length" class="aids" data-test="aids">
-    <p v-if="message" class="msg" data-test="aid-message" role="status">{{ message }}</p>
+    <p v-if="message" class="msg" data-test="aid-message" role="status" title="Toucher pour fermer" @click="message = ''">{{ message }}</p>
 
     <div v-if="mode" class="panel" data-test="aid-panel">
       <strong>{{ LABEL[mode.aid.id] }}</strong>
@@ -293,6 +300,7 @@ defineExpose({ onPick })
   color: #374151;
 }
 .msg {
+  cursor: pointer;
   display: block;
   text-align: center;
 }

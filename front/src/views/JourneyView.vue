@@ -372,24 +372,17 @@ section {
 }
 
 /* Messages des pouvoirs, choix d'une ligne ou d'une case, présentation d'un nouveau pouvoir : trop larges pour leur emplacement,
-   ils s'affichent juste au-dessus, sur le pare-brise. */
+   ils s'affichent à gauche de la colonne, SUR LE PARE-BRISE (dans la cabine). Jamais au-dessus de la cabine : ils cacheraient
+   le bas de la grille et ses chiffres. */
 .bonus-col :deep(.panel),
 .bonus-col :deep(.msg),
 .bonus-col :deep(.fresh) {
   position: absolute;
-  bottom: calc(100% + 0.6rem);
-  left: 50%;
-  transform: translateX(-50%);
+  top: 0.5rem;
+  right: calc(100% + 0.5rem);
   z-index: 8;
   width: max-content;
-  max-width: min(92vw, 28rem);
-}
-.bonus-col :deep(.panel),
-.bonus-col :deep(.msg),
-.bonus-col :deep(.fresh) {
-  left: auto;
-  right: 0.4rem;
-  transform: none;
+  max-width: min(68vw, 26rem);
 }
 .store .next {
   width: 100%;
