@@ -1,6 +1,6 @@
 # Contexte de build = racine du dépôt (le front importe le dossier shared/).
 # --- Étape 1 : build de l'app Vue ---
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app/front
 
 COPY front/package.json front/package-lock.json* ./
