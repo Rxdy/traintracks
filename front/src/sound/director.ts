@@ -17,7 +17,9 @@ import { setBus, BUS_LEVEL, type LoopName, type SfxName } from './engine'
 export interface Engine {
   play(name: SfxName, k?: number): void
   startLoop(name: LoopName): () => void
-  setBus(name: 'sfx' | 'train' | 'amb', level: number, seconds?: number): void
+  setBus(name: 'sfx' | 'train' | 'amb' | 'music' | 'lobby', level: number, seconds?: number): void
+  startMusic?(): () => void // musique des menus
+  lobbyTrain?(dir: 1 | -1): void // le train qui passe derrière, sur l'accueil
 }
 
 const KEY = 'tt-sound'
@@ -49,6 +51,17 @@ export function createDirector(engine: Engine, now: () => number = () => perform
   let thinks = 0
   let lastThink = -Infinity
   let chain = 0
+  // menus (lobby) : musique de fond tant qu'un écran de menu est affiché ; le train de l'accueil sonne un passage sur deux
+  let lobbyOn = false
+  let stopMusic: (() => void) | null = null
+  let passes = 0
+  const lobbyTimers: number[] = []
+  const musicOn = () => { if (!stopMusic && lobbyOn && soundOn.value && engine.startMusic) stopMusic = engine.startMusic() }
+  const musicOff = () => {
+    stopMusic?.(); stopMusic = null
+    lobbyTimers.splice(0).forEach((t) => clearTimeout(t))
+    engine.setBus('music', BUS_LEVEL.music, 0.05)
+  }
 
   const stopLoop = (n: LoopName) => { loops.get(n)?.(); loops.delete(n) }
   const startLoop = (n: LoopName) => { if (!loops.has(n)) loops.set(n, engine.startLoop(n)) }
@@ -146,9 +159,25 @@ export function createDirector(engine: Engine, now: () => number = () => perform
       lastAny = t
       engine.play(name)
     },
+    // un écran de menu s'affiche (true) ou on entre dans un niveau (false)
+    lobby(on: boolean) {
+      lobbyOn = on
+      if (on) musicOn()
+      else musicOff()
+    },
+    // le train de l'accueil commence un passage (9 s) : un sur deux est sonore, et la musique baisse un peu pendant qu'il passe
+    lobbyPass(dir: 1 | -1) {
+      if (!lobbyOn || !soundOn.value || !engine.lobbyTrain) return
+      if (passes++ % 2) return
+      engine.lobbyTrain(dir)
+      lobbyTimers.push(window.setTimeout(() => engine.setBus('music', BUS_LEVEL.music * 0.55, 1.5), 1500))
+      lobbyTimers.push(window.setTimeout(() => engine.setBus('music', BUS_LEVEL.music, 2.5), 6000))
+    },
     setOn(v: boolean) {
       soundOn.value = v
       try { localStorage.setItem(KEY, v ? 'on' : 'off') } catch { /* stockage indisponible */ }
+      if (v) musicOn()
+      else musicOff()
       if (!v) { stopTrain(); stopAmbience() } else if ((phase === 'scene' || phase === 'train') && scenery) { const b = bedFor(scenery); if (b) startLoop(b) }
     },
     // quitter le niveau, ou rejouer le train
@@ -162,5 +191,5 @@ export function createDirector(engine: Engine, now: () => number = () => perform
   }
 }
 
-export const sound = createDirector({ play: real.play, startLoop: real.startLoop, setBus })
+export const sound = createDirector({ play: real.play, startLoop: real.startLoop, setBus, startMusic: real.startMusic, lobbyTrain: real.lobbyTrain })
 export { unlock, suspend, available } from './engine'

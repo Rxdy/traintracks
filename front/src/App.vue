@@ -12,7 +12,7 @@ import InstallButton from './components/InstallButton.vue'
 import CoinBadge from './components/CoinBadge.vue'
 import { notice, resetToken } from './auth'
 import { homeTheme } from './journey'
-import { suspend, unlock } from './sound/director'
+import { sound, soundOn, suspend, unlock } from './sound/director'
 
 // Accueil = le Voyage (mode principal). Les autres écrans s'ouvrent depuis
 // les petits cubes de l'accueil.
@@ -70,6 +70,14 @@ watch(resetToken, (t) => t && go('account'), { immediate: true })
       </h1>
       <div class="right">
         <CoinBadge />
+        <!-- musique des menus et train de l'accueil : même réglage que le bouton son du jeu -->
+        <button type="button" class="btn btn--ghost btn--small snd" data-test="menu-sound" :aria-pressed="soundOn" :aria-label="soundOn ? 'Couper le son' : 'Activer le son'" :title="soundOn ? 'Couper le son' : 'Activer le son'" @click="sound.setOn(!soundOn)">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9v6h4l5 4V5L8 9z" />
+            <path v-if="soundOn" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" />
+            <path v-else d="m17 9 4 6M21 9l-4 6" />
+          </svg>
+        </button>
         <InstallButton v-if="view === 'home'" />
       </div>
     </header>
@@ -159,6 +167,21 @@ watch(resetToken, (t) => t && go('account'), { immediate: true })
 }
 .left {
   justify-self: start;
+}
+.snd {
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  justify-content: center;
+}
+.snd svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .right {
   justify-self: end;

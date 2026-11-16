@@ -6,7 +6,7 @@ import type { Home3D } from '../scenery3d/home'
 // Fond 3D du menu (voir scenery3d/home.ts). Three.js est chargé à part : le dessin SVG du fond reste affiché
 // en attendant, et il reprend la main en cas d'échec.
 const props = defineProps<{ theme: Theme }>()
-const emit = defineEmits<{ (e: 'ready'): void; (e: 'fail'): void }>()
+const emit = defineEmits<{ (e: 'ready'): void; (e: 'fail'): void; (e: 'pass', dir: 1 | -1): void }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const ready = ref(false)
@@ -16,7 +16,7 @@ onMounted(async () => {
   try {
     const { createHome } = await import('../scenery3d/home')
     if (gone || !canvas.value) return
-    const v = await createHome(canvas.value, props.theme)
+    const v = await createHome(canvas.value, props.theme, (dir) => emit('pass', dir))
     if (gone) return v.dispose()
     view = v
     ready.value = true

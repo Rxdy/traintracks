@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { PAL, type Theme } from '../scenery'
 import { SKY } from '../scenery/sky'
 import Home3D from './Home3D.vue'
+import { sound } from '../sound/director'
 import { webglAvailable } from '../decor'
 
 // Paysage de l'accueil : ciel, soleil, nuages, collines, arbres et une voie
@@ -19,12 +20,15 @@ const failed3d = ref(false)
 const ready3d = ref(false)
 const use3d = computed(() => !failed3d.value && webglAvailable())
 watch(() => props.theme, () => (ready3d.value = false)) // nouveau paysage : le dessin le temps qu'il se charge
+// Les menus ont leur musique (tant que ce paysage est affiché), et le train qui passe derrière a son son.
+onMounted(() => sound.lobby(true))
+onUnmounted(() => sound.lobby(false))
 const STARS = [[30, 60], [90, 140], [150, 40], [210, 110], [260, 70], [350, 90], [60, 220], [180, 190], [300, 200], [380, 30], [120, 90], [240, 30]]
 </script>
 
 <template>
   <div class="landscape" data-test="landscape" :data-theme="theme" :style="vars" aria-hidden="true">
-    <Home3D v-if="use3d" :key="theme" :theme="theme" @ready="ready3d = true" @fail="failed3d = true" />
+    <Home3D v-if="use3d" :key="theme" :theme="theme" @ready="ready3d = true" @fail="failed3d = true" @pass="sound.lobbyPass($event)" />
     <svg v-show="!ready3d || !use3d" viewBox="0 0 400 800" preserveAspectRatio="xMidYMax slice">
       <defs>
         <radialGradient id="sun" cx="50%" cy="50%" r="50%">

@@ -150,3 +150,50 @@ describe('chef d\'orchestre des sons', () => {
     expect(started.filter((n) => n === 'think')).toHaveLength(3)
   })
 })
+
+describe('menus : musique et train de l\'accueil', () => {
+  function lobbySetup() {
+    const log: string[] = []
+    const engine = {
+      play: vi.fn(),
+      startLoop: () => () => {},
+      setBus: vi.fn(),
+      startMusic: () => { log.push('music'); return () => void log.push('music-stop') },
+      lobbyTrain: (dir: number) => void log.push('train ' + dir),
+    }
+    return { d: createDirector(engine as never, () => 0), log, engine }
+  }
+  it('la musique joue tant qu\'un menu est affiché, et s\'arrête en entrant dans un niveau', () => {
+    const { d, log } = lobbySetup()
+    d.lobby(true)
+    d.lobby(true) // pas deux fois
+    expect(log).toEqual(['music'])
+    d.lobby(false)
+    expect(log).toEqual(['music', 'music-stop'])
+  })
+  it('le train sonne un passage sur deux, et la musique baisse puis remonte pendant qu\'il passe', () => {
+    vi.useFakeTimers()
+    const { d, log, engine } = lobbySetup()
+    d.lobby(true)
+    d.lobbyPass(1)
+    d.lobbyPass(-1)
+    d.lobbyPass(1)
+    expect(log.filter((x) => x.startsWith('train'))).toEqual(['train 1', 'train 1'])
+    vi.advanceTimersByTime(1600)
+    expect(engine.setBus).toHaveBeenCalledWith('music', expect.any(Number), 1.5)
+    vi.advanceTimersByTime(5000)
+    expect(engine.setBus).toHaveBeenLastCalledWith('music', 0.55, 2.5)
+    vi.useRealTimers()
+  })
+  it('son coupé : ni musique ni train ; rallumé dans un menu, la musique reprend', () => {
+    const { d, log } = lobbySetup()
+    soundOn.value = false
+    d.lobby(true)
+    d.lobbyPass(1)
+    expect(log).toEqual([])
+    d.setOn(true)
+    expect(log).toEqual(['music'])
+    d.setOn(false)
+    expect(log).toEqual(['music', 'music-stop'])
+  })
+})

@@ -4,13 +4,15 @@
 type Ctor = typeof AudioContext
 const Ctx: Ctor | undefined = typeof window === 'undefined' ? undefined : (window.AudioContext ?? (window as unknown as { webkitAudioContext?: Ctor }).webkitAudioContext)
 
-export type BusName = 'sfx' | 'train' | 'amb'
-export const BUS_LEVEL: Record<BusName, number> = { sfx: 1, train: 0.3, amb: 0.5 }
+export type BusName = 'sfx' | 'train' | 'amb' | 'music' | 'lobby'
+// music : la musique des menus (lobby) ; lobby : le train qui passe derrière, sur l'accueil
+export const BUS_LEVEL: Record<BusName, number> = { sfx: 1, train: 0.3, amb: 0.5, music: 0.55, lobby: 0.5 }
 const MASTER_LEVEL = 0.55
 
 let ctx: AudioContext | null = null
 let master: GainNode
 let noise: AudioBuffer
+let reverb: ConvolverNode
 const buses = {} as Record<BusName, GainNode>
 
 export const available = () => !!Ctx
@@ -32,6 +34,13 @@ function ensure(): AudioContext | null {
     noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate)
     const d = noise.getChannelData(0)
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
+    // réverbération (salle calculée : du bruit qui s'éteint), pour la musique et le train de l'accueil
+    reverb = ctx.createConvolver()
+    const n = Math.floor(ctx.sampleRate * 3), ir = ctx.createBuffer(2, n, ctx.sampleRate)
+    for (let ch = 0; ch < 2; ch++) { const x = ir.getChannelData(ch); for (let i = 0; i < n; i++) x[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.4) }
+    reverb.buffer = ir
+    const wet = ctx.createGain(); wet.gain.value = 0.45
+    reverb.connect(wet); wet.connect(master)
   }
   if (ctx.state === 'suspended') void ctx.resume()
   return ctx
@@ -172,4 +181,124 @@ const LOOPS: Record<LoopName, { bus: BusName; start: (out: AudioNode) => () => v
 export function startLoop(name: LoopName): () => void {
   if (!ensure()) return () => {}
   return LOOPS[name].start(buses[LOOPS[name].bus])
+}
+
+// ---- musique des menus : « Quai du matin » (lo-fi, 74 bpm) et le train à vapeur qui passe derrière ----
+// Choisis sur le banc d'écoute : piano électrique doux, basse ronde, balais, léger craquement de disque ; le train passe en 9 s,
+// d'une enceinte à l'autre, plus fort et plus clair devant, avec l'effet Doppler sur le sifflet.
+function seeded(seed: number): () => number {
+  let a = seed >>> 0
+  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296 }
+}
+function envAt(g: GainNode, t: number, a: number, peak: number, d: number): void {
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + a)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + a + d)
+}
+function wetSend(node: AudioNode, out: AudioNode, wet: number): void {
+  node.connect(out)
+  if (wet > 0) { const s = ctx!.createGain(); s.gain.value = wet; node.connect(s); s.connect(reverb) }
+}
+function epiano(t: number, m: number, dur: number, v: number, out: AudioNode): void {
+  const c = ctx!, f = mtof(m), car = c.createOscillator(), mod = c.createOscillator(), mg = c.createGain(), g = c.createGain()
+  car.frequency.value = f; mod.frequency.value = f
+  mg.gain.setValueAtTime(f * 1.4, t); mg.gain.exponentialRampToValueAtTime(f * 0.04, t + 0.7)
+  mod.connect(mg); mg.connect(car.frequency); car.connect(g)
+  envAt(g, t, 0.006, v, dur)
+  wetSend(g, out, 0.25)
+  car.start(t); mod.start(t); car.stop(t + dur + 0.2); mod.stop(t + dur + 0.2)
+}
+function bassAt(t: number, m: number, dur: number, v: number, out: AudioNode): void {
+  const c = ctx!, a = c.createOscillator(), b = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter(), k = c.createGain()
+  a.frequency.value = b.frequency.value = mtof(m); b.type = 'triangle'; k.gain.value = 0.3
+  lp.type = 'lowpass'; lp.frequency.value = 480
+  a.connect(lp); b.connect(k); k.connect(lp); lp.connect(g); envAt(g, t, 0.012, v, dur); g.connect(out)
+  for (const x of [a, b]) { x.start(t); x.stop(t + dur + 0.1) }
+}
+function hitAt(t: number, d: number, o: { type?: BiquadFilterType; f: number; f2?: number; q?: number; v: number; a?: number }, out: AudioNode, wet = 0): void {
+  const c = ctx!, s = c.createBufferSource(); s.buffer = noise
+  const bq = c.createBiquadFilter(); bq.type = o.type ?? 'bandpass'; bq.frequency.setValueAtTime(o.f, t)
+  if (o.f2) bq.frequency.exponentialRampToValueAtTime(o.f2, t + d)
+  bq.Q.value = o.q ?? 1
+  const g = c.createGain(); envAt(g, t, o.a ?? 0.005, o.v, d)
+  s.connect(bq); bq.connect(g); wetSend(g, out, wet)
+  s.start(t, Math.random() * 1.5, d + (o.a ?? 0.005) + 0.05)
+}
+function kickAt(t: number, v: number, out: AudioNode): void {
+  const c = ctx!, os = c.createOscillator(), g = c.createGain()
+  os.frequency.setValueAtTime(115, t); os.frequency.exponentialRampToValueAtTime(42, t + 0.18)
+  envAt(g, t, 0.004, v, 0.28); os.connect(g); g.connect(out); os.start(t); os.stop(t + 0.4)
+}
+const QUAI = [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]] // Fa maj7, Mi m7, Ré m7, Do maj7
+function quaiStep(i: number, t: number, sd: number, out: AudioNode): void {
+  const bar = Math.floor(i / 8), s = i % 8, ch = QUAI[bar % 4]
+  t += s % 2 ? sd * 0.18 : 0 // swing
+  if (s === 0) ch.forEach((m, k) => epiano(t + k * 0.014, m + 12, sd * 7, 0.065, out))
+  if (s === 5) ch.slice(1).forEach((m, k) => epiano(t + k * 0.01, m + 12, sd * 2.5, 0.035, out))
+  if (s === 0) bassAt(t, ch[0] - 12, sd * 3, 0.22, out)
+  if (s === 3) bassAt(t, ch[0] - 5, sd * 1.4, 0.14, out)
+  if (s === 6) bassAt(t, ch[0] - 12, sd * 1.4, 0.15, out)
+  if (s === 0 || (s === 5 && bar % 2)) kickAt(t, 0.22, out)
+  if (s === 4) hitAt(t, 0.14, { f: 1800, q: 0.7, v: 0.05 }, out, 0.2) // caisse claire aux balais
+  if (s % 2) hitAt(t, 0.05, { type: 'highpass', f: 7000, v: s === 3 || s === 7 ? 0.045 : 0.028 }, out)
+  const r = seeded(bar * 31 + s * 7 + 1)
+  if (bar % 8 >= 2 && r() < 0.28) { const pool = [ch[0] + 24, ch[1] + 24, ch[2] + 24, ch[3] + 12]; epiano(t, pool[Math.floor(r() * 4)], sd * 3, 0.045, out) }
+  if (r() < 0.55) hitAt(t + r() * sd, 0.004, { type: 'highpass', f: 2500, v: 0.035 }, out) // craquement du disque
+}
+// Lance la musique des menus (fondu d'entrée) ; renvoie son arrêt (fondu de sortie).
+export function startMusic(): () => void {
+  const c = ensure()
+  if (!c) return () => {}
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, c.currentTime); g.gain.linearRampToValueAtTime(1, c.currentTime + 2)
+  g.connect(buses.music)
+  const sd = 60 / 74 / 2 // une croche à 74 bpm
+  const stop = looper(sd, (dt, i) => quaiStep(i, c.currentTime + dt, sd, g))
+  return () => {
+    stop()
+    const t = c.currentTime
+    g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0.0001, t + 0.8)
+    window.setTimeout(() => g.disconnect(), 6000)
+  }
+}
+// Le train à vapeur passe derrière, sur l'accueil : `dir` 1 de gauche à droite, -1 dans l'autre sens ; `dur` en secondes.
+export function lobbyTrain(dir: 1 | -1, dur = 9): void {
+  const c = ensure()
+  if (!c) return
+  const t0 = c.currentTime + 0.03, N = 96
+  const gain = new Float32Array(N), cut = new Float32Array(N), pan = new Float32Array(N), det = new Float32Array(N)
+  for (let i = 0; i < N; i++) {
+    const x = i / (N - 1), d = (x - 0.5) * 2, near = Math.exp(-Math.pow(d * 1.7, 2))
+    gain[i] = Math.max(0.0001, Math.min(1, x / 0.1, (1 - x) / 0.1) * (0.1 + 0.9 * near))
+    cut[i] = 450 + 5000 * near
+    pan[i] = dir * d * 0.9
+    det[i] = 45 * Math.tanh(-d * 3) // plus aigu en approchant, plus grave en s'éloignant
+  }
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueCurveAtTime(cut, t0, dur)
+  const g = c.createGain(); g.gain.setValueCurveAtTime(gain, t0, dur)
+  const p = c.createStereoPanner(); p.pan.setValueCurveAtTime(pan, t0, dur)
+  lp.connect(g); g.connect(p); p.connect(buses.lobby)
+  const w = c.createGain(); w.gain.value = 0.25; g.connect(w); w.connect(reverb)
+  // halètement de la cheminée, un temps fort sur quatre
+  let k = 0
+  for (let t = t0; t < t0 + dur; t += 0.27, k++) hitAt(t, 0.2, { f: k % 4 === 0 ? 700 : 950, q: 0.7, v: k % 4 === 0 ? 0.55 : 0.35, a: 0.015 }, lp)
+  // grondement sourd
+  const rs = c.createBufferSource(); rs.buffer = noise; rs.loop = true
+  const rl = c.createBiquadFilter(); rl.type = 'lowpass'; rl.frequency.value = 140
+  const rg = c.createGain(); rg.gain.value = 0.22
+  rs.connect(rl); rl.connect(rg); rg.connect(lp); rs.start(t0); rs.stop(t0 + dur)
+  // sifflet en accord, qui suit l'effet Doppler
+  const ws = t0 + dur * 0.3, wl = 1.5
+  const wg = c.createGain(), wf = c.createBiquadFilter()
+  wf.type = 'lowpass'; wf.frequency.value = 3000
+  wg.gain.setValueAtTime(0.0001, ws); wg.gain.linearRampToValueAtTime(0.09, ws + 0.08); wg.gain.setValueAtTime(0.09, ws + wl - 0.3); wg.gain.linearRampToValueAtTime(0.0001, ws + wl)
+  wf.connect(wg); wg.connect(lp)
+  for (const f of [622, 740, 932]) {
+    const os = c.createOscillator(); os.frequency.value = f
+    os.detune.setValueCurveAtTime(det, t0, dur)
+    const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = 6; lg.gain.value = 6; l.connect(lg); lg.connect(os.detune); l.start(ws); l.stop(ws + wl)
+    os.connect(wf); os.start(ws); os.stop(ws + wl + 0.05)
+  }
+  hitAt(ws, 1.4, { f: 1500, q: 1.5, v: 0.05, a: 0.08 }, lp) // le souffle du sifflet
+  window.setTimeout(() => { lp.disconnect(); g.disconnect(); p.disconnect(); w.disconnect() }, (dur + 3) * 1000)
 }
