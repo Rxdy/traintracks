@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { PAL, PARAMS, rng, type Scenery, type Theme, type TileKind } from '../scenery'
 import { SKY } from '../scenery/sky'
-import { build, canvasTex, dark, groundSvg, light, loadSvgTexture, makeKit, makeTextures, tickAnims, type Anim } from './world'
+import { build, canvasTex, finish, dark, groundSvg, light, loadSvgTexture, makeKit, makeTextures, tickAnims, type Anim } from './world'
 
 const NIGHT = new Set<Theme>(['lune', 'neon'])
 const HOT = new Set<Theme>(['volcan', 'enfer'])
@@ -16,7 +16,7 @@ export interface Home3D {
   dispose(): void
 }
 
-export async function createHome(canvas: HTMLCanvasElement, theme: Theme): Promise<Home3D> {
+export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass?: (dir: 1 | -1) => void): Promise<Home3D> {
   const pal = PAL[theme] ?? PAL.plaine
   const sky = SKY[theme] ?? SKY.plaine
   const params = PARAMS[theme]
@@ -24,6 +24,7 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme): Promi
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  const fin = finish(renderer)
   const scene = new THREE.Scene()
   const texs = makeTextures(7)
   const kit = makeKit(texs)
@@ -77,7 +78,7 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme): Promi
   }
 
   // sol : l'herbe de l'environnement, répétée jusqu'à l'horizon
-  const groundMat = new THREE.MeshStandardMaterial({ color: pal.a, roughness: 1 })
+  const groundMat = new THREE.MeshStandardMaterial({ color: pal.a, roughness: 1, toneMapped: false })
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120).rotateX(-Math.PI / 2), groundMat)
   ground.receiveShadow = true
   scene.add(ground)
@@ -212,6 +213,7 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme): Promi
   const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   const t0 = performance.now()
   let raf = 0
+  let prevK = -1
   let last = 0
   const span = 26 // de -13 à +13 : hors champ aux deux bouts
   const loop = (now: number) => {
@@ -229,6 +231,10 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme): Promi
       // un passage vers la droite (de 3 s à 12 s), puis vers la gauche (de 18 s à 27 s)
       const k = ((t / 1000) % CYCLE) / CYCLE
       const go = (a: number) => Math.min(1, Math.max(0, (k - a) / 0.3))
+      // un passage commence (9 s) : le son du train part avec lui
+      if (prevK >= 0 && prevK < 0.1 && k >= 0.1) onPass?.(1)
+      if (prevK >= 0 && prevK < 0.6 && k >= 0.6) onPass?.(-1)
+      prevK = k
       if (k < 0.5) {
         train.rotation.y = 0
         train.position.x = -span / 2 + go(0.1) * span
@@ -237,7 +243,7 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme): Promi
         train.position.x = span / 2 - go(0.6) * span
       }
     } else train.position.x = -40
-    renderer.render(scene, camera)
+    fin.draw(scene, camera)
   }
   raf = requestAnimationFrame(loop)
 
@@ -255,7 +261,7 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme): Promi
         }
       })
       disposables.forEach((x) => x.dispose())
-      renderer.dispose()
+      fin.dispose()
     },
   }
 }

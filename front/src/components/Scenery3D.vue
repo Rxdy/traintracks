@@ -42,11 +42,11 @@ onMounted(async () => {
     const remove = world.addView(() => {
       r.check(onSize)
       world.setMode('top')
-      r.renderer.render(world.scene, top)
+      r.draw(world.scene, top)
     })
     stop = () => {
       remove()
-      r.renderer.dispose()
+      r.dispose()
       releaseWorld(sc)
     }
     ready.value = true

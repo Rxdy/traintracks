@@ -7,6 +7,7 @@
 // une seule texture de sol, dessinée en SVG puis rastérisée : c'est le rendu « option 1 ». Les objets debout sont
 // en volumes, avec des textures générées par le code (écorce, tuiles, pierre, bois, façades). Aucune image à charger.
 import * as THREE from 'three'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { PAL, rng, type Scenery, type Tile } from '../scenery'
 import { riverD, sample } from '../scenery/motion'
 import type { Pal } from '../scenery/themes'
@@ -272,12 +273,31 @@ export function makeKit(texs: Texs) {
     parent?.add(o)
     return o
   }
-  return { mat, geo, mesh, texs, dispose: () => { mats.forEach((m) => m.dispose()); geos.forEach((g) => g.dispose()) } }
+  // Ombre de contact : une tache sombre et douce sous chaque objet debout (fausse occlusion ambiante, presque gratuite) : il « se pose » sur le sol.
+  let contactTex: THREE.CanvasTexture | null = null
+  const contactMat = () =>
+    mat('#000000', (contactTex ??= canvasTex(64, 64, (g, w) => {
+      const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2)
+      gr.addColorStop(0, 'rgba(0,0,0,0.55)')
+      gr.addColorStop(0.55, 'rgba(0,0,0,0.25)')
+      gr.addColorStop(1, 'rgba(0,0,0,0)')
+      g.fillStyle = gr
+      g.fillRect(0, 0, w, w)
+    }, false)), { transparent: true, depthWrite: false, toneMapped: false, flatShading: false })
+  const contact = (size: number, parent: THREE.Object3D, x = 0, z = 0) => {
+    const o = new THREE.Mesh(geo('contact', () => new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2)), contactMat())
+    o.scale.set(size, 1, size)
+    o.position.set(x, 0.004, z)
+    o.renderOrder = 1
+    parent.add(o)
+    return o
+  }
+  return { mat, geo, mesh, contact, texs, dispose: () => { mats.forEach((m) => m.dispose()); geos.forEach((g) => g.dispose()); contactTex?.dispose() } }
 }
 export type Kit = ReturnType<typeof makeKit>
 
 export function build(kind: Tile['kind'], v: number, pal: Pal, kit: Kit, anims: Anim[], delay: number): THREE.Group | null {
-  const { mat, geo, mesh, texs } = kit
+  const { mat, geo, mesh, contact, texs } = kit
   const g = new THREE.Group()
   const trunk = pal.trunk ?? '#7a4e2d'
   const sway = () => anims.push({ g, delay, kind: 'sway', phase: v * 1.7 })
@@ -285,20 +305,25 @@ export function build(kind: Tile['kind'], v: number, pal: Pal, kit: Kit, anims: 
     case 'tree': {
       mesh(geo('trunk', () => new THREE.CylinderGeometry(0.045, 0.065, 0.3, 7)), mat(trunk, texs.bark), 0, 0.15, 0, g)
       const c = pal.canopy
-      const blob = (r: number) => geo('blob' + r, () => new THREE.IcosahedronGeometry(r, 1))
-      mesh(blob(0.25), mat(c[v % 3], texs.speckle), 0, 0.47, 0, g).rotation.y = v
-      mesh(blob(0.17), mat(c[(v + 1) % 3], texs.speckle), -0.15, 0.36, 0.06, g)
-      mesh(blob(0.18), mat(c[(v + 2) % 3], texs.speckle), 0.15, 0.37, 0.05, g)
-      mesh(blob(0.13), mat(light(c[v % 3], 0.12), texs.speckle), 0.02, 0.33, 0.16, g)
+      const blob = (r: number) => geo('blob' + r, () => new THREE.IcosahedronGeometry(r, 2)) // lisse : le feuillage n'est plus facetté
+      mesh(blob(0.25), mat(c[v % 3], texs.speckle, { flatShading: false }), 0, 0.47, 0, g).rotation.y = v
+      mesh(blob(0.17), mat(c[(v + 1) % 3], texs.speckle, { flatShading: false }), -0.15, 0.36, 0.06, g)
+      mesh(blob(0.18), mat(c[(v + 2) % 3], texs.speckle, { flatShading: false }), 0.15, 0.37, 0.05, g)
+      mesh(blob(0.13), mat(light(c[v % 3], 0.12), texs.speckle, { flatShading: false }), 0.02, 0.33, 0.16, g)
+      // plus de volume et de relief : une touche claire au sommet (là où le soleil frappe) et une masse sombre dans le bas
+      mesh(blob(0.12), mat(light(c[(v + 1) % 3], 0.2), texs.speckle, { flatShading: false }), 0.06, 0.62, -0.02, g)
+      mesh(blob(0.15), mat(dark(c[(v + 2) % 3], 0.18), texs.speckle, { flatShading: false }), -0.04, 0.27, -0.12, g)
+      contact(0.62, g)
       if (pal.fruit && v === 2) for (const [x, y, z] of [[-0.1, 0.5, 0.18], [0.12, 0.42, 0.2], [0.04, 0.62, 0.12]]) mesh(geo('fruit', () => new THREE.SphereGeometry(0.035, 8, 6)), mat(pal.fruit, null, { flatShading: false, roughness: 0.4 }), x, y, z, g)
       sway()
       break
     }
     case 'pine': {
       mesh(geo('ptrunk', () => new THREE.CylinderGeometry(0.04, 0.05, 0.16, 6)), mat(trunk, texs.bark), 0, 0.08, 0, g)
-      const tiers: [number, number, number][] = [[0.27, 0.38, 0.32], [0.2, 0.32, 0.53], [0.13, 0.26, 0.72]]
+      contact(0.5, g)
+      const tiers: [number, number, number][] = [[0.29, 0.34, 0.27], [0.24, 0.32, 0.43], [0.18, 0.3, 0.6], [0.11, 0.26, 0.77]]
       tiers.forEach(([r, h, y], i) => {
-        mesh(geo(`cone${r}`, () => new THREE.ConeGeometry(r, h, 8)), mat(pal.pine[i % 2], texs.speckle), 0, y, 0, g)
+        mesh(geo(`cone${r}`, () => new THREE.ConeGeometry(r, h, 12)), mat(pal.pine[i % 2], texs.speckle, { flatShading: false }), 0, y, 0, g)
         if (pal.snow) mesh(geo(`snow${r}`, () => new THREE.ConeGeometry(r * 0.55, h * 0.4, 8)), mat('#ffffff', null, { roughness: 0.6 }), 0, y + h * 0.3, 0, g)
       })
       sway()
@@ -307,6 +332,7 @@ export function build(kind: Tile['kind'], v: number, pal: Pal, kit: Kit, anims: 
     case 'house': {
       const wall = pal.walls[v % pal.walls.length]
       const roof = pal.roofs[v % pal.roofs.length]
+      contact(0.78, g)
       mesh(geo('walls', () => new THREE.BoxGeometry(0.52, 0.3, 0.44)), mat(wall, texs.plaster), 0, 0.15, 0, g)
       const roofGeo = geo('roof', () => {
         const sh = new THREE.Shape()
@@ -576,14 +602,14 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
   const disposables: { dispose(): void }[] = [kit, skyTex, ...Object.values(texs)]
 
   // sol du décor
-  const groundMat = new THREE.MeshStandardMaterial({ color: pal.a, roughness: 1 })
+  const groundMat = new THREE.MeshStandardMaterial({ color: pal.a, roughness: 1, toneMapped: false }) // le sol est une peinture : on garde ses couleurs franches
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(sc.cols, sc.rows).rotateX(-Math.PI / 2), groundMat)
   ground.position.set(cx, 0, cz)
   ground.receiveShadow = true
   world.add(ground)
   disposables.push(ground.geometry, groundMat)
   // au-delà du décor : la même herbe qui continue jusqu'à l'horizon (on ne la voit que depuis la cabine)
-  const farMat = new THREE.MeshStandardMaterial({ color: pal.a, roughness: 1 })
+  const farMat = new THREE.MeshStandardMaterial({ color: pal.a, roughness: 1, toneMapped: false })
   const far = new THREE.Mesh(new THREE.PlaneGeometry(160, 160).rotateX(-Math.PI / 2), farMat)
   far.position.set(cx, -0.004, cz)
   far.receiveShadow = true
@@ -799,11 +825,36 @@ export function releaseWorld(sc: Scenery): void {
   void e.p.then((w) => w.dispose()).catch(() => undefined)
 }
 
+// Rendu soigné : tons de cinéma (ACES : hautes lumières qui ne brûlent pas, couleurs plus riches) et un léger éclairage d'ambiance
+// (reflets doux sur l'eau, les toits, les rails) fabriqué sur place, sans fichier à télécharger. Chaque rendu a le sien (un contexte WebGL
+// ne partage pas ses textures), posé sur la scène juste avant de dessiner. Le sol (une peinture) n'est pas retouché : toneMapped = false.
+export function finish(renderer: THREE.WebGLRenderer) {
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 0.9
+  const pm = new THREE.PMREMGenerator(renderer)
+  const env = pm.fromScene(new RoomEnvironment(), 0.04).texture
+  pm.dispose()
+  return {
+    draw(scene: THREE.Scene, camera: THREE.Camera) {
+      scene.environment = env
+      scene.environmentIntensity = 0.07
+      renderer.render(scene, camera)
+    },
+    dispose() {
+      env.dispose()
+      renderer.dispose()
+    },
+  }
+}
+
 // Un rendu WebGL sur un canvas, à la bonne résolution (la grille est agrandie par CSS à la victoire : on dessine à la taille réelle).
 export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: !opaque })
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.shadowMap.autoUpdate = true
+  const fin = finish(renderer)
+  const { draw } = fin
   let lastScale = 0
   let frame = 0
   const fit = (onSize: (w: number, h: number) => void) => {
@@ -818,6 +869,8 @@ export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
   }
   return {
     renderer,
+    draw,
+    dispose: fin.dispose,
     fit,
     // à appeler à chaque image : se recale si la taille à l'écran a changé (agrandissement CSS animé)
     check(onSize: (w: number, h: number) => void) {

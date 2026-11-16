@@ -38,11 +38,11 @@ onMounted(async () => {
       cam.position.set(x, 0.42, z)
       ahead.set(x + c.hx * 3, 0.3, z + c.hy * 3) // regard à peine vers le bas : la voie devant, l'horizon dans le tiers haut
       cam.lookAt(ahead)
-      r.renderer.render(world.scene, cam)
+      r.draw(world.scene, cam)
     })
     stop = () => {
       remove()
-      r.renderer.dispose()
+      r.dispose()
       releaseWorld(sc)
     }
     ready.value = true
