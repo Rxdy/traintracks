@@ -1,7 +1,7 @@
 // Compte : changement d'adresse e-mail, export et import des données, préférence de classement.
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import type { Ctx } from './auth.js'
-import { checkOwnerPassword, emailKeyOf, newToken, normEmail, sha256 } from './auth.js'
+import { checkOwnerPassword, emailKeyOf, newToken, normEmail, sha256, validPseudo } from './auth.js'
 import { canon } from './journey.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
@@ -65,6 +65,21 @@ export async function confirmEmailChange(ctx: Ctx, token: string): Promise<Chang
 }
 
 // --- Préférence : apparaître dans le classement ---------------------------------------------------------------
+// Changer de pseudo (tous les comptes, y compris ceux créés par Google, qui reçoivent un pseudo tiré au hasard).
+export async function changePseudo(ctx: Ctx, userId: string, raw: string): Promise<{ ok: true; pseudo: string } | { ok: false; code: 'invalid' | 'pseudo_taken' }> {
+  const pseudo = raw.trim()
+  if (!validPseudo(pseudo)) return { ok: false, code: 'invalid' }
+  const key = pseudo.toLowerCase()
+  const taken = await ctx.db.query('SELECT 1 FROM users WHERE pseudo_key = $1 AND id <> $2', [key, userId])
+  if (taken.rows.length) return { ok: false, code: 'pseudo_taken' }
+  try {
+    await ctx.db.query('UPDATE users SET pseudo = $2, pseudo_key = $3 WHERE id = $1', [userId, pseudo, key])
+  } catch {
+    return { ok: false, code: 'pseudo_taken' } // pris entre-temps (contrainte d'unicité)
+  }
+  return { ok: true, pseudo }
+}
+
 export async function setLeaderboard(ctx: Ctx, userId: string, visible: boolean): Promise<void> {
   await ctx.db.query('UPDATE users SET leaderboard = $2 WHERE id = $1', [userId, visible])
 }

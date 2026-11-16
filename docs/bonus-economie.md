@@ -95,7 +95,7 @@ gagnées en jouant, directement depuis le bouton de l'aide (jusqu'au plafond de 
   achat avec les pièces gagnées, solde visible à l'accueil et en partie, reprise des cases révélées.
   Les rails révélés se comportent comme des rails imposés (verrouillés, dans le bon sens).
 - Fait : générateur de puzzles à solution unique (shared/generator.ts) et puzzle du jour côté serveur : graine =
-  date (fuseau Europe/Paris), 5×5 du lundi au jeudi, 6×6 du vendredi au dimanche, même grille pour tous,
+  date (fuseau Europe/Paris), toujours en 6×6, même grille pour tous,
   sans aide, premier temps du jour seul compté, 20 pièces + 2 par jour de série (max +10), statistiques
   (nombre, moyenne, meilleur, pire, série) et reprise gardée par le serveur.
 - Reste : Google côté serveur, classement, étoiles de rapidité.

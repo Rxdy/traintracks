@@ -31,9 +31,8 @@ describe('la date du jour', () => {
     expect(previousDay('2026-03-01')).toBe('2026-02-28')
     expect(previousDay('2026-01-01')).toBe('2025-12-31')
   })
-  it('5×5 du lundi au jeudi, 6×6 du vendredi au dimanche', () => {
-    expect(['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12'].map(sizeFor)).toEqual([5, 5, 5, 5])
-    expect(['2026-11-13', '2026-11-14', '2026-11-15'].map(sizeFor)).toEqual([6, 6, 6])
+  it('toujours 6×6, tous les jours de la semaine', () => {
+    expect(['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15'].map(sizeFor)).toEqual([6, 6, 6, 6, 6, 6, 6])
   })
 })
 
@@ -43,7 +42,7 @@ describe('puzzle du jour (serveur)', () => {
     const a = await startDaily(db, U, D1, new Date(t0))
     const b = await startDaily(db, 'u:88888888-8888-8888-8888-888888888888', D1, new Date(t0 + 5000))
     expect(a.puzzle).toEqual(b.puzzle)
-    expect(a.puzzle).toEqual(generate(`daily:${D1}`, 5).puzzle) // reproductible depuis la date
+    expect(a.puzzle).toEqual(generate(`daily:${D1}`, 6).puzzle) // reproductible depuis la date
     expect(JSON.stringify(a)).not.toMatch(/solution/i)
     expect((await db.query('SELECT 1 FROM daily_puzzles')).rows).toHaveLength(1)
   })

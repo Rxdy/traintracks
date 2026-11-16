@@ -160,8 +160,16 @@ describe('page Classement', () => {
     const rows = w.findAll('[data-test=ranking-row]')
     expect(rows.map((r) => r.text())).toEqual(['1ZoéNiveau 120', '2AliceNiveau 90', '3BobNiveau 12'])
     expect(rows[1].classes()).toContain('me')
-    expect(w.find('[data-test=ranking-me]').text()).toContain('2')
-    expect(w.find('[data-test=ranking-me]').text()).toContain('sur 3')
+    expect(w.find('[data-test=ranking-me]').exists()).toBe(false) // déjà dans les 10 premiers : pas de ligne en plus
+  })
+  it('hors des 10 premiers : ma ligne, avec ma place, juste sous les 10', async () => {
+    const top = Array.from({ length: 10 }, (_, i) => ({ rank: i + 1, pseudo: 'J' + (i + 1), value: 200 - i, me: false }))
+    mockFetch({ status: 200, body: board({ entries: top, me: { rank: 27, value: 40, pseudo: 'Alice', avatar: 'chat' }, total: 31 }) })
+    const w = mount(RankingView)
+    await flushPromises()
+    expect(w.findAll('[data-test=ranking-row]')).toHaveLength(10)
+    expect(w.find('[data-test=ranking-me]').text()).toBe('27AliceNiveau 40')
+    expect(w.find('[data-test=ranking-me] li').classes()).toContain('me')
   })
   it('onglets Du jour (temps) et Séries (jours), avec le bon appel', async () => {
     const calls = mockFetch({ status: 200, body: board() }, { status: 200, body: board({ board: 'jour', entries: [{ rank: 1, pseudo: 'Bob', value: 61_000, me: false }], me: null, total: 1 }) }, { status: 200, body: board({ board: 'serie', entries: [{ rank: 1, pseudo: 'Zoé', value: 5, me: false }], me: null, total: 1 }) })

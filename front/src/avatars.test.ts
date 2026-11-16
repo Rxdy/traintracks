@@ -161,3 +161,25 @@ describe('Classement : l\'avatar à côté du pseudo', () => {
     expect(lignes[0].find('.pseudo').text()).toBe('Alice')
   })
 })
+
+describe('Compte : changer de pseudo', () => {
+  it('le crayon ouvre un champ ; enregistré, le pseudo change partout ; refus du serveur : message clair', async () => {
+    const { w, calls } = await monter({ current: 'loco', owned: [], coins: 0 }, { 'POST /api/account/pseudo': { status: 200, body: { ok: true, pseudo: 'Cheminote' } } }, false)
+    await w.find('[data-test=pseudo-edit]').trigger('click')
+    await w.find('[data-test=pseudo-input]').setValue('Cheminote')
+    await w.find('[data-test=pseudo-form]').trigger('submit')
+    await flushPromises()
+    expect(calls.at(-1)).toEqual({ key: 'POST /api/account/pseudo', body: { pseudo: 'Cheminote' } })
+    expect(user.value?.name).toBe('Cheminote')
+    expect(w.find('[data-test=pseudo]').text()).toBe('Cheminote')
+  })
+  it('pseudo déjà pris : le champ reste ouvert avec le message', async () => {
+    const { w } = await monter({ current: 'loco', owned: [], coins: 0 }, { 'POST /api/account/pseudo': { status: 409, body: { error: 'pseudo_taken' } } }, false)
+    await w.find('[data-test=pseudo-edit]').trigger('click')
+    await w.find('[data-test=pseudo-input]').setValue('Bob')
+    await w.find('[data-test=pseudo-form]').trigger('submit')
+    await flushPromises()
+    expect(w.find('[data-test=pseudo-msg]').text()).toBe('Ce pseudo est déjà pris.')
+    expect(user.value?.name).toBe('Alice')
+  })
+})

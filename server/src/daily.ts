@@ -21,10 +21,10 @@ const DAY = 86_400_000
 const toMs = (d: string) => Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)))
 export const previousDay = (d: string): string => new Date(toMs(d) - DAY).toISOString().slice(0, 10)
 
-// Du lundi au jeudi : 5×5 ; du vendredi au dimanche : 6×6.
-export function sizeFor(date: string): number {
-  const wd = new Date(toMs(date)).getUTCDay() // 0 = dimanche
-  return wd >= 1 && wd <= 4 ? 5 : 6
+// Toujours 6×6, tous les jours (la grille est générée par le serveur, une fois par jour, puis gardée en base).
+export const DAILY_SIZE = 6
+export function sizeFor(_date: string): number {
+  return DAILY_SIZE
 }
 
 export interface PublicDaily {
@@ -79,7 +79,7 @@ export interface DailyStatus {
   done: boolean
   timeMs: number | null
   streak: number
-  size: number // taille de la grille du jour (5×5 en semaine, 6×6 du vendredi au dimanche)
+  size: number // taille de la grille du jour (toujours 6×6)
 }
 
 export async function dailyStatus(db: Db, owner: string, date: string): Promise<DailyStatus> {

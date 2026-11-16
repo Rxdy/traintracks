@@ -28,6 +28,8 @@ export interface PublicUser {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 const PSEUDO_RE = /^[\p{L}\p{N}_.-]+$/u
+// Pseudo acceptable : 2 à 24 caractères, lettres, chiffres, « _ », « . » et « - » (même règle à l'inscription et au changement).
+export const validPseudo = (p: string): boolean => p.length >= 2 && p.length <= 24 && PSEUDO_RE.test(p)
 export const SIGNUP_COINS = 100
 const CONFIRM_TTL_MS = 24 * 3600_000
 const SESSION_TTL_MS = 30 * 24 * 3600_000
@@ -53,7 +55,7 @@ export type RegisterResult =
 export async function register(ctx: Ctx, input: { pseudo: string; email: string; password: string }): Promise<RegisterResult> {
   const pseudo = input.pseudo.trim()
   const email = normEmail(input.email)
-  if (pseudo.length < 2 || pseudo.length > 24 || !PSEUDO_RE.test(pseudo)) return { ok: false, code: 'invalid', field: 'pseudo' }
+  if (!validPseudo(pseudo)) return { ok: false, code: 'invalid', field: 'pseudo' }
   if (email.length > 254 || !EMAIL_RE.test(email)) return { ok: false, code: 'invalid', field: 'email' }
   if (!input.password || input.password.length > 200) return { ok: false, code: 'invalid', field: 'password' }
 

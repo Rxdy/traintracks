@@ -184,6 +184,18 @@ export async function confirmEmailChangeFromUrl(search = window.location.search)
   history.replaceState(null, '', window.location.pathname)
 }
 
+// --- Pseudo : modifiable par tous les comptes (ceux créés par Google reçoivent un pseudo au hasard) ---
+export async function changePseudo(pseudo: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const r = await api('POST', '/api/account/pseudo', { pseudo })
+  if (r?.status === 200) {
+    if (user.value) user.value = { ...user.value, name: (r.data as { pseudo: string }).pseudo }
+    return { ok: true }
+  }
+  if (r?.status === 409) return { ok: false, error: 'Ce pseudo est déjà pris.' }
+  if (r?.status === 400) return { ok: false, error: '2 à 24 caractères : lettres, chiffres, « _ », « . » ou « - ».' }
+  return { ok: false, error: 'Serveur injoignable : vérifie ta connexion.' }
+}
+
 // --- Classement : apparaître ou non ---
 export async function setLeaderboard(visible: boolean): Promise<boolean> {
   const r = await api('POST', '/api/account/leaderboard', { visible })

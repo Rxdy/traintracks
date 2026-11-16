@@ -6,10 +6,11 @@ import { fetchBoard, formatTime, type BoardData, type BoardId } from '../stats'
 
 // Classements : ouverts à tous en lecture (seuls le pseudo et l'avatar sont montrés) ; « ma place » si on est connecté.
 const go = inject<(view: string) => void>('go', () => undefined)
-const BOARDS: { id: BoardId; label: string; hint: string }[] = [
-  { id: 'voyage', label: 'Voyage', hint: 'Le niveau le plus loin atteint. À égalité, celui qui y est arrivé le premier.' },
-  { id: 'jour', label: 'Du jour', hint: "Les temps du puzzle d'aujourd'hui, du plus rapide au plus lent." },
-  { id: 'serie', label: 'Séries', hint: 'Ta plus longue série de jours de suite avec le puzzle du jour. Si tu perds ta série, ton record reste : il n\'est remplacé que quand tu le dépasses.' },
+// Les 10 premiers ; si je n'y suis pas, ma ligne s'ajoute juste dessous, avec ma place.
+const BOARDS: { id: BoardId; label: string }[] = [
+  { id: 'voyage', label: 'Voyage' },
+  { id: 'jour', label: 'Du jour' },
+  { id: 'serie', label: 'Séries' },
 ]
 const board = ref<BoardId>('voyage')
 const data = ref<BoardData | null>(null)
@@ -34,7 +35,6 @@ const value = (v: number): string => (board.value === 'voyage' ? `Niveau ${v}` :
     <div class="tabs" role="tablist">
       <button v-for="b in BOARDS" :key="b.id" type="button" role="tab" class="tab" :class="{ on: board === b.id }" :aria-selected="board === b.id" :data-test="'tab-' + b.id" @click="board = b.id">{{ b.label }}</button>
     </div>
-    <p class="hint halo">{{ BOARDS.find((b) => b.id === board)!.hint }}</p>
 
     <p v-if="failed" class="note halo" data-test="ranking-error">Classement indisponible : vérifie ta connexion.</p>
     <p v-else-if="!data" class="note halo">…</p>
@@ -47,8 +47,17 @@ const value = (v: number): string => (board.value === 'voyage' ? `Niveau ${v}` :
           <span class="val">{{ value(e.value) }}</span>
         </li>
       </ol>
-      <p v-if="user && data.me" class="mine halo" data-test="ranking-me">Ta place : <b>{{ data.me.rank }}</b> sur {{ data.total }}</p>
-      <p v-else-if="user && data.entries.length" class="note halo" data-test="ranking-hidden">
+      <template v-if="user && data.me && !data.entries.some((e) => e.me)">
+        <p class="gap" aria-hidden="true">⋮</p>
+        <ol class="list" data-test="ranking-me">
+          <li class="me">
+            <span class="rank">{{ data.me.rank }}</span>
+            <span class="name"><Avatar :id="data.me.avatar" class="pic" /><span class="pseudo">{{ data.me.pseudo }}</span></span>
+            <span class="val">{{ value(data.me.value) }}</span>
+          </li>
+        </ol>
+      </template>
+      <p v-else-if="user && !data.me && data.entries.length" class="note halo" data-test="ranking-hidden">
         Tu n'es pas classé ici{{ user.leaderboard === false ? " (tu as choisi de ne pas apparaître : réglage dans l'écran Compte)" : '' }}.
       </p>
       <p v-else-if="!user" class="note halo">
@@ -83,10 +92,17 @@ section {
   background: #2563eb;
   color: #fff;
 }
-.hint,
 .note {
   font-size: 0.85rem;
   margin: 0.6rem 0;
+}
+.gap {
+  margin: 0.15rem 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 .list {
   list-style: none;
@@ -133,9 +149,6 @@ section {
 .val {
   font-variant-numeric: tabular-nums;
   color: #4b5563;
-}
-.mine {
-  margin: 0.8rem 0 0;
 }
 .link {
   border: 0;

@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { buildApp } from './app.js'
 import { edgesOf, makeGame, STRONG } from './helpers.test-util.js'
+import { makeCtx } from './helpers.test-util.js'
+import { register } from './auth.js'
+import { changePseudo } from './accountData.js'
 
 async function setup() {
   const c = await makeGame()
@@ -158,7 +161,7 @@ describe('statistiques et classements', () => {
     expect(pub.me).toBeNull()
     expect(pub.entries.every((e: { me: boolean }) => !e.me)).toBe(true)
     const mine = (await get('/api/leaderboard?board=voyage', b)).json()
-    expect(mine.me).toEqual({ rank: 3, value: 1 })
+    expect(mine.me).toMatchObject({ rank: 3, value: 1, pseudo: 'Bob' }) // ma ligne complète, montrée sous les 10 premiers
     expect(mine.entries.find((e: { pseudo: string }) => e.pseudo === 'Bob').me).toBe(true)
     expect(JSON.stringify(pub)).not.toMatch(/@|email|id"/)
     // Alice se masque : elle disparaît du classement
@@ -182,7 +185,7 @@ describe('statistiques et classements', () => {
     await db.query("INSERT INTO daily_results (owner, date, time_ms, solved_at) VALUES ($1,$2,90000,now()),($3,$2,60000,now()),($1,$4,50000,now())", [`u:${idOf('Alice')}`, day, `u:${idOf('Bob')}`, prev])
     const j = (await get('/api/leaderboard?board=jour', a)).json()
     expect(j.entries.map((e: { pseudo: string; value: number }) => [e.pseudo, e.value])).toEqual([['Bob', 60000], ['Alice', 90000]])
-    expect(j.me).toEqual({ rank: 2, value: 90000 })
+    expect(j.me).toMatchObject({ rank: 2, value: 90000 })
     const s = (await get('/api/leaderboard?board=serie', a)).json()
     expect(s.entries[0]).toMatchObject({ pseudo: 'Alice', value: 2 }) // hier + aujourd'hui
     expect(s.entries[1]).toMatchObject({ pseudo: 'Bob', value: 1 })
@@ -200,10 +203,25 @@ describe('statistiques et classements', () => {
     for (const n of [1, 0]) await db.query('INSERT INTO daily_results (owner, date, time_ms, solved_at) VALUES ($1,$2,1000,now())', [own('Bob'), ago(n)])
     let s = (await get('/api/leaderboard?board=serie', a)).json()
     expect(s.entries.map((e: { pseudo: string; value: number }) => [e.pseudo, e.value])).toEqual([['Alice', 4], ['Bob', 2]])
-    expect(s.me).toEqual({ rank: 1, value: 4 })
+    expect(s.me).toMatchObject({ rank: 1, value: 4 })
     // Bob dépasse Alice : son score remplace l'ancien rang d'Alice.
     for (const n of [2, 3, 4]) await db.query('INSERT INTO daily_results (owner, date, time_ms, solved_at) VALUES ($1,$2,1000,now())', [own('Bob'), ago(n)])
     s = (await get('/api/leaderboard?board=serie', b)).json()
     expect(s.entries.map((e: { pseudo: string; value: number }) => [e.pseudo, e.value])).toEqual([['Bob', 5], ['Alice', 4]])
+  })
+})
+
+describe('changer de pseudo', () => {
+  it('tout compte peut changer de pseudo ; règles de l\'inscription ; pas de doublon (sans tenir compte des majuscules)', async () => {
+    const { ctx, db } = await makeCtx()
+    const id = (pseudo: string) => db.query<{ id: string }>('SELECT id FROM users WHERE pseudo = $1', [pseudo]).then((r) => r.rows[0].id)
+    for (const [p, e] of [['Alice', 'alice@x.fr'], ['Bob', 'bob@x.fr']]) await register(ctx, { pseudo: p, email: e, password: STRONG })
+    const a = await id('Alice')
+    expect(await changePseudo(ctx, a, '  Cheminote_42 ')).toEqual({ ok: true, pseudo: 'Cheminote_42' })
+    expect((await db.query('SELECT pseudo, pseudo_key FROM users WHERE id = $1', [a])).rows[0]).toEqual({ pseudo: 'Cheminote_42', pseudo_key: 'cheminote_42' })
+    expect(await changePseudo(ctx, a, 'bob')).toEqual({ ok: false, code: 'pseudo_taken' })
+    expect(await changePseudo(ctx, a, 'x')).toEqual({ ok: false, code: 'invalid' })
+    expect(await changePseudo(ctx, a, 'avec espace')).toEqual({ ok: false, code: 'invalid' })
+    expect(await changePseudo(ctx, a, 'CHEMINOTE_42')).toEqual({ ok: true, pseudo: 'CHEMINOTE_42' }) // le sien, autre casse : permis
   })
 })

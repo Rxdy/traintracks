@@ -7,7 +7,7 @@ import { begin, mergeAnonymous, start, status, submit } from './journey.js'
 import { aidState, buyAid, useAid } from './aids.js'
 import { beginDaily, dailyStats, dailyStatus, dateKey, startDaily, submitDaily } from './daily.js'
 import { randomUUID } from 'node:crypto'
-import { confirmEmailChange, exportData, importData, requestEmailChange, setLeaderboard } from './accountData.js'
+import { confirmEmailChange, exportData, importData, requestEmailChange, changePseudo, setLeaderboard } from './accountData.js'
 import { completeTutorial } from './tutorial.js'
 import { avatarState, buyAvatar, selectAvatar } from './avatars.js'
 import { journeyStats, leaderboard, type Board } from './stats.js'
@@ -325,6 +325,13 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const r = await selectAvatar(opts.db, user.id, ((req.body ?? {}) as Body).id)
     if (r.ok) return { ok: true, ...(await avatarState(opts.db, user.id)) }
     return reply.code(r.code === 'not_owned' ? 403 : 400).send({ error: r.code })
+  })
+  app.post('/api/account/pseudo', async (req, reply) => {
+    const user = await userOrFail(req, reply)
+    if (!user) return
+    const r = await changePseudo(ctx, user.id, str(((req.body ?? {}) as Body).pseudo))
+    if (!r.ok) return reply.code(r.code === 'invalid' ? 400 : 409).send({ error: r.code })
+    return r
   })
   app.post('/api/account/leaderboard', async (req, reply) => {
     const user = await userOrFail(req, reply)

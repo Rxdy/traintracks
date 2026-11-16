@@ -50,11 +50,11 @@ export interface Entry {
 export interface Leaderboard {
   board: Board
   date?: string
-  entries: Entry[] // les 50 premiers
-  me: { rank: number; value: number } | null // ma place, même hors du top 50 (null : pas classé ou masqué)
+  entries: Entry[] // les 10 premiers
+  me: { rank: number; value: number; pseudo: string; avatar: string } | null // ma place, même hors du top 10 (null : pas classé ou masqué)
   total: number // nombre de joueurs classés
 }
-const TOP = 50
+const TOP = 10 // les 10 premiers ; ma propre ligne s'ajoute dessous si je n'y suis pas
 
 // Seuls les comptes qui ont choisi d'apparaître (par défaut oui) sont classés ; on ne montre que le pseudo.
 export async function leaderboard(db: Db, board: Board, today: string, viewer: string | null): Promise<Leaderboard> {
@@ -84,12 +84,12 @@ export async function leaderboard(db: Db, board: Board, today: string, viewer: s
   const ranked = rows.map((r, i) => ({ ...r, rank: board === 'voyage' ? i + 1 : (rows.findIndex((x) => x.value === r.value) + 1) }))
   const mine = viewer ? ranked.find((r) => r.id === viewer) : undefined
   const top = ranked.slice(0, TOP)
-  const avatars = new Map((await db.query<{ id: string; avatar: string }>('SELECT id, avatar FROM users WHERE id = ANY($1::uuid[])', [top.map((r) => r.id)])).rows.map((r) => [r.id, r.avatar]))
+  const avatars = new Map((await db.query<{ id: string; avatar: string }>('SELECT id, avatar FROM users WHERE id = ANY($1::uuid[])', [[...top.map((r) => r.id), ...(mine ? [mine.id] : [])]])).rows.map((r) => [r.id, r.avatar]))
   return {
     board,
     date: board === 'jour' || board === 'serie' ? today : undefined,
     entries: top.map((r) => ({ rank: r.rank, pseudo: r.pseudo, avatar: avatars.get(r.id) ?? DEFAULT_AVATAR, value: r.value, me: r.id === viewer })),
-    me: mine ? { rank: mine.rank, value: mine.value } : null,
+    me: mine ? { rank: mine.rank, value: mine.value, pseudo: mine.pseudo, avatar: avatars.get(mine.id) ?? DEFAULT_AVATAR } : null,
     total: ranked.length,
   }
 }

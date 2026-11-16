@@ -41,7 +41,7 @@ export interface BoardData {
   board: BoardId
   date?: string
   entries: BoardEntry[]
-  me: { rank: number; value: number } | null
+  me: { rank: number; value: number; pseudo: string; avatar: string } | null // ma ligne, montrée sous les 10 premiers si je n'y suis pas
   total: number
 }
 export async function fetchBoard(board: BoardId): Promise<BoardData | null> {

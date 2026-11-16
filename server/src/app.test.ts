@@ -211,7 +211,7 @@ describe('API du puzzle du jour et des statistiques', () => {
     return { ...c, cookie }
   }
   const dailyEdges = () => {
-    const sol = generate('daily:2026-01-01', 5).solution // l'horloge de test est le 1er janvier 2026
+    const sol = generate('daily:2026-01-01', 6).solution // l'horloge de test est le 1er janvier 2026
     return sol.slice(1).map((c, i) => edgeKey(sol[i][0], sol[i][1], c[0], c[1])!)
   }
 
@@ -227,7 +227,7 @@ describe('API du puzzle du jour et des statistiques', () => {
     expect((await app.inject({ method: 'GET', url: '/api/daily', headers: { cookie } })).json()).toMatchObject({ date: '2026-01-01', done: false, streak: 0 })
     const st = await post(app, '/api/daily/start', {}, cookie)
     expect(st.statusCode).toBe(200)
-    expect(st.json().puzzle.size).toBe(5)
+    expect(st.json().puzzle.size).toBe(6) // toujours 6×6
     expect(st.body).not.toMatch(/solution/i)
     expect((await post(app, '/api/daily/submit', { edges: [] }, cookie)).statusCode).toBe(422)
     const ok = await post(app, '/api/daily/submit', { edges: dailyEdges() }, cookie)

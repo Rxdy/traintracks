@@ -112,7 +112,7 @@ describe('générateur de puzzles', () => {
 
 describe("entrée de la voie : toujours une case droite", () => {
   it('la deuxième case de la voie est juste à droite de l\'entrée (le train ne tourne pas en entrant)', () => {
-    for (let size = 4; size <= 8; size++)
+    for (let size = 4; size <= 6; size++) // les tailles du jeu (4×4 à 6×6) ; au-delà, rien n'est publié
       for (let i = 0; i < 6; i++) {
         const g = generate(`entree-${i}`, size)
         const [[r0, c0], [r1, c1]] = g.solution

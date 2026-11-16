@@ -4,7 +4,7 @@ import AuthPanel from '../components/AuthPanel.vue'
 import PasswordMeter from '../components/PasswordMeter.vue'
 import Avatar from '../components/Avatar.vue'
 import { AVATARS, avatarOf } from '../avatars'
-import { avatars, buyAvatar, loadAvatars, selectAvatar, user, logout, deleteAccount, notice, resetToken, changeEmail, changePassword, forgotPassword, estimateBits, MIN_BITS, setLeaderboard, fetchExport, importFile } from '../auth'
+import { avatars, buyAvatar, changePseudo, loadAvatars, selectAvatar, user, logout, deleteAccount, notice, resetToken, changeEmail, changePassword, forgotPassword, estimateBits, MIN_BITS, setLeaderboard, fetchExport, importFile } from '../auth'
 
 const go = inject<(view: string) => void>('go', () => undefined)
 
@@ -86,6 +86,27 @@ async function submitPassword(): Promise<void> {
 
 // Avatars : la même liste pour tout le monde, sans libellé. Les gratuits et ceux déjà achetés se choisissent d'un clic ;
 // un avatar payant ouvre une confirmation avec son prix (le serveur fait foi : prix, possession, solde).
+// Pseudo : un crayon à côté, un petit champ pour le changer.
+const editingPseudo = ref(false)
+const pseudoDraft = ref('')
+const pseudoMsg = ref('')
+function editPseudo(): void {
+  pseudoDraft.value = user.value?.name ?? ''
+  pseudoMsg.value = ''
+  editingPseudo.value = true
+}
+async function savePseudo(): Promise<void> {
+  const v = pseudoDraft.value.trim()
+  if (!v || v === user.value?.name) {
+    editingPseudo.value = false
+    return
+  }
+  busy.value = true
+  const r = await changePseudo(v)
+  busy.value = false
+  if (r.ok) editingPseudo.value = false
+  else pseudoMsg.value = r.error
+}
 const picker = ref(false) // la feuille des avatars : fermée par défaut (la page Compte reste courte, surtout sur téléphone)
 const buying = ref<string | null>(null) // avatar payant en cours de confirmation
 const onEsc = (e: KeyboardEvent): void => {
@@ -201,7 +222,18 @@ function cancel(): void {
           <Avatar :id="user.avatar" class="me-avatar" data-test="my-avatar" />
           <span class="edit" aria-hidden="true">✎</span>
         </button>
-        <h2 data-test="pseudo">{{ user.name }}</h2>
+        <form v-if="editingPseudo" class="pseudo-edit" data-test="pseudo-form" @submit.prevent="savePseudo">
+          <input id="pseudo-input" v-model="pseudoDraft" class="field" maxlength="24" autocomplete="nickname" aria-label="Nouveau pseudo" data-test="pseudo-input" />
+          <div class="row">
+            <button type="button" class="btn btn--ghost btn--small" data-test="pseudo-cancel" @click="editingPseudo = false">Annuler</button>
+            <button type="submit" class="btn btn--small" :disabled="busy" data-test="pseudo-save">Enregistrer</button>
+          </div>
+          <p v-if="pseudoMsg" class="err" data-test="pseudo-msg">{{ pseudoMsg }}</p>
+        </form>
+        <h2 v-else class="pseudo-line">
+          <span data-test="pseudo">{{ user.name }}</span>
+          <button type="button" class="pen" data-test="pseudo-edit" aria-label="Changer de pseudo" title="Changer de pseudo" @click="editPseudo">✎</button>
+        </h2>
         <p class="mail">{{ user.email }}</p>
         <p class="tag">Compte {{ user.provider === 'google' ? 'Google' : 'e-mail' }}</p>
         <button type="button" class="btn btn--ghost btn--small" data-test="logout" @click="logout">Se déconnecter</button>
@@ -447,6 +479,27 @@ h3 {
   padding: 0.6rem 0.9rem 0.8rem;
   border-top: 1px solid #e5e7eb;
   background: #fffbeb;
+}
+.pseudo-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.pen {
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.pseudo-edit {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+  width: 100%;
 }
 .coins {
   font-size: 0.85rem;
