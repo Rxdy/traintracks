@@ -98,7 +98,7 @@ etiqueter() {
   # manifeste déjà publié pour ce commit, au même contenu : on lui ajoute les tags
   local deja
   deja=$(mktemp -d)
-  if oras pull -q -o "$deja" "$MANIFESTES:$commit" >/dev/null 2>&1 &&
+  if oras pull -o "$deja" "$MANIFESTES:$commit" >/dev/null 2>&1 &&
     [ "$(jq -S . "$deja/$(basename "$fichier")" 2>/dev/null)" = "$(jq -S . "$fichier")" ]; then
     oras tag "$MANIFESTES:$commit" "$@"
     return
