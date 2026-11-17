@@ -115,7 +115,7 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
 
     <!-- prolongements de la voie hors de la grille de jeu (qui, elle, ne dessine que ses cases) : au-dessus des ponts -->
     <path v-for="(d, i) in extRails.sleepers" :key="'xs' + i" :d="d" fill="none" :stroke="pal.rail.tie" stroke-width="0.07" />
-    <path v-for="(d, i) in extRails.rails" :key="'xr' + i" :d="d" fill="none" :stroke="pal.rail.rail" stroke-width="0.06" stroke-linecap="round" />
+    <path v-for="(d, i) in extRails.rails" :key="'xr' + i" data-test="ext-rail" :d="d" fill="none" :stroke="pal.rail.rail" stroke-width="0.06" stroke-linecap="round" />
 
     <g v-for="it in standing" :key="'s' + it.r + '-' + it.c" class="pop" :style="{ animationDelay: it.d + 'ms' }" :transform="`translate(${it.c} ${it.r}) scale(0.01)`">
       <GrassEl v-if="it.kind === 'grass'" :pal="palFor(it.r, it.c)" :v="it.v" />

@@ -4,7 +4,7 @@
 defineProps<{ r: number; c: number; axis: 'h' | 'v' }>()
 </script>
 <template>
-  <g>
+  <g data-test="bridge">
     <template v-if="axis === 'h'">
       <rect :x="c + 0.07" :y="r + 0.2" width="0.86" height="0.64" rx="0.03" fill="#000" opacity="0.18" />
       <rect :x="c + 0.08" :y="r + 0.19" width="0.84" height="0.62" fill="#c3bdaf" />

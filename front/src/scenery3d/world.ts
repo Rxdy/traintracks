@@ -11,6 +11,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { PAL, rng, type Scenery, type Tile } from '../scenery'
 import { riverD, sample } from '../scenery/motion'
 import type { Pal } from '../scenery/themes'
+import { offBoardBridges } from './bridgeRails'
 import { pointAt, type Route } from '../trainRoute'
 import { SKY } from '../scenery/sky'
 
@@ -697,6 +698,7 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
   }
 
   // ponts de la voie : tablier de pierre et parapets
+  const DECK_TOP = 0.012 + 0.025 // dessus du tablier (centre + demi-épaisseur)
   for (const [k, axis] of sc.bridges) {
     const [r, c] = k.split(',').map(Number)
     const deck = new THREE.Group()
@@ -706,6 +708,21 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     for (const z of [-0.33, 0.33]) kit.mesh(kit.geo('parapet', () => new THREE.BoxGeometry(1.04, 0.07, 0.06)), kit.mat('#8d877a', texs.stone), 0, 0.035, z, deck)
     world.add(deck)
   }
+
+  // Rails sur les ponts hors de la grille, en vue du dessus (voir bridgeRails.ts) : la voie y est peinte sur le sol, sous
+  // l'eau et le tablier ; on repose rails et traverses sur le tablier, avec la géométrie des rails de la grille.
+  const bridgeRails = new THREE.Group()
+  world.add(bridgeRails)
+  for (const { r, c, axis } of offBoardBridges(sc)) {
+    const g = new THREE.Group()
+    // la vue cavalière remonte ce qui a de la hauteur (z − SHEAR·y) : on compense, la voie reste dans l'alignement de celle du sol
+    g.position.set(c + 0.5, DECK_TOP, r + 0.5 + SHEAR * (DECK_TOP + 0.016))
+    if (axis === 'v') g.rotation.y = Math.PI / 2
+    for (const x of [-0.375, -0.125, 0.125, 0.375]) kit.mesh(kit.geo('bridge-tie', () => new THREE.BoxGeometry(0.07, 0.01, 0.4)), kit.mat(pal.rail.tie, texs.wood), x, 0.005, 0, g)
+    for (const z of [-0.12, 0.12]) kit.mesh(kit.geo('bridge-rail', () => new THREE.BoxGeometry(1, 0.012, 0.06)), kit.mat(pal.rail.rail, null, { metalness: 0.6, roughness: 0.35, flatShading: false }), 0, 0.016, z, g)
+    bridgeRails.add(g)
+  }
+  const onBridge = (x: number, z: number) => sc.bridges.has(`${Math.floor(z)},${Math.floor(x)}`)
 
   // rails 3D le long de toute la voie (grille comprise) : seulement pour la vue de la cabine (vue du dessus : ceux de la grille)
   const track = new THREE.Group()
@@ -731,11 +748,12 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     }
     for (let s = 0; s <= rails.length; s += STEP) {
       const q = along(rails, s, mg)
-      for (const o of [-0.12, 0.12]) put(railMesh, q.x - q.tz * o, 0.05, q.z + q.tx * o, Math.atan2(-q.tz, q.tx))
+      const y = onBridge(q.x, q.z) ? DECK_TOP + 0.03 : 0.05 // sur un pont, au-dessus du tablier (sinon les rails s'y enfoncent)
+      for (const o of [-0.12, 0.12]) put(railMesh, q.x - q.tz * o, y, q.z + q.tx * o, Math.atan2(-q.tz, q.tx))
     }
     for (let s = 0.125; s <= rails.length; s += 0.25) {
       const q = along(rails, s, mg)
-      put(sleeperMesh, q.x, 0.02, q.z, Math.atan2(-q.tz, q.tx))
+      put(sleeperMesh, q.x, onBridge(q.x, q.z) ? DECK_TOP + 0.0125 : 0.02, q.z, Math.atan2(-q.tz, q.tx))
     }
   }
 
@@ -759,6 +777,7 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     const cab = m === 'cab'
     world.matrix.copy(cab ? flat : shear)
     track.visible = cab
+    bridgeRails.visible = !cab // en cabine, la voie 3D complète passe déjà sur les ponts
     far.visible = cab
     scene.fog = cab ? fogCab : null
     scene.background = cab ? skyTex : null
