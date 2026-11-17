@@ -1,0 +1,40 @@
+{
+  "projet": "traintracks",
+  "plateformes": "linux/amd64,linux/arm64",
+  "services": {
+    "front": {
+      "image": "traintracks-front",
+      "contexte": ".",
+      "dockerfile": "front/Dockerfile",
+      "sources": [
+        "front",
+        "shared",
+        "server/data",
+        ".dockerignore"
+      ],
+      "build_args": [
+        "APP_VERSION={court}",
+        "APP_COMMIT={commit}"
+      ]
+    },
+    "api": {
+      "image": "traintracks-api",
+      "contexte": ".",
+      "dockerfile": "server/Dockerfile",
+      "sources": [
+        "server/Dockerfile",
+        "server/package.json",
+        "server/package-lock.json",
+        "server/src",
+        "server/migrations",
+        "server/data",
+        "shared",
+        ".dockerignore"
+      ],
+      "build_args": [
+        "APP_VERSION={court}",
+        "APP_COMMIT={commit}"
+      ]
+    }
+  }
+}

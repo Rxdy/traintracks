@@ -71,17 +71,6 @@ dev-player: ## Compte d'essai arrivé à un niveau : make dev-player LEVEL=60 [C
 	$(COMPOSE) exec -T -e DEV_TOOLS=1 api npx tsx src/devPlayer.cli.ts $(or $(LEVEL),1) $(COINS)
 
 .PHONY: release
-release: ## Publie une version : make release V=1.0.0 (tests, version dans les package.json, commit, tag vX.Y.Z, push ; la CI construit les images)
-	@test -n "$(V)" || (echo "Usage : make release V=1.0.0" && exit 1)
-	@echo "$(V)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' || (echo "V doit être de la forme 1.2.3" && exit 1)
-	@test -z "$$(git status --porcelain)" || (echo "Des changements ne sont pas commités : commite d'abord." && exit 1)
-	@test "$$(git branch --show-current)" = main || (echo "Une version se publie depuis main." && exit 1)
+release: ## Publie une version : make release V=1.0.0 (tag vX.Y.Z sur main, déjà en prod ; la CI pose la version sur les images de la prod et crée la release)
 	@test -f server/data/levels.lock.json || echo "Attention : niveaux non gelés (make freeze), sans importance tant qu'aucun joueur réel n'a joué."
-	cd server && npm test
-	cd front && npm run typecheck && npm test
-	cd server && npm version $(V) --no-git-tag-version
-	cd front && npm version $(V) --no-git-tag-version
-	git add server/package.json server/package-lock.json front/package.json front/package-lock.json
-	git commit -m "Version $(V)"
-	git tag v$(V)
-	git push origin main v$(V)
+	@.github/images/release.sh "$(V)"

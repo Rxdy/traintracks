@@ -3,7 +3,7 @@ name: Tests
 
 on:
   push:
-    branches: ["**"] # pas les tags : un tag de version passe par release.yml, qui rappelle ces tests
+    branches-ignore: [dev, staging, main] # dev : images.yml rappelle ces tests avant le build ; staging et main ne font que promouvoir
   pull_request:
   workflow_call:
 
