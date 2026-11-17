@@ -77,8 +77,9 @@ manifeste() {
       '. + {($s): {image: $img, empreinte: $e, digest: $d, ref: ($img + "@" + $d)}}' <<<"$svcs")
   done
   [ "$manque" = 0 ] || return 1
-  jq -n --arg p "$PROJET" --arg r "${GITHUB_REPOSITORY:-}" --arg c "$commit" --arg date "$(date -u +%FT%TZ)" --argjson s "$svcs" \
-    '{projet: $p, depot: $r, commit: $c, date: $date, services: $s}' >"$fichier"
+  # pas de date : pour un même commit, le manifeste est identique d'une étape à l'autre (il est re-étiqueté, pas republié)
+  jq -n --arg p "$PROJET" --arg r "${GITHUB_REPOSITORY:-}" --arg c "$commit" --argjson s "$svcs" \
+    '{projet: $p, depot: $r, commit: $c, services: $s}' >"$fichier"
   cat "$fichier"
 }
 
@@ -94,6 +95,14 @@ etiqueter() {
     echo "$s : $ref → $*"
   done
   commit=$(jq -r .commit "$fichier")
+  # manifeste déjà publié pour ce commit, au même contenu : on lui ajoute les tags
+  local deja
+  deja=$(mktemp -d)
+  if oras pull -q -o "$deja" "$MANIFESTES:$commit" >/dev/null 2>&1 &&
+    [ "$(jq -S . "$deja/$(basename "$fichier")" 2>/dev/null)" = "$(jq -S . "$fichier")" ]; then
+    oras tag "$MANIFESTES:$commit" "$@"
+    return
+  fi
   (
     cd "$(dirname "$fichier")"
     oras push "$MANIFESTES:$(IFS=,; echo "$commit,$*")" \
