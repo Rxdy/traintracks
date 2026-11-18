@@ -496,7 +496,9 @@ section {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  width: min(92vw, 560px);
+  width: 100%; /* pleine largeur : Quitter au bord gauche de l'écran, pièces au bord droit */
+  padding: 0 0.75rem;
+  box-sizing: border-box;
   color: #374151;
 }
 .back {
