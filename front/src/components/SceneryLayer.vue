@@ -44,7 +44,7 @@ const box = computed(() => {
   const board = s.rows - s.margin.y - s.margin.b
   const u = 100 / (board + 1)
   // hauteur : seulement la partie visible (jusqu'au bas de la zone d'origine) ; le reste du dessin est rogné (slice)
-  return { width: `${s.cols * u}%`, height: `${s.frame.visibleRows * u}%`, left: `${-s.margin.x * u}%`, top: `${-s.margin.y * u}%` }
+  return { width: `${s.cols * u}%`, height: `${s.frame.visibleRows * u}%`, left: `${(1 - s.margin.x) * u}%`, top: `${(1 - s.margin.y) * u}%` }
 })
 
 const items = computed(() => {

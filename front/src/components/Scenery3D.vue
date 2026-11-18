@@ -13,7 +13,7 @@ const box = computed(() => {
   const s = props.scenery
   const board = s.rows - s.margin.y - s.margin.b
   const u = 100 / (board + 1)
-  return { width: `${s.cols * u}%`, height: `${s.frame.visibleRows * u}%`, left: `${-s.margin.x * u}%`, top: `${-s.margin.y * u}%` }
+  return { width: `${s.cols * u}%`, height: `${s.frame.visibleRows * u}%`, left: `${(1 - s.margin.x) * u}%`, top: `${(1 - s.margin.y) * u}%` }
 })
 
 const canvas = ref<HTMLCanvasElement | null>(null)

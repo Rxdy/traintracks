@@ -123,13 +123,13 @@ describe('trainRoute : sortie de l\'écran', () => {
     const size = 8
     // sortie vers le bas : distance jusqu'au bas de l'écran
     const down = leadCells('down', rect, size, vp)
-    expect(130 + size * cell + down * cell).toBeGreaterThan(vp.height + 3 * cell)
+    expect(130 + cell + size * cell + down * cell).toBeGreaterThan(vp.height + 3 * cell)
     const right = leadCells('right', rect, size, vp)
-    expect(39 + size * cell + right * cell).toBeGreaterThan(vp.width + 3 * cell)
+    expect(39 + cell + size * cell + right * cell).toBeGreaterThan(vp.width + 3 * cell)
     const left = leadCells('left', rect, size, vp)
-    expect(39 - left * cell).toBeLessThan(-3 * cell)
+    expect(39 + cell - left * cell).toBeLessThan(-3 * cell)
     const up = leadCells('up', rect, size, vp)
-    expect(130 - up * cell).toBeLessThan(-3 * cell)
+    expect(130 + cell - up * cell).toBeLessThan(-3 * cell)
   })
 
   it('leadCells : valeur large quand la grille ne se mesure pas', () => {

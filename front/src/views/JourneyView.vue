@@ -316,6 +316,7 @@ section {
   }
   .bonus-dock :deep(.row) {
     flex-direction: column;
+    width: 100%; /* sinon la colonne se réduit à son contenu et les boutons deviennent minuscules */
   }
   .bonus-dock :deep(.aid) {
     flex: none;
@@ -331,7 +332,7 @@ section {
   }
   .bonus-dock :deep(.panel),
   .bonus-dock :deep(.msg),
-  .bonus-dock :deep(.fresh) {
+  .bonus-dock :deep(div.fresh) {
     position: absolute;
     top: 0;
     left: calc(100% + 0.6rem);
@@ -534,6 +535,22 @@ section {
   background: #15803d;
 }
 
+/* Téléphone couché : les messages des bonus tiennent entre la colonne et le bord de l'écran. */
+@media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  .bonus-dock :deep(.panel),
+  .bonus-dock :deep(.msg),
+  .bonus-dock :deep(div.fresh) {
+    max-width: 11rem;
+    font-size: 0.72rem;
+  }
+  .bonus-dock :deep(div.fresh) {
+    flex-wrap: wrap;
+    width: 11rem;
+  }
+  .bonus-dock :deep(div.fresh .icon) {
+    display: none;
+  }
+}
 /* Téléphone couché : la barre du haut flotte par-dessus (elle ne prend plus de hauteur à la grille), le titre se range près de Quitter. */
 @media (min-aspect-ratio: 1/1) and (max-height: 560px) {
   .bar {

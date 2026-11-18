@@ -243,14 +243,14 @@ function sceneryMargins(): { x: number; y: number; top?: number; below?: number;
   const cell = rect.width / (n + 1) // taille d'une case à l'écran avant le rétrécissement (px)
   const unit = cell * k // une case du décor à l'écran, après le rétrécissement (px)
   // La grille n'est pas toujours au milieu de l'écran (en paysage, les bonus sont à sa droite) : le décor doit couvrir le côté le plus éloigné.
-  const cx = rect.left + (n / 2) * cell
+  const cx = rect.left + cell + (n / 2) * cell // les indices sont à gauche et en haut : les cases commencent une case plus loin
   const farthest = Math.max(cx, window.innerWidth - cx) // distance du centre des cases au bord de l'écran le plus loin (px)
   const x = Math.min(40, Math.max(y, Math.ceil(farthest / unit - n / 2) + 1))
   // La grille rétrécit autour du centre de sa zone de jeu (sans la rangée des indices) : on situe à l'écran le haut et le bas
   // du décor qu'on aurait sans complément. Le bas tombe pile sur le bas d'origine de la grille (rangée des indices comprise).
   // À la victoire la grille glisse aussi vers le milieu de l'écran (dy) : le paysage se calcule depuis sa place d'arrivée.
-  const dy = Math.round(window.innerHeight / 2 - (rect.top + (n / 2) * cell))
-  const oy = rect.top + dy + (n / 2) * cell
+  const dy = Math.round(window.innerHeight / 2 - (rect.top + cell + (n / 2) * cell))
+  const oy = rect.top + cell + dy + (n / 2) * cell
   const decorTop = oy - (y + n / 2) * unit
   const decorBottom = rect.bottom + dy
   // Le Trajet est un paysage plein écran : le décor monte jusqu'en haut de l'écran (la barre du haut, le bouton Quitter et les
@@ -627,6 +627,7 @@ onMounted(() => {
           :key="'cell-' + r + '-' + c"
           :data-r="r"
           :data-c="c"
+          :style="{ gridRow: r + 2, gridColumn: c + 2 }"
           :mark="markOf(r, c)"
           :sides="sidesGrid[r][c]"
           :variant="variantOf(r, c)"
@@ -636,6 +637,7 @@ onMounted(() => {
         />
 
         <ClueNumber
+          :style="{ gridRow: r + 2, gridColumn: 1 }"
           :value="puzzle.rowClues[r]"
           :status="statuses.rows[r]"
           orientation="row"
@@ -645,12 +647,13 @@ onMounted(() => {
       <ClueNumber
         v-for="c in indices"
         :key="'col-' + c"
+        :style="{ gridRow: 1, gridColumn: c + 2 }"
         :value="puzzle.colClues[c]"
         :status="statuses.cols[c]"
         orientation="col"
       />
 
-      <div class="corner"></div>
+      <div class="corner" style="grid-row: 1; grid-column: 1"></div>
 
       <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" @frame="emit('land', $event)" />
 
@@ -897,15 +900,15 @@ onMounted(() => {
 
   /* Taille du Plateau : la grille (compteurs compris) prend presque tout l'écran, ni cabine ni paysage autour. Portrait : limitée par la
      largeur, et par la hauteur moins la barre du haut, les outils et les bonus. Paysage : limitée par la hauteur, les bonus sont à droite. */
-  --shift: calc(100% / (var(--size) + 1) / 2);
+  --shift: calc(-100% / (var(--size) + 1) / 2);
   --w: min(calc((100vw - 1rem) * (var(--size) + 1) / (var(--size) + 2)), calc(100dvh - 17rem), 780px);
   width: var(--w);
   aspect-ratio: 1;
-  /* La colonne des compteurs est à droite : on décale VERS LA DROITE d'une demi-colonne pour
+  /* Les compteurs sont à gauche et en haut : on décale VERS LA GAUCHE d'une demi-colonne pour
      que les CASES (pas la grille + compteurs) soient centrées sur la page. */
   /* À la victoire, la grille rétrécit au centre d'un paysage plus grand (--k < 1) : le décor déborde autour. */
   transform: translate(var(--shift), var(--dy, 0px)) scale(var(--k, 1));
-  transform-origin: calc(50% * var(--size) / (var(--size) + 1)) calc(50% * var(--size) / (var(--size) + 1));
+  transform-origin: calc(100% * (1 + var(--size) / 2) / (var(--size) + 1)) calc(100% * (1 + var(--size) / 2) / (var(--size) + 1));
   transition: transform 1.8s ease-in-out;
 
   /* Le glisser doit dessiner, pas faire défiler / sélectionner. */
