@@ -121,6 +121,35 @@ const uc = computed(() => sim.uc ?? 0)
           <circle cx="-0.07" r="0.02" fill="#fff" />
           <circle cx="0.085" cy="-0.005" r="0.008" fill="#111827" />
         </template>
+        <template v-else-if="a.kind === 'sheep'">
+          <g :transform="`translate(0 ${Math.max(0, Math.sin(a.t * 0.9)) * 0.012})`">
+            <g stroke="#3b3b3b" stroke-width="0.014" stroke-linecap="round"><line x1="-0.035" y1="0.04" x2="-0.035" y2="0.085" /><line x1="0.035" y1="0.04" x2="0.035" y2="0.085" /></g>
+            <ellipse cx="0.082" :cy="0.012 + Math.max(0, Math.sin(a.t * 0.9)) * 0.03" rx="0.03" ry="0.026" fill="#3b3b3b" />
+            <circle cx="-0.04" cy="-0.012" r="0.04" fill="#f8fafc" stroke="#cbd5e1" stroke-width="0.01" /><circle cx="0.005" cy="-0.022" r="0.045" fill="#f8fafc" stroke="#cbd5e1" stroke-width="0.01" /><circle cx="0.04" cy="-0.005" r="0.036" fill="#f8fafc" stroke="#cbd5e1" stroke-width="0.01" />
+            <circle cx="0.09" :cy="0.006 + Math.max(0, Math.sin(a.t * 0.9)) * 0.03" r="0.006" fill="#fff" />
+          </g>
+        </template>
+        <template v-else-if="a.kind === 'cow'">
+          <g :transform="`translate(0 ${Math.max(0, Math.sin(a.t * 0.7)) * 0.01})`">
+            <g stroke="#374151" stroke-width="0.018" stroke-linecap="round"><line x1="-0.07" y1="0.04" x2="-0.07" y2="0.09" /><line x1="-0.03" y1="0.04" x2="-0.03" y2="0.09" /><line x1="0.04" y1="0.04" x2="0.04" y2="0.09" /><line x1="0.08" y1="0.04" x2="0.08" y2="0.09" /></g>
+            <ellipse cx="0" cy="0" rx="0.12" ry="0.058" fill="#fff" stroke="#9ca3af" stroke-width="0.012" />
+            <path d="M-0.05 -0.04 q0.03 -0.02 0.05 0.01 q-0.01 0.04 -0.05 0.03 Z M0.04 0.0 q0.04 -0.02 0.06 0.02 q-0.03 0.035 -0.06 -0.02 Z" fill="#1f2937" />
+            <ellipse cx="0.14" :cy="0.012 + Math.max(0, Math.sin(a.t * 0.7)) * 0.035" rx="0.04" ry="0.03" fill="#fff" stroke="#9ca3af" stroke-width="0.012" />
+            <ellipse cx="0.165" :cy="0.022 + Math.max(0, Math.sin(a.t * 0.7)) * 0.035" rx="0.016" ry="0.014" fill="#f9a8b4" />
+            <path d="M0.13 -0.012 l-0.005 -0.025 M0.15 -0.012 l0.01 -0.022" stroke="#e5e7eb" stroke-width="0.012" stroke-linecap="round" :transform="`translate(0 ${Math.max(0, Math.sin(a.t * 0.7)) * 0.035})`" />
+          </g>
+        </template>
+        <template v-else-if="a.kind === 'tractor'">
+          <g :transform="`translate(0 ${Math.sin(a.t * 18) * 0.003})`">
+            <circle cx="-0.07" cy="0.03" r="0.055" fill="#1f2937" /><circle cx="-0.07" cy="0.03" r="0.025" fill="#9ca3af" />
+            <circle cx="0.09" cy="0.05" r="0.034" fill="#1f2937" /><circle cx="0.09" cy="0.05" r="0.014" fill="#9ca3af" />
+            <rect x="-0.0" y="-0.03" width="0.14" height="0.06" rx="0.012" fill="#dc2626" stroke="#7f1d1d" stroke-width="0.012" />
+            <rect x="-0.1" y="-0.08" width="0.1" height="0.09" rx="0.012" fill="#b91c1c" stroke="#7f1d1d" stroke-width="0.012" />
+            <rect x="-0.085" y="-0.068" width="0.07" height="0.04" rx="0.008" fill="#bfdbfe" />
+            <rect x="0.115" y="-0.075" width="0.012" height="0.05" fill="#374151" />
+            <circle :cx="0.12 + Math.sin(a.t * 2) * 0.01" :cy="-0.1 - ((a.t * 0.4) % 1) * 0.05" r="0.018" fill="#9ca3af" :opacity="0.7 - ((a.t * 0.4) % 1) * 0.6" />
+          </g>
+        </template>
         <template v-else-if="a.kind === 'hedgehog'">
           <ellipse rx="0.08" ry="0.055" fill="#6b4a2b" stroke="#3b2713" stroke-width="0.012" />
           <path v-for="x in [-0.04, -0.01, 0.02, 0.05]" :key="x" :d="`M${x} -0.05 l0.01 -0.03 M${x} 0.05 l0.01 0.03`" stroke="#3b2713" stroke-width="0.012" />

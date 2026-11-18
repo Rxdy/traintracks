@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { levels } from '../testLevels'
-import { buildScenery, THEMES, type Scenery, type Road } from './generate'
+import { buildScenery, seedOf, THEMES, type Scenery, type Road } from './generate'
 import { at, createLandSim, createWaterSim, distanceNear, sample } from './motion'
 import { buildRoute } from '../trainRoute'
 
@@ -156,6 +156,37 @@ describe('chaque environnement a ses animaux', () => {
         const s = buildScenery(lv.puzzle, lv.solution, th, undefined, { x: 6, y: 2 }) // comme en jeu : avec la marge de paysage
         expect(createLandSim(s).step(0.05, 1, false).animals.length, `${th} niveau ${lv.id}`).toBeGreaterThan(0)
       }
+    }
+  })
+
+  it('plaine : un troupeau broute près de son point d\'attache, un tracteur travaille dans un champ d\'au moins 2 cases, ailleurs rien de tout cela', () => {
+    let herds = 0, tractors = 0
+    for (const lv of levels.slice(0, 80)) {
+      const s = buildScenery(lv.puzzle, lv.solution, 'plaine', seedOf(lv.puzzle), { x: 3, y: 3 })
+      const sim = createLandSim(s)
+      let f = sim.step(0.05, 1, false)
+      const kinds = f.animals.map((a) => a.kind)
+      if (kinds.includes('sheep') || kinds.includes('cow')) herds++
+      const tr = f.animals.find((a) => a.kind === 'tractor')
+      if (tr) {
+        tractors++
+        const r = Math.floor(tr.y), c0 = Math.floor(tr.x)
+        expect(s.tiles[r][c0].kind, `niveau ${lv.id}`).toBe('field')
+        for (let t = 2; t < 40; t += 0.5) {
+          f = sim.step(0.5, t, false)
+          const a = f.animals.find((x) => x.kind === 'tractor')!
+          expect(s.tiles[Math.floor(a.y)][Math.floor(a.x)].kind, `niveau ${lv.id}`).toBe('field')
+        }
+      }
+    }
+    expect(herds).toBeGreaterThan(40)
+    expect(tractors).toBeGreaterThan(10)
+    for (const th of THEMES.filter((t) => t !== 'plaine')) {
+      const s = buildScenery(levels[0].puzzle, levels[0].solution, th)
+      const kinds = createLandSim(s).step(0.05, 1, false).animals.map((a) => a.kind)
+      expect(kinds).not.toContain('tractor')
+      expect(kinds).not.toContain('sheep')
+      expect(kinds).not.toContain('cow')
     }
   })
 })

@@ -191,6 +191,15 @@ const calmSleepers = [66, 70.5, 76.5, 84.5, 95, 109].map((y, i) => ({ y, x1: 170
         <template v-else-if="s.kind === 'owl'">
           <ellipse cx="0" cy="-0.08" rx="0.1" ry="0.12" fill="#8b6f47" /><circle cx="-0.04" cy="-0.1" r="0.04" fill="#fff7d6" /><circle cx="0.04" cy="-0.1" r="0.04" fill="#fff7d6" /><circle cx="-0.04" cy="-0.1" r="0.018" fill="#111827" /><circle cx="0.04" cy="-0.1" r="0.018" fill="#111827" /><path d="M-0.012 -0.07 l0.012 0.03 l0.012 -0.03z" fill="#f59e0b" />
         </template>
+        <template v-else-if="s.kind === 'sheep'">
+          <circle cx="-0.05" cy="-0.1" r="0.06" fill="#f8fafc" /><circle cx="0.03" cy="-0.12" r="0.07" fill="#f8fafc" /><circle cx="0.08" cy="-0.08" r="0.05" fill="#f8fafc" /><ellipse cx="0.14" cy="-0.1" rx="0.04" ry="0.035" fill="#3b3b3b" /><rect x="-0.04" y="-0.06" width="0.02" height="0.06" fill="#3b3b3b" /><rect x="0.05" y="-0.06" width="0.02" height="0.06" fill="#3b3b3b" />
+        </template>
+        <template v-else-if="s.kind === 'cow'">
+          <ellipse cx="0" cy="-0.16" rx="0.16" ry="0.08" fill="#fff" /><circle cx="-0.04" cy="-0.17" r="0.035" fill="#1f2937" /><ellipse cx="0.19" cy="-0.15" rx="0.05" ry="0.04" fill="#fff" /><ellipse cx="0.23" cy="-0.14" rx="0.02" ry="0.018" fill="#f9a8b4" /><g stroke="#374151" stroke-width="0.03"><line x1="-0.1" y1="-0.1" x2="-0.1" y2="0" /><line x1="0.1" y1="-0.1" x2="0.1" y2="0" /></g>
+        </template>
+        <template v-else-if="s.kind === 'tractor'">
+          <circle cx="-0.08" cy="-0.07" r="0.07" fill="#1f2937" /><circle cx="0.11" cy="-0.045" r="0.045" fill="#1f2937" /><rect x="0" y="-0.12" width="0.18" height="0.07" rx="0.015" fill="#dc2626" /><rect x="-0.12" y="-0.2" width="0.12" height="0.12" rx="0.015" fill="#b91c1c" /><rect x="-0.1" y="-0.18" width="0.08" height="0.05" fill="#bfdbfe" />
+        </template>
         <template v-else-if="s.kind === 'hedgehog'">
           <ellipse cx="0" cy="-0.06" rx="0.11" ry="0.07" fill="#6b4f35" /><circle cx="0.11" cy="-0.05" r="0.035" fill="#d6b88a" />
         </template>
