@@ -361,7 +361,7 @@ section {
   width: var(--t);
   height: var(--t);
   border: 0.3rem solid #fbbf24;
-  border-radius: 16%;
+  border-radius: 0.85rem;
 }
 .bonus-col :deep(.aid .badge) {
   top: -0.45rem;
