@@ -28,7 +28,7 @@ export interface Camera {
 }
 export interface Quad {
   pts: Pt2[]
-  kind: 'grass' | 'field' | 'water' | 'road'
+  kind: 'grass' | 'field' | 'water' | 'road' | 'path'
   v: number
   dir?: 'h' | 'v'
   f: number
@@ -95,7 +95,7 @@ function clipNear(poly: { f: number; l: number }[]): { f: number; l: number }[] 
   return out
 }
 
-const NO_SPRITE = new Set<TileKind>(['rail', 'grass', 'field', 'road'])
+const NO_SPRITE = new Set<TileKind>(['rail', 'grass', 'field', 'road', 'path'])
 
 /** Cap naturel du train (radians) : celui que la caméra suit, avant lissage. */
 export function trackHeading(route: Route, s: number): number {
@@ -120,7 +120,7 @@ export function cabView(scenery: Scenery, route: Route, s: number, opts: { headi
       if (mid.f < NEAR - 0.8 || mid.f > FAR + 0.8 || Math.abs(mid.l) > mid.f * 1.7 + 1.3) continue
       const tile = scenery.tiles[r][c]
       const isWater = scenery.water.has(`${r},${c}`)
-      const flat: Quad['kind'] | null = isWater ? 'water' : tile.kind === 'field' ? 'field' : tile.kind === 'road' ? 'road' : tile.kind === 'grass' && tile.v % 2 === 1 ? 'grass' : null
+      const flat: Quad['kind'] | null = isWater ? 'water' : tile.kind === 'field' ? 'field' : tile.kind === 'road' ? 'road' : tile.kind === 'path' ? 'path' : tile.kind === 'grass' && tile.v % 2 === 1 ? 'grass' : null
       if (flat) {
         const poly = clipNear(
           ([[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]] as Pt2[]).map(([dx, dy]) => toCamera(cam, wx + dx, wy + dy)),

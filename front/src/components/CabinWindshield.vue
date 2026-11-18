@@ -63,7 +63,7 @@ const drawList = computed(() => {
 const BIRD_COLORS: Record<string, string> = { gull: '#f8fafc', crow: '#111827', eagle: '#5b3a21', parrot: '#22c55e', vulture: '#1f2937', bat: '#111827', pigeon: '#94a3b8', drone: '#475569' }
 const pts = (p: [number, number][]) => p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
 const groundFill = (q: { kind: string; v: number }) =>
-  q.kind === 'water' ? pal.value.water : q.kind === 'road' ? pal.value.road : q.kind === 'field' ? pal.value.crops[q.v % pal.value.crops.length][0] : pal.value.b
+  q.kind === 'water' ? pal.value.water : q.kind === 'road' ? pal.value.road : q.kind === 'path' ? pal.value.bed : q.kind === 'field' ? pal.value.crops[q.v % pal.value.crops.length][0] : pal.value.b
 const place = (s: { x: number; y: number; u: number }) => `translate(${s.x.toFixed(1)} ${s.y.toFixed(1)}) scale(${s.u.toFixed(2)})`
 // Collines lointaines : elles tournent avec le cap du train dans les virages.
 const hillShift = computed(() => (((((view.value?.heading ?? 0) * 70) % 340) + 340) % 340) * -1)

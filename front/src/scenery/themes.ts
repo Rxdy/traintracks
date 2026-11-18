@@ -60,10 +60,11 @@ export interface Params {
   peakKind?: 'mountain' | 'mesa' | 'dune' // ce que « montagne » devient : mesa au canyon, dune au désert
   clump?: boolean // arbres et reliefs en GROUPES (bosquets, crêtes) plutôt qu'au hasard
   treeKind?: 'tree' | 'cactus' | 'palm' | 'crater' | 'obsidian' | 'deadtree' // ce que « arbre » devient dans cet environnement
+  paths?: boolean // sentiers de terre entre les maisons et la route
   pineKind?: 'pine' | 'cactus' | 'palm' | 'vent' | 'skull' | 'boulder'
 }
 export const PARAMS: Record<Theme, Params> = {
-  plaine: { clump: true, river: 0.7, tree: 0.4, pine: 0.1, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0, road: 0.85, windmills: 1 },
+  plaine: { paths: true, clump: true, river: 0.7, tree: 0.4, pine: 0.1, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0, road: 0.85, windmills: 1 },
   foret: { clump: true, river: 0.5, tree: 0.6, pine: 0.6, houseBase: 0, houseRatio: 0, fields: 0, peaks: 0, boulders: 0.05, snowmen: 0, road: 0.35, windmills: 0 },
   automne: { clump: true, river: 0.6, tree: 0.5, pine: 0.12, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0, road: 0.8, windmills: 0 },
   montagne: { clump: true, river: 0.7, tree: 0.25, pine: 0.7, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.3, boulders: 0.2, snowmen: 0, road: 0.5, windmills: 0 },
