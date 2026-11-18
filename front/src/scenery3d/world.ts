@@ -762,6 +762,39 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     }
   }
 
+  // tunnels au bout de la voie : un couloir de roche (deux murs et un toit), sombre de l'intérieur. En cabine, le train sort de
+  // l'ombre au départ, et la voie s'enfonce dans la montagne à l'arrivée. Local : +x vers l'extérieur de la grille.
+  const tunnelDark = new THREE.MeshBasicMaterial({ color: '#07090d', side: THREE.BackSide })
+  const floorMat = new THREE.MeshBasicMaterial({ color: '#0b0e13' })
+  disposables.push(tunnelDark, floorMat)
+  for (const tn of [sc.tunnels?.entry, sc.tunnels?.exit]) {
+    if (!tn) continue
+    const tg = new THREE.Group()
+    tg.position.set(tn.x, 0, tn.y)
+    tg.rotation.y = Math.atan2(-tn.out.y, tn.out.x)
+    const Lx = tn.inset + 6
+    const rock = kit.mat(pal.rock[1], texs.stone)
+    const slab = (w: number, h: number, d: number, x: number, y: number, z: number) => {
+      const geo = new THREE.BoxGeometry(w, h, d)
+      disposables.push(geo)
+      kit.mesh(geo, rock, x, y, z, tg)
+      const inner = new THREE.Mesh(geo, tunnelDark)
+      inner.position.set(x, y, z)
+      tg.add(inner)
+    }
+    slab(Lx, 0.9, 0.64, Lx / 2, 0.45, -0.63) // mur gauche
+    slab(Lx, 0.9, 0.64, Lx / 2, 0.45, 0.63) // mur droit
+    slab(Lx, 0.5, 1.9, Lx / 2, 0.85, 0) // toit (plus haut que l'ouverture)
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.62, 0.62), tunnelDark)
+    back.position.set(Lx, 0.31, 0)
+    tg.add(back)
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(Lx, 0.62), floorMat)
+    floor.rotation.x = -Math.PI / 2
+    floor.position.set(Lx / 2, 0.004, 0)
+    tg.add(floor)
+    world.add(tg)
+  }
+
   // objets debout, qui poussent l'un après l'autre (même rythme que le décor SVG)
   const anims: Anim[] = []
   sc.tiles.forEach((row, r) =>

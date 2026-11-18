@@ -125,7 +125,6 @@ const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
 const trainDone = ref(false)
-const stops = ref<{ start?: number; end?: number }>({}) // positions de la locomotive à quai (départ, arrivée)
 // Vitesse du train (cases/s) : trois crans en haut à droite (lent, normal, rapide). Normal par défaut ; le choix reste d'un trajet à l'autre.
 import { speed } from '../speedPref' // le choix est gardé d'un niveau à l'autre
 const SPEEDS: Record<Speed, number> = { slow: 1.2, normal: 1.9, fast: 4.5 }
@@ -144,7 +143,17 @@ function onTrainProgress(s: number): void {
 // Zone où le train est visible : exactement celle du décor (en cases de la grille de jeu).
 const trainClip = computed(() => {
   const sc = scenery.value
-  return sc ? { x: -sc.margin.x, y: -sc.margin.y, w: sc.cols, h: sc.frame.visibleRows } : undefined
+  if (!sc) return undefined
+  const r = { x: -sc.margin.x, y: -sc.margin.y, w: sc.cols, h: sc.frame.visibleRows }
+  // Le train sort d'un tunnel et entre dans un autre : il est coupé au plan de leur entrée, pas au bord du décor.
+  for (const [tn, dir] of [[sc.tunnels.entry, puz.value.entry.dir], [sc.tunnels.exit, puz.value.exit.dir]] as const) {
+    if (!tn) continue
+    if (dir === 'left') { r.x += tn.inset; r.w -= tn.inset }
+    else if (dir === 'right') r.w -= tn.inset
+    else if (dir === 'up') { r.y += tn.inset; r.h -= tn.inset }
+    else r.h -= tn.inset
+  }
+  return r
 })
 
 // Position de la locomotive sur son trajet : les barrières du passage à niveau se baissent quand elle approche.
@@ -235,7 +244,7 @@ function boardRect(): DOMRect | undefined {
 }
 const isLandscape = (): boolean => window.innerWidth >= window.innerHeight
 let sceneLandscape = isLandscape() // forme d'écran pour laquelle le décor a été généré
-function sceneryMargins(): { x: number; y: number; top?: number; below?: number; dy?: number } {
+function sceneryMargins(): { x: number; y: number; top?: number; below?: number; dy?: number; view?: { left: number; right: number; up: number; down: number } } {
   const n = puz.value.size
   const y = sceneryMargin(n)
   const rect = boardRect()
@@ -258,7 +267,15 @@ function sceneryMargins(): { x: number; y: number; top?: number; below?: number;
   // réglages flottent par-dessus) et descend jusqu'en bas (la cabine, en fenêtre, se pose par-dessus).
   const top = Math.max(0, decorTop / unit + 0.05)
   const below = Math.max(0, (window.innerHeight - decorBottom) / unit + 0.05)
-  return { x, y, top, below, dy }
+  // Ce qui est visible à l'écran autour de la grille rétrécie (en cases du décor) : les tunnels se posent dans l'écran.
+  const half = (n / 2) * unit
+  const view = {
+    left: (cx - half) / unit,
+    right: (window.innerWidth - (cx + half)) / unit,
+    up: (oy - half) / unit,
+    down: (window.innerHeight - (oy + half)) / unit,
+  }
+  return { x, y, top, below, dy, view }
 }
 function buildDecor(path: [number, number][]): void {
   sceneLandscape = isLandscape()
@@ -307,7 +324,6 @@ function runTrain(): void {
     return
   }
   trainS.value = -1
-  stops.value = {}
   sound.trainStart()
   const sc = scenery.value
   if (sc) {
@@ -316,12 +332,6 @@ function runTrain(): void {
     const below = sc.frame.visibleRows - sc.margin.y - puz.value.size // cases de décor visibles sous la grille
     const lead = (dir: string) => (dir === 'left' || dir === 'right' ? sc.margin.x : dir === 'up' ? sc.margin.y : below) + TRAIN_LENGTH + 1
     route.value = buildRoute(path, puz.value, { entry: lead(puz.value.entry.dir), exit: lead(puz.value.exit.dir) })
-    // Gares : le train part à quai et s'arrête à quai (quand le décor laisse la place).
-    const st = sc.stations
-    stops.value = {
-      start: st?.entry ? route.value.gridStart - st.entry.loco : undefined,
-      end: st?.exit ? route.value.gridEnd + st.exit.loco : undefined,
-    }
     return
   }
   // Pas de décor (cas limite) : la voie est prolongée jusqu'au bord de l'ÉCRAN.
@@ -665,8 +675,11 @@ onMounted(() => {
 
       <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" @frame="emit('land', $event)" />
 
-      <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" :stop-start="stops.start" :stop-end="stops.end" :speed="SPEEDS[speed]" @progress="onTrainProgress" @done="trainDone = true" />
+      <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" :speed="SPEEDS[speed]" @progress="onTrainProgress" @done="trainDone = true" />
     </div>
+
+    <!-- Trajet : les bords de l'écran s'assombrissent, comme les parois d'un tunnel -->
+    <div v-if="scenery" class="tunnel-shade" aria-hidden="true"></div>
 
     <!-- La victoire s'affiche par-dessus le décor (position absolue) : elle ne pousse rien. -->
     <div class="win-zone win-zone--compact" :class="{ on: solved }">
@@ -955,6 +968,25 @@ onMounted(() => {
   }
   .win-zone {
     min-height: 0;
+  }
+}
+/* Trajet : des bords sombres, comme si on regardait depuis un tunnel (le train sort de l'ombre au départ et y rentre à l'arrivée). */
+.tunnel-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 58%, rgba(8, 12, 20, 0.5) 100%);
+  animation: shade-in 1.6s ease both;
+}
+@keyframes shade-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tunnel-shade {
+    animation: none;
   }
 }
 </style>

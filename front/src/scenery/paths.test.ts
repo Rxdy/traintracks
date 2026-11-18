@@ -34,26 +34,23 @@ describe('sentiers', () => {
   })
 })
 
-describe('gares', () => {
-  it('une gare de départ et une d\'arrivée sont posées sur la voie, et jamais sur une route, une voie ou l\'eau', () => {
+describe('tunnels', () => {
+  it('au bout de chaque voie, un tunnel quand le décor laisse la place, jamais sur une route, une maison, un champ, un sentier ou l\'eau', () => {
     let both = 0
     for (const lv of levels) {
       const sc = buildScenery(lv.puzzle, lv.solution, 'plaine', seedOf(lv.puzzle), { x: 9, y: 9 })
-      const { entry, exit } = sc.stations
+      const { entry, exit } = sc.tunnels
       if (entry && exit) both++
-      for (const st of [entry, exit]) {
-        if (!st) continue
-        expect(st.loco, `niveau ${lv.id}`).toBeGreaterThan(1)
-        // le quai et le bâtiment : tout le rectangle est hors route, hors voie, hors eau
-        const rad = (st.angle * Math.PI) / 180
-        const h = { x: Math.cos(rad), y: Math.sin(rad) }
-        const n = { x: -h.y * st.side, y: h.x * st.side }
-        for (let a = -1.2; a <= 1.2; a += 0.4) for (let b = 0.7; b <= 1.3; b += 0.3) {
-          const r = Math.floor(st.y + h.y * a + n.y * b), c = Math.floor(st.x + h.x * a + n.x * b)
+      for (const tn of [entry, exit]) {
+        if (!tn) continue
+        expect(tn.inset, `niveau ${lv.id}`).toBeGreaterThanOrEqual(0.5)
+        // la montagne, de l'entrée au bord du décor : rien d'autre dessous
+        for (let a = 0; a <= tn.inset; a += 0.5) for (let b = -0.9; b <= 0.9; b += 0.45) {
+          const r = Math.floor(tn.y + tn.out.y * a - tn.out.x * b), c = Math.floor(tn.x + tn.out.x * a + tn.out.y * b)
           const t = sc.tiles[r]?.[c]
           if (!t) continue
-          expect(['road', 'rail', 'house', 'windmill', 'field'], `niveau ${lv.id} : quai sur ${t.kind}`).not.toContain(t.kind)
-          expect(sc.water.has(`${r},${c}`), `niveau ${lv.id} : quai dans l'eau`).toBe(false)
+          expect(['road', 'house', 'windmill', 'field', 'path'], `niveau ${lv.id} : tunnel sur ${t.kind}`).not.toContain(t.kind)
+          expect(sc.water.has(`${r},${c}`), `niveau ${lv.id} : tunnel dans l'eau`).toBe(false)
         }
       }
     }
