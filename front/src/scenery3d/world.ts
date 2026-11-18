@@ -171,6 +171,11 @@ export function groundSvg(sc: Scenery, route: Route | null, pal: Pal): string {
   for (const e of sc.ext) lines.push('M' + e.map((p) => `${(p.x * 100).toFixed(1)} ${(p.y * 100).toFixed(1)}`).join(' L'))
   for (const d of lines) s += `<path d="${d}" fill="none" stroke="#000" stroke-opacity="0.16" stroke-width="72" stroke-linejoin="round" transform="translate(3 5)"/>`
   for (const d of lines) s += `<path d="${d}" fill="none" stroke="${pal.bedEdge}" stroke-width="68" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="url(#gravel)" stroke-width="58" stroke-linejoin="round"/>`
+  // sentiers de terre : sous la route, la rivière et les objets
+  for (const p of sc.paths ?? []) {
+    const d = 'M' + p.map((q) => `${(q.x * 100).toFixed(1)} ${(q.y * 100).toFixed(1)}`).join(' L')
+    s += `<path d="${d}" fill="none" stroke="${pal.bedEdge}" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="${pal.bed}" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>`
+  }
   // route
   if (sc.road) {
     const mid = (sc.road.line + 0.5) * 100
@@ -761,7 +766,7 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
   const anims: Anim[] = []
   sc.tiles.forEach((row, r) =>
     row.forEach((t, c) => {
-      if (t.kind === 'rail' || t.kind === 'road' || t.kind === 'grass' || sc.water.has(`${r},${c}`)) return
+      if (t.kind === 'rail' || t.kind === 'road' || t.kind === 'path' || t.kind === 'grass' || sc.water.has(`${r},${c}`)) return
       const g = build(t.kind, t.v, palAt(sc, r, c), kit, anims, 500 + (r + c) * 120)
       if (!g) return
       g.position.set(c + 0.5, 0, r + 0.5)

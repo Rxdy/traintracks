@@ -15,7 +15,7 @@ import { PARAMS, THEMES, type Theme } from './themes'
 export { THEMES, themeForLevel, LEVELS_PER_THEME, timing, type Theme } from './themes'
 
 
-export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'windmill' | 'cactus' | 'palm' | 'crater' | 'obsidian' | 'vent' | 'deadtree' | 'skull' | 'building' | 'mesa' | 'dune'
+export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'path' | 'windmill' | 'cactus' | 'palm' | 'crater' | 'obsidian' | 'vent' | 'deadtree' | 'skull' | 'building' | 'mesa' | 'dune'
 
 export interface Tile {
   kind: TileKind
@@ -48,6 +48,7 @@ export interface Scenery {
   river: Pt[] | null // ligne de la rivière, en unités de case (hors grille aux deux bouts)
   pond: [number, number][] // étang de repli quand aucune rivière ne passe
   bridges: Map<string, 'h' | 'v'> // cases de voie posées sur la rivière → axe de la voie (le pont la porte)
+  paths: Pt[][] // sentiers de terre (maisons et moulin vers la route ou un autre sentier), en unités de case ; tuiles « path »
 }
 
 type Cell = [number, number]
@@ -424,5 +425,42 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
     }
   }
 
-  return { seed, road, margin: mg, frame, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges }
+  const paths = P.paths ? makePaths(seed, tiles, rows, cols) : []
+  return { seed, road, margin: mg, frame, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges, paths }
+}
+
+// --- Sentiers : chaque maison et chaque moulin est relié à la route (ou à un sentier déjà tracé, ou à une autre maison) par un chemin de terre qui
+// ne traverse que de l'herbe ou des arbres (abattus sur son passage) : jamais un champ, la voie ou l'eau. Un sentier trop long (plus de 9 cases) n'est pas tracé.
+// Tirés d'une graine à part : ajouter les sentiers ne change rien au reste du décor.
+function makePaths(seed: number, tiles: Tile[][], rows: number, cols: number): Pt[][] {
+  const pr = rng(seed ^ 0x7a11e5)
+  const out: Pt[][] = []
+  const isHome = (t: Tile | undefined) => !!t && (t.kind === 'house' || t.kind === 'windmill' || t.kind === 'building')
+  const goal = (r: number, c: number) => tiles[r][c].kind === 'road' || tiles[r][c].kind === 'path' || isHome(tiles[r][c])
+  const homes: Cell[] = []
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (isHome(tiles[r][c])) homes.push([r, c])
+  for (const [hr, hc] of shuffle(homes, pr)) {
+    // parcours en largeur depuis la maison, par l'herbe, jusqu'à la route ou à un sentier
+    const prev = new Map<string, Cell | null>([[key(hr, hc), null]])
+    const queue: Cell[] = [[hr, hc]]
+    let end: Cell | null = null
+    for (let i = 0; i < queue.length && !end; i++) {
+      const [r, c] = queue[i]
+      for (const [dr, dc] of shuffle(DIRS, pr)) {
+        const nr = r + dr, nc = c + dc
+        if (nr < 0 || nc < 0 || nr >= rows || nc >= cols || prev.has(key(nr, nc))) continue
+        if (goal(nr, nc)) { prev.set(key(nr, nc), [r, c]); end = [nr, nc]; break }
+        if (!['grass', 'tree', 'pine'].includes(tiles[nr][nc].kind)) continue // les arbres sur le tracé sont abattus
+        prev.set(key(nr, nc), [r, c])
+        queue.push([nr, nc])
+      }
+    }
+    if (!end) continue
+    const cells: Cell[] = []
+    for (let cur: Cell | null = end; cur; cur = prev.get(key(cur[0], cur[1])) ?? null) cells.unshift(cur)
+    if (cells.length > 10) continue
+    for (const [r, c] of cells) if (['grass', 'tree', 'pine'].includes(tiles[r][c].kind)) tiles[r][c] = { kind: 'path', v: 0 }
+    out.push(cells.map(([r, c]) => ({ x: c + 0.5, y: r + 0.5 })))
+  }
+  return out
 }
