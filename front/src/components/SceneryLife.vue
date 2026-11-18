@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, shallowRef } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import type { Scenery } from '../scenery/generate'
 import { useClock } from '../scenery/clock'
 import { createLandSim, type LandFrame } from '../scenery/motion'
@@ -9,7 +9,7 @@ import { sound } from '../sound/director'
 // Le décor qui vit AU-DESSUS des rails : voitures et barrières du passage à niveau, animaux, oiseaux, feuilles ou
 // neige qui tombent. Les voitures s'arrêtent quand le train approche (`trainNear`) et repartent après son passage.
 // Même repère que le train : 1 case = 1×1, la grille occupe 0..size (le reste, c'est la colonne et la rangée des indices, à gauche et en haut : -1..0).
-const props = defineProps<{ scenery: Scenery; trainNear: boolean }>()
+const props = withDefaults(defineProps<{ scenery: Scenery; trainNear: boolean; start?: boolean }>(), { start: true })
 const emit = defineEmits<{ (e: 'frame', f: LandFrame): void }>()
 const cols = computed(() => props.scenery.cols)
 const board = computed(() => props.scenery.rows - props.scenery.margin.y - props.scenery.margin.b) // taille de la grille de jeu : le repère de la page
@@ -17,7 +17,16 @@ const pal = computed(() => PAL[props.scenery.theme])
 const sim = createLandSim(props.scenery)
 const empty: LandFrame = { cars: [], barrier: 0, lights: false, animals: [], birds: [], flakes: [], leaves: [], embers: [], events: [] }
 const frame = shallowRef<LandFrame>(empty)
+// Apparition : tout ce qui vit sur le décor (animaux, oiseaux, voitures, cabane, tunnels…) apparaît dans la même vague diagonale que
+// les arbres et le sol (500 ms, puis 120 ms par case en diagonale), à partir du moment où le décor est prêt (`start`).
+const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+const wave = ref(reduce ? 2 : 0) // position du front de la vague, de 0 (coin haut gauche) à 1 (coin bas droit) ; > 1.05 : fini, plus de masque
+let waveT0 = -1
 useClock((dt, t) => {
+  if (wave.value <= 1.05 && props.start) {
+    if (waveT0 < 0) waveT0 = t
+    wave.value = Math.max(0, ((t - waveT0) * 1000 - 500) / 120 / (props.scenery.cols + props.scenery.rows))
+  }
   frame.value = sim.step(dt, t, props.trainNear)
   frame.value.events.forEach((e) => sound.ambient(e))
   emit('frame', frame.value) // la cabine du conducteur montre les mêmes voitures, barrières et animaux
@@ -42,10 +51,19 @@ const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, 
 <template>
   <svg class="life" :viewBox="`-1 -1 ${board + 1} ${board + 1}`" data-test="scenery-life" aria-hidden="true">
     <defs>
+      <linearGradient id="life-wave" gradientUnits="userSpaceOnUse" x1="0" y1="0" :x2="(scenery.cols + scenery.rows) / 2" :y2="(scenery.cols + scenery.rows) / 2">
+        <stop offset="0" stop-color="#fff" />
+        <stop :offset="Math.min(1, wave)" stop-color="#fff" />
+        <stop :offset="Math.min(1, wave + 0.03)" stop-color="#000" />
+        <stop offset="1" stop-color="#000" />
+      </linearGradient>
+      <mask id="life-mask" maskUnits="userSpaceOnUse" :x="-2" :y="-2" :width="scenery.cols + 4" :height="scenery.rows + 4">
+        <rect :x="-2" :y="-2" :width="scenery.cols + 4" :height="scenery.rows + 4" fill="url(#life-wave)" />
+      </mask>
       <clipPath id="life-clip"><rect x="0" y="0" :width="cols" :height="scenery.frame.visibleRows" rx="0.18" /></clipPath>
     </defs>
     <g :transform="`translate(${-scenery.margin.x} ${-scenery.margin.y})`">
-    <g clip-path="url(#life-clip)">
+    <g clip-path="url(#life-clip)" :mask="wave <= 1.05 ? 'url(#life-mask)' : undefined">
       <!-- route : voitures et barrières -->
       <g v-if="scenery.road" :transform="roadFrame">
         <g v-for="c in frame.cars" :key="c.id" :transform="`translate(${c.lane} ${c.u}) rotate(${c.dir > 0 ? 90 : -90})`">

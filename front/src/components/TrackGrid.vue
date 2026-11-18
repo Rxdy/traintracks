@@ -118,6 +118,7 @@ const elapsed = ref(0)
 const route = ref<Route | null>(null)
 // Décor : d'abord il se dévoile (voie posée), PUIS le train démarre.
 const scenery = ref<Scenery | null>(null)
+const decorReady = ref(false) // le décor 3D est prêt : la vague d'apparition part de là, pour tout ce qui vit dessus
 const glideY = ref(0) // de combien la grille glisse (px) vers le milieu de l'écran quand le paysage apparaît
 const failed3d = ref(false) // le décor 3D n'a pas pu s'afficher : décor classique jusqu'à la fin de la visite
 const use3d = computed(() => !failed3d.value && webglAvailable())
@@ -278,6 +279,7 @@ function sceneryMargins(): { x: number; y: number; top?: number; below?: number;
   return { x, y, top, below, dy, view }
 }
 function buildDecor(path: [number, number][]): void {
+  decorReady.value = false
   sceneLandscape = isLandscape()
   const mg = sceneryMargins()
   glideY.value = mg.dy ?? 0
@@ -635,7 +637,7 @@ onMounted(() => {
     >
       <!-- Décor : en 3D si le joueur le veut et que l'appareil sait le faire ; sinon (ou en cas d'échec) le décor classique en SVG. -->
       <Transition name="decor">
-        <Scenery3D v-if="scenery && use3d" :key="'3d-' + scenery.seed" :scenery="scenery" :route="sceneryRoute" @fail="failed3d = true" />
+        <Scenery3D v-if="scenery && use3d" :key="'3d-' + scenery.seed" :scenery="scenery" :route="sceneryRoute" @fail="failed3d = true" @ready="decorReady = true" />
         <SceneryLayer v-else-if="scenery" :scenery="scenery" :route="sceneryRoute" />
       </Transition>
 
@@ -673,7 +675,7 @@ onMounted(() => {
 
       <div class="corner" style="grid-row: 1; grid-column: 1"></div>
 
-      <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" @frame="emit('land', $event)" />
+      <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" :start="!use3d || decorReady" @frame="emit('land', $event)" />
 
       <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" :speed="SPEEDS[speed]" @progress="onTrainProgress" @done="trainDone = true" />
     </div>

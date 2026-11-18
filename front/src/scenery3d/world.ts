@@ -622,12 +622,31 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
   world.add(far)
   disposables.push(far.geometry, farMat)
 
+  // Le sol peint (route, rivière, champs, sentiers, herbe détaillée) apparaît dans la même vague diagonale que les objets debout :
+  // un sol uni dessous, et par-dessus le sol peint, découpé au-delà du front de la vague (`uWave`, en cases x + y).
+  const waveU = { value: 0 }
+  const topMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+  topMat.onBeforeCompile = (sh) => {
+    sh.uniforms.uWave = waveU
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vG;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvG = vec2(position.x + ${(sc.cols / 2).toFixed(2)}, position.z + ${(sc.rows / 2).toFixed(2)});`)
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vG;\nuniform float uWave;')
+      .replace('void main() {', 'void main() {\n  if (vG.x + vG.y > uWave) discard;')
+  }
+  const groundTop = new THREE.Mesh(new THREE.PlaneGeometry(sc.cols, sc.rows).rotateX(-Math.PI / 2), topMat)
+  groundTop.position.set(cx, 0.0008, cz)
+  groundTop.receiveShadow = true
+  groundTop.visible = false // tant que la texture n'est pas chargée
+  world.add(groundTop)
+  disposables.push(groundTop.geometry, topMat)
   const groundReady = loadSvgTexture(groundSvg(sc, rails, pal), sc.cols * 100, sc.rows * 100, 4096)
     .then((t) => {
       t.anisotropy = 8
-      groundMat.map = t
-      groundMat.color.set('#ffffff')
-      groundMat.needsUpdate = true
+      topMat.map = t
+      topMat.needsUpdate = true
+      groundTop.visible = true
       disposables.push(t)
     })
     .catch(() => undefined) // sans texture : un sol uni de la bonne couleur
@@ -835,6 +854,7 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     const dt = Math.min(0.1, (now - last) / 1000)
     last = now
     tickAnims(anims, t, dt, still)
+    waveU.value = still ? 1e9 : (t - 500) / 120 // même rythme que les objets debout : 500 ms + 120 ms par case en diagonale
     if (shineTex && !still) shineTex.offset.y -= dt * 0.35
     views.forEach((draw) => draw(t, dt))
   }

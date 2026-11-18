@@ -7,7 +7,7 @@ import type { Route } from '../trainRoute'
 // Vue du dessus calée sur les cases. Three.js n'est chargé qu'ici, à la première victoire (fichier à part).
 // En cas d'échec (pas de WebGL, chargement raté), on prévient le parent, qui remet le décor classique.
 const props = defineProps<{ scenery: Scenery; route: Route | null }>()
-const emit = defineEmits<{ (e: 'fail'): void }>()
+const emit = defineEmits<{ (e: 'fail'): void; (e: 'ready'): void }>()
 
 const box = computed(() => {
   const s = props.scenery
@@ -50,6 +50,7 @@ onMounted(async () => {
       releaseWorld(sc)
     }
     ready.value = true
+    emit('ready')
   } catch {
     if (!gone) emit('fail')
   }
