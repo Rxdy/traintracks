@@ -6,6 +6,7 @@ import CoinBadge from '../components/CoinBadge.vue'
 import QuitButton from '../components/QuitButton.vue'
 import WinReceipt from '../components/WinReceipt.vue'
 import CabinFrame from '../components/CabinFrame.vue'
+import FinishDialog from '../components/FinishDialog.vue'
 import type { Route } from '../trainRoute'
 import type { Scenery } from '../scenery/generate'
 import type { LandFrame } from '../scenery/motion'
@@ -33,6 +34,7 @@ const trainRunning = ref(false)
 const trainS = ref(0)
 const landFrame = shallowRef<LandFrame | null>(null)
 const cabScene = ref<{ route: Route; scenery: Scenery; rails: Route | null } | null>(null)
+const grid = ref<InstanceType<typeof TrackGrid> | null>(null)
 const won = ref(false) // tracé validé : la cabine monte
 const finished = ref(false)
 const storeDown = computed(() => finished.value && !trainRunning.value)
@@ -92,6 +94,7 @@ function quit(): void {
       </div>
       <div class="play-area">
         <TrackGrid
+          ref="grid"
           :key="date"
           :puzzle="puzzle"
           :validate="validate"
@@ -105,28 +108,18 @@ function quit(): void {
           @scene="cabScene = $event"
           @land="landFrame = $event"
         />
-        <CabinFrame :shown="won" :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :store-down="storeDown">
-          <template #store>
-            <div v-if="finished" class="finish" data-test="finish">
-              <template v-if="outcome && outcome.counted">
-                <div class="head">
-                  <p class="win" data-test="win">Niveau terminé</p>
-                  <p class="time" data-test="result-time"><span>Temps</span> {{ formatTime(outcome.timeMs) }}</p>
-                </div>
-                <p class="note" data-test="saved">Temps enregistré<template v-if="outcome.streak > 1"> · série de {{ outcome.streak }} jours</template></p>
-                <WinReceipt :lines="[{ label: 'Puzzle du jour', amount: outcome.earned.base }, { label: 'Série de ' + outcome.streak + ' jours', amount: outcome.earned.streakBonus }]" />
-              </template>
-              <template v-else-if="outcome">
-                <div class="head">
-                  <p class="win" data-test="win">Niveau terminé</p>
-                  <p class="time" data-test="result-time"><span>Temps</span> {{ formatTime(outcome.timeMs) }}</p>
-                </div>
-                <p class="note" data-test="not-counted">Temps non retenu : seul le premier essai du jour compte.</p>
-              </template>
-              <button type="button" class="btn cta next" data-test="quit-end" @click="quit">Retour</button>
-            </div>
+        <CabinFrame :shown="won" :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" />
+        <!-- À l'arrivée du train : le récapitulatif au centre de l'écran. « Suivant » ramène au salon. -->
+        <FinishDialog :open="storeDown" next-label="Retour" @replay="grid?.replayTrain()" @next="quit">
+          <template v-if="outcome">
+            <p class="time" data-test="result-time"><span>Temps</span> {{ formatTime(outcome.timeMs) }}</p>
+            <template v-if="outcome.counted">
+              <p class="note" data-test="saved">Temps enregistré<template v-if="outcome.streak > 1"> · série de {{ outcome.streak }} jours</template></p>
+              <WinReceipt :lines="[{ label: 'Puzzle du jour', amount: outcome.earned.base }, { label: 'Série de ' + outcome.streak + ' jours', amount: outcome.earned.streakBonus }]" />
+            </template>
+            <p v-else class="note" data-test="not-counted">Temps non retenu : seul le premier essai du jour compte.</p>
           </template>
-        </CabinFrame>
+        </FinishDialog>
       </div>
     </template>
 
@@ -252,69 +245,25 @@ h2 {
   font-weight: 800;
   color: #374151;
 }
-/* Récapitulatif sur le store de la cabine (même présentation qu'au Voyage). */
-.finish {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  width: min(100%, 22rem);
-  padding: 0.45rem 0.8rem 0.5rem;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
-  text-align: center;
-}
-.head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.8rem;
-  width: 100%;
-}
-.win {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: #15803d;
-}
+/* Corps de la fenêtre de fin : le temps, la série, la facture. */
 .time {
-  font-size: 1.1rem;
+  margin: 0;
+  text-align: center;
+  font-size: 1.5rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: #1f2937;
 }
 .time span {
-  margin-right: 0.25rem;
-  font-size: 0.8rem;
+  margin-right: 0.35rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #6b7280;
 }
 .note {
-  font-size: 0.8rem;
+  margin: 0;
+  text-align: center;
+  font-size: 0.9rem;
   color: #4b5563;
-}
-.finish :deep(.receipt) {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.6rem;
-  width: 100%;
-  padding-top: 0;
-}
-.finish :deep(.receipt .row) {
-  flex: none;
-  gap: 0.3rem;
-  font-size: 0.8rem;
-}
-.finish :deep(.receipt .total) {
-  font-size: 0.85rem;
-}
-.finish :deep(.receipt .fill),
-.finish :deep(.receipt .rule) {
-  display: none;
-}
-.next {
-  width: 100%;
-  margin-top: 0.35rem;
-  padding: 0.45rem 0;
 }
 </style>
