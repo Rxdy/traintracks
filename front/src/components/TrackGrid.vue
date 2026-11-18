@@ -126,8 +126,8 @@ let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
 const trainDone = ref(false)
 // Vitesse du train (cases/s) : trois crans en haut à droite (lent, normal, rapide). Normal par défaut ; le choix reste d'un trajet à l'autre.
+import { speed } from '../speedPref' // le choix est gardé d'un niveau à l'autre
 const SPEEDS: Record<Speed, number> = { slow: 1.2, normal: 1.9, fast: 4.5 }
-const speed = ref<Speed>('normal')
 // Sons : la fin du trajet laisse la place au décor ; la barrière du passage à niveau a ses propres sons.
 watch(trainDone, (v) => v && sound.trainEnd())
 // L'écran de jeu suit le train (vue de la cabine) : il roule dès que sa route existe, jusqu'à son arrivée.
