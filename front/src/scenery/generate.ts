@@ -265,12 +265,17 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
     free.forEach(([r, c]) => {
       if (isFree(r, c + 1)) pairs.push([[r, c], [r, c + 1]])
       if (isFree(r + 1, c)) pairs.push([[r, c], [r + 1, c]])
-      // l'hiver a des étangs de tailles différentes : une case, deux cases, ou un carré de quatre
+      // l'hiver a des étangs de tailles différentes : 1 case, 2 cases, un carré de 2×2 ou de 3×3
       if (th === 'hiver' && isFree(r, c + 1) && isFree(r + 1, c) && isFree(r + 1, c + 1)) pairs.push([[r, c], [r, c + 1], [r + 1, c], [r + 1, c + 1]])
+      // …ou un grand étang de neuf (3×3)
+      if (th === 'hiver' && [0, 1, 2].every((i) => [0, 1, 2].every((j) => isFree(r + i, c + j)))) pairs.push([0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => [r + i, c + j] as Cell)))
     })
     if (th === 'hiver') free.forEach((x) => pairs.push([x]))
     if (pairs.length >= 1 && free.length >= 5) {
-      const p = pairs[Math.floor(rand() * pairs.length)]
+      // l'hiver tire d'abord une TAILLE (sinon les étangs d'une case, bien plus nombreux, l'emporteraient toujours), puis un emplacement
+      const sizes = [...new Set(pairs.map((x) => x.length))].sort((x, y) => x - y)
+      const pool = th === 'hiver' ? pairs.filter((x) => x.length === sizes[Math.floor(rand() * sizes.length)]) : pairs
+      const p = pool[Math.floor(rand() * pool.length)]
       p.forEach(([r, c]) => {
         pond.push([r, c])
         water.add(key(r, c))
