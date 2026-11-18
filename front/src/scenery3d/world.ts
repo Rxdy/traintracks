@@ -766,7 +766,7 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
   const anims: Anim[] = []
   sc.tiles.forEach((row, r) =>
     row.forEach((t, c) => {
-      if (t.kind === 'rail' || t.kind === 'road' || t.kind === 'path' || t.kind === 'grass' || sc.water.has(`${r},${c}`)) return
+      if (t.kind === 'rail' || t.kind === 'road' || t.kind === 'path' || t.kind === 'clear' || t.kind === 'grass' || sc.water.has(`${r},${c}`)) return
       const g = build(t.kind, t.v, palAt(sc, r, c), kit, anims, 500 + (r + c) * 120)
       if (!g) return
       g.position.set(c + 0.5, 0, r + 0.5)

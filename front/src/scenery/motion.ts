@@ -154,7 +154,7 @@ export interface CarState {
   kind: 0 | 1 // voiture / camion
   color: string
 }
-export type AnimalKind = 'owl' | 'squirrel' | 'deer' | 'rabbit' | 'hedgehog' | 'butterfly' | 'cat' | 'lizard' | 'scorpion' | 'alien' | 'sheep' | 'cow' | 'tractor'
+export type AnimalKind = 'owl' | 'squirrel' | 'deer' | 'rabbit' | 'hedgehog' | 'butterfly' | 'cat' | 'lizard' | 'scorpion' | 'alien' | 'sheep' | 'cow' | 'tractor' | 'goat' | 'campfire' | 'skater' | 'skier' | 'sled' | 'gondola'
 export interface AnimalState {
   id: number
   kind: AnimalKind
@@ -288,6 +288,73 @@ export function createLandSim(sc: Scenery) {
     if (th === 'volcan' || th === 'desert' || th === 'fusion') walker('lizard', 1, 0.5, [2, 3])
     if (th === 'enfer' || th === 'canyon') walker('scorpion', 2, 0.25, [3, 4])
     if (th === 'lune') { walker('alien', 0, 0.22, [4, 4]); walker('alien', 3, 0.22, [5, 4]) }
+  }
+  // Forêt : un feu de camp qui fume, près de la cabane. Montagne : des chèvres, et la cabine du téléphérique qui monte et descend
+  // entre ses deux pylônes. Hiver : des patineurs sur l'étang, un skieur et un traîneau qui glissent le long d'une rangée d'herbe.
+  if (th === 'foret' && grass.length > 2) {
+    const s = mkAnimal('campfire', centre(grass[Math.min(2, grass.length - 1)]))
+    actors.push({ s, step: (_dt, t) => { s.t = t } })
+  }
+  if (th === 'montagne') {
+    if (grass.length) { walker('goat', 0, 0.12, [3, 4]); walker('goat', Math.min(4, grass.length - 1), 0.12, [4, 4]) }
+    if (sc.cable) {
+      const [a, b] = sc.cable
+      const s = mkAnimal('gondola', { x: a.x, y: a.y })
+      const len = Math.hypot(b.x - a.x, b.y - a.y)
+      actors.push({ s, step: (_dt, t) => {
+        // aller-retour à vitesse constante, avec une courte halte à chaque station
+        const period = len / 0.3 + 2, ph = (t % (2 * period)) / period
+        const k = ph < 1 ? Math.min(1, ph * period / (len / 0.3)) : 1 - Math.min(1, (ph - 1) * period / (len / 0.3))
+        s.x = a.x + (b.x - a.x) * k
+        s.y = a.y + (b.y - a.y) * k + 0.18 // la cabine pend sous le câble
+        s.face = b.x - a.x >= 0 ? 1 : -1
+        s.t = t
+      } })
+    }
+  }
+  if (th === 'hiver') {
+    if (sc.pond.length) {
+      const rs = sc.pond.map((c) => c[0]), cs = sc.pond.map((c) => c[1])
+      const w = Math.max(...cs) - Math.min(...cs) + 1, h = Math.max(...rs) - Math.min(...rs) + 1
+      const cx = (Math.min(...cs) + Math.max(...cs) + 1) / 2, cy = (Math.min(...rs) + Math.max(...rs) + 1) / 2
+      const n = w * h >= 4 ? 3 : w * h >= 2 ? 2 : 1
+      for (let i = 0; i < n; i++) {
+        const s = mkAnimal('skater', { x: cx, y: cy }), ph = (i / n) * Math.PI * 2, sp = 0.5 + i * 0.12
+        actors.push({ s, step: (_dt, t) => {
+          const a = ph + t * sp
+          s.x = cx + Math.cos(a) * w * 0.3
+          s.y = cy + Math.sin(a) * h * 0.26
+          s.face = -Math.sin(a) >= 0 ? 1 : -1
+          s.t = t
+        } })
+      }
+    }
+    // rangées horizontales d'herbe d'au moins 3 cases, les plus longues d'abord
+    const gk = new Set(grass.map(([r, c]) => `${r},${c}`))
+    const runs: [number, number, number][] = []
+    for (const [r, c] of grass) {
+      if (gk.has(`${r},${c - 1}`)) continue
+      let n = 1
+      while (gk.has(`${r},${c + n}`)) n++
+      if (n >= 3) runs.push([r, c, n])
+    }
+    runs.sort((a, b) => b[2] - a[2])
+    const slide = (kind: AnimalKind, run: [number, number, number], speed: number) => {
+      const x0 = run[1] + 0.3, x1 = run[1] + run[2] - 0.3, y = run[0] + 0.55
+      const s = mkAnimal(kind, { x: x0, y })
+      let dir: 1 | -1 = 1, wait = 0
+      actors.push({ s, step: (dt, t) => {
+        if (wait > 0) wait -= dt
+        else {
+          s.x += dir * speed * dt
+          if (s.x >= x1) { s.x = x1; dir = -1; wait = 2 } else if (s.x <= x0) { s.x = x0; dir = 1; wait = 2 }
+        }
+        s.face = dir
+        s.t = t
+      } })
+    }
+    if (runs[0]) slide('skier', runs[0], 0.45)
+    if (runs[1]) slide('sled', runs[1], 0.3)
   }
   // Plaine : un troupeau (moutons ou vaches, selon la graine) qui broute autour d'une case d'herbe, de préférence près d'un champ,
   // et un tracteur qui fait des allers-retours dans un grand champ (au moins 2 cases côte à côte).

@@ -68,7 +68,7 @@ export const PARAMS: Record<Theme, Params> = {
   foret: { clump: true, river: 0.5, tree: 0.6, pine: 0.6, houseBase: 0, houseRatio: 0, fields: 0, peaks: 0, boulders: 0.05, snowmen: 0, road: 0.35, windmills: 0 },
   automne: { clump: true, river: 0.6, tree: 0.5, pine: 0.12, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0, road: 0.8, windmills: 0 },
   montagne: { clump: true, river: 0.7, tree: 0.25, pine: 0.7, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.3, boulders: 0.2, snowmen: 0, road: 0.5, windmills: 0 },
-  hiver: { clump: true, river: 0.7, tree: 0.35, pine: 0.7, houseBase: 1, houseRatio: 0.1, fields: 0, peaks: 0.08, boulders: 0, snowmen: 0.2, road: 0.6, windmills: 0 },
+  hiver: { clump: true, river: 0.3, tree: 0.35, pine: 0.7, houseBase: 1, houseRatio: 0.1, fields: 0, peaks: 0.08, boulders: 0, snowmen: 0.2, road: 0.6, windmills: 0 },
   ville: { river: 0.7, tree: 0.25, pine: 0.1, houseBase: 3, houseRatio: 0.38, fields: 0, peaks: 0, boulders: 0, snowmen: 0, road: 1, windmills: 0, houseKind: 'building' },
   desert: { clump: true, peakKind: 'dune', river: 0.4, tree: 0.3, pine: 0.5, houseBase: 1, houseRatio: 0.08, fields: 0, peaks: 0.3, boulders: 0.25, snowmen: 0, road: 0.7, windmills: 0, treeKind: 'cactus', pineKind: 'cactus' },
   tropical: { clump: true, river: 0.65, tree: 0.5, pine: 0.7, houseBase: 1, houseRatio: 0.06, fields: 0, peaks: 0, boulders: 0.1, snowmen: 0, road: 0.35, windmills: 0, pineKind: 'palm', treeKind: 'palm' },
