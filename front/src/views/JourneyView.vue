@@ -72,6 +72,7 @@ const fmt = (ms: number): string => {
   const t = Math.floor(ms / 1000)
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`
 }
+const won = ref(false) // le tracé est validé : le Plateau cède la place au Trajet (la cabine monte, les bonus partent)
 const levelFinished = ref(false) // le train est passé : le récapitulatif et « Niveau suivant » apparaissent sur le store
 const colorHints = ref(false) // indicateurs de couleur : désactivés par défaut, l'aide « Couleurs » les active sur ce niveau
 // Une pièce sonne par ligne de gain, quand le récapitulatif apparaît (le décor se tait un instant).
@@ -99,6 +100,7 @@ async function play(): Promise<void> {
   resume.value = { reveals: r.reveals ?? [], crosses: r.crosses ?? [] }
   colorHints.value = (r.usedAids ?? []).includes('colors') // reprise : les couleurs déjà payées restent actives
   picking.value = false
+  won.value = false
   levelFinished.value = false
   trainRunning.value = false
   trainS.value = 0
@@ -182,28 +184,44 @@ function quit(): void {
           <span class="swatch" aria-hidden="true"></span>
           {{ current.intro }}
         </p>
-        <TrackGrid
-          ref="grid"
-          :key="current.id"
-          :puzzle="current.puzzle"
-          :validate="validate"
-          :official-ms="officialMs"
-          :theme="themeForLevel(current.id)"
-          :picking="picking"
-          :color-hints="colorHints"
-          @begin="beginLevel()"
-          external-recap
-          @finish="levelFinished = true"
-          @train="trainRunning = $event"
-          @progress="trainS = $event"
-          @scene="cabScene = $event"
-          @land="landFrame = $event"
-          :initial="{ givens: resume.reveals, crosses: resume.crosses }"
-          @pick="(r, c) => aidBar?.onPick(r, c)"
-        />
+        <div class="stage">
+          <TrackGrid
+            ref="grid"
+            :key="current.id"
+            :puzzle="current.puzzle"
+            :validate="validate"
+            :official-ms="officialMs"
+            :theme="themeForLevel(current.id)"
+            :picking="picking"
+            :color-hints="colorHints"
+            @begin="beginLevel()"
+            @solved="won = true"
+            external-recap
+            @finish="levelFinished = true"
+            @train="trainRunning = $event"
+            @progress="trainS = $event"
+            @scene="cabScene = $event"
+            @land="landFrame = $event"
+            :initial="{ givens: resume.reveals, crosses: resume.crosses }"
+            @pick="(r, c) => aidBar?.onPick(r, c)"
+          />
+          <!-- Les bonus : sous la grille (portrait) ou à sa droite (paysage), seulement pendant le Plateau. -->
+          <div class="bonus-dock" :class="{ gone: won }" data-test="bonus-col">
+            <AidBar
+              ref="aidBar"
+              :key="'aids-' + current.id"
+              :size="current.puzzle.size"
+              :level="current.id"
+              :snapshot="() => grid?.snapshotForAid() ?? { edges: [], crosses: [], marks: 0 }"
+              @reveal="(g, c) => grid?.reveal(g, c)"
+              @colors="colorHints = true"
+              @picking="picking = $event"
+            />
+          </div>
+        </div>
         <!-- Cabine sous la grille, collée au décor et sur toute la largeur. Pare-brise : la voie défile quand le train roule ; à l'arrivée un store
              se ferme et porte le récapitulatif, avec « Niveau suivant » juste dessous. Pouvoirs : colonne à droite. -->
-        <CabinFrame :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :theme="themeForLevel(current.id)" :store-down="storeDown">
+        <CabinFrame :shown="won" :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :theme="themeForLevel(current.id)" :store-down="storeDown">
           <template #store>
             <div v-if="levelFinished" class="finish" data-test="finish">
               <template v-if="earned">
@@ -221,20 +239,6 @@ function quit(): void {
               <!-- « Niveau suivant » juste sous le récapitulatif, sur le store -->
               <button v-if="hasNext" type="button" class="btn cta next" data-test="next" :disabled="loading" @click="play">Niveau suivant</button>
               <p v-else class="trophy" data-test="coming-soon">Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt.</p>
-            </div>
-          </template>
-          <template #side>
-            <div class="bonus-col" data-test="bonus-col">
-              <AidBar
-                ref="aidBar"
-                :key="'aids-' + current.id"
-                :size="current.puzzle.size"
-                :level="current.id"
-                :snapshot="() => grid?.snapshotForAid() ?? { edges: [], crosses: [], marks: 0 }"
-                @reveal="(g, c) => grid?.reveal(g, c)"
-                @colors="colorHints = true"
-                @picking="picking = $event"
-              />
             </div>
           </template>
         </CabinFrame>
@@ -318,70 +322,71 @@ section {
   display: none;
 }
 
-/* Les pouvoirs : une colonne à droite, à côté du tableau de bord, sur un fond clair qui dit « ce n'est pas la cabine ». Touches plus grosses. */
-.bonus-col {
-  position: relative;
-  flex: none;
-  width: 25%;
-  container-type: size;
-  display: grid;
-  place-items: center;
-  padding: 0.6rem 0;
-  border-top: 3px solid #fff;
-  border-radius: 0 30px 0 0 / 0 22px 0 0;
-  background: #e6edf6;
-  box-shadow: var(--shadow);
-}
-.bonus-col::before {
-  content: 'BONUS';
-  position: absolute;
-  top: 0.55rem;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  color: #92400e;
-}
-.bonus-col :deep(.aids) {
-  width: auto;
-  gap: 0;
-  margin-top: 0.7rem;
-}
-.bonus-col :deep(.row) {
+/* Le plateau : la grille, et les bonus dessous (portrait) ou à droite (paysage). */
+.stage {
+  display: flex;
   flex-direction: column;
-  flex-wrap: nowrap;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.75rem;
 }
-.bonus-col :deep(.aid) {
-  --t: min(calc(100cqw - 1.1rem), calc((100cqh - 3.4rem) / 4));
-  width: var(--t);
-  height: var(--t);
-  border: 0.3rem solid #fbbf24;
-  border-radius: 0.85rem;
+.bonus-dock {
+  display: grid;
+  justify-items: center;
+  width: min(94vw, 30rem);
+  transition: opacity 0.4s ease, transform 0.5s ease;
 }
-.bonus-col :deep(.aid .badge) {
-  top: -0.45rem;
-  right: -0.5rem;
-  min-width: 1.5rem;
-  height: 1.5rem;
-  font-size: 0.85rem;
+.bonus-dock.gone {
+  opacity: 0;
+  transform: translateY(1.5rem);
+  pointer-events: none;
 }
-
-/* Messages des pouvoirs, choix d'une ligne ou d'une case, présentation d'un nouveau pouvoir : trop larges pour leur emplacement,
-   ils s'affichent à gauche de la colonne, SUR LE PARE-BRISE (dans la cabine). Jamais au-dessus de la cabine : ils cacheraient
-   le bas de la grille et ses chiffres. */
-.bonus-col :deep(.panel),
-.bonus-col :deep(.msg),
-.bonus-col :deep(.fresh) {
-  position: absolute;
-  top: 0.5rem;
-  right: calc(100% + 0.5rem);
-  z-index: 8;
-  width: max-content;
-  max-width: min(68vw, 26rem);
+.bonus-dock :deep(.aids) {
+  width: 100%;
+}
+.bonus-dock :deep(.row) {
+  flex-wrap: nowrap;
+  gap: 0.6rem;
+}
+.bonus-dock :deep(.aid) {
+  flex: 1 1 0;
+  width: auto;
+  max-width: 5.5rem;
+  height: 3.6rem;
+}
+/* Paysage (l'écran est plus large que haut) : les bonus forment une colonne à droite de la grille. */
+@media (min-aspect-ratio: 1/1) {
+  .stage {
+    flex-direction: row;
+    gap: 1.5rem;
+  }
+  .bonus-dock {
+    width: 5.5rem;
+  }
+  .bonus-dock :deep(.row) {
+    flex-direction: column;
+  }
+  .bonus-dock :deep(.aid) {
+    flex: none;
+    width: 100%;
+    max-width: none;
+  }
+  .bonus-dock.gone {
+    transform: translateX(1.5rem);
+  }
+  /* Messages et choix d'un pouvoir : trop larges pour la colonne, ils s'ouvrent à sa droite. */
+  .bonus-dock {
+    position: relative;
+  }
+  .bonus-dock :deep(.panel),
+  .bonus-dock :deep(.msg),
+  .bonus-dock :deep(.fresh) {
+    position: absolute;
+    top: 0;
+    left: calc(100% + 0.6rem);
+    z-index: 8;
+    width: max-content;
+    max-width: 16rem;
+  }
 }
 .store .next {
   width: 100%;
