@@ -379,4 +379,32 @@ describe('TrackGrid : accélérer le train', () => {
     expect(w.findComponent(TrainRun).props('speed')).toBeLessThan(2.5)
     w.unmount()
   })
+
+  it('écran tourné : le décor garde sa forme pendant le trajet, et se refait pour la nouvelle forme au « Revoir le trajet »', async () => {
+    const taille = (l: number, h: number) => {
+      Object.defineProperty(window, 'innerWidth', { value: l, configurable: true })
+      Object.defineProperty(window, 'innerHeight', { value: h, configurable: true })
+    }
+    taille(390, 844)
+    const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
+    await tracer(w)
+    const scene = () => (w.emitted('scene') ?? []).filter((e) => e[0]).at(-1)?.[0] as { scenery: unknown } | undefined
+    const depart = scene()?.scenery
+    expect(depart).toBeTruthy()
+    const rejouer = () => (w.vm as unknown as { replayTrain: () => void }).replayTrain()
+    taille(844, 390) // rotation pendant le trajet : rien ne change
+    window.dispatchEvent(new Event('resize'))
+    await w.vm.$nextTick()
+    expect(scene()?.scenery).toBe(depart)
+    w.findComponent(TrainRun).vm.$emit('done')
+    rejouer() // écran tourné : décor refait
+    await flushPromises()
+    expect(scene()?.scenery).not.toBe(depart)
+    const refait = scene()?.scenery
+    rejouer() // même forme : le décor reste
+    await flushPromises()
+    expect(scene()?.scenery).toBe(refait)
+    taille(1024, 768)
+    w.unmount()
+  })
 })

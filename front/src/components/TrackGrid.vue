@@ -217,10 +217,26 @@ async function checkWin(): Promise<void> {
 // La voie prend l'allure de l'environnement : traverses grises sous la neige, acier plus sombre en forêt…
 const railStyle = computed(() => (scenery.value ? { '--won-rail': PAL[scenery.value.theme].rail.rail, '--won-tie': PAL[scenery.value.theme].rail.tie } : {}))
 // Marges de paysage autour de la grille : le décor couvre TOUT l'écran (toute la largeur, du haut au bas de l'écran), sur tous les appareils.
+// La grille telle qu'elle est posée au Plateau : à la victoire elle rétrécit et glisse (transform), ce qui fausserait la mesure
+// si le décor devait être refait pendant le Trajet (rotation de l'écran). On coupe donc le transform le temps de mesurer.
+function boardRect(): DOMRect | undefined {
+  const el = boardEl.value
+  if (!el) return undefined
+  const { transform, transition } = el.style
+  el.style.transition = 'none'
+  el.style.transform = 'none'
+  const r = el.getBoundingClientRect()
+  el.style.transform = transform
+  void el.offsetWidth // applique la mesure avant de rendre la transition
+  el.style.transition = transition
+  return r
+}
+const isLandscape = (): boolean => window.innerWidth >= window.innerHeight
+let sceneLandscape = isLandscape() // forme d'écran pour laquelle le décor a été généré
 function sceneryMargins(): { x: number; y: number; top?: number; below?: number } {
   const n = puz.value.size
   const y = sceneryMargin(n)
-  const rect = boardEl.value?.getBoundingClientRect()
+  const rect = boardRect()
   if (!rect || !(rect.width > 0)) return { x: y, y }
   const k = n / (n + 2 * y) // échelle de la grille à la victoire (voir buildScenery)
   const cell = rect.width / (n + 1) // taille d'une case à l'écran avant le rétrécissement (px)
@@ -240,6 +256,14 @@ function sceneryMargins(): { x: number; y: number; top?: number; below?: number 
   const below = Math.max(0, (window.innerHeight - decorBottom) / unit + 0.05)
   return { x, y, top, below }
 }
+function buildDecor(path: [number, number][]): void {
+  sceneLandscape = isLandscape()
+  const mg = sceneryMargins()
+  scenery.value = buildScenery(puz.value, path, props.theme, seedOf(puz.value), mg)
+  const horiz = (d: string) => d === 'left' || d === 'right'
+  const sm = scenery.value.margin // marges réelles (avec le complément du haut) : la voie va jusqu'au bord du décor
+  sceneryRoute.value = buildRoute(path, puz.value, { entry: horiz(puz.value.entry.dir) ? sm.x : puz.value.entry.dir === 'up' ? sm.y : sm.b, exit: horiz(puz.value.exit.dir) ? sm.x : puz.value.exit.dir === 'up' ? sm.y : sm.b })
+}
 function revealScenery(): void {
   const path = tracePath(connections.value, puz.value)
   if (!path) {
@@ -256,18 +280,19 @@ function revealScenery(): void {
   connections.value = keep
   rails.value = new Set()
   crosses.value = new Set()
-  const mg = sceneryMargins()
-  scenery.value = buildScenery(puz.value, path, props.theme, seedOf(puz.value), mg)
-  sound.reveal(scenery.value)
-  const horiz = (d: string) => d === 'left' || d === 'right'
-  const sm = scenery.value.margin // marges réelles (avec le complément du haut) : la voie va jusqu'au bord du décor
-  sceneryRoute.value = buildRoute(path, puz.value, { entry: horiz(puz.value.entry.dir) ? sm.x : puz.value.entry.dir === 'up' ? sm.y : sm.b, exit: horiz(puz.value.exit.dir) ? sm.x : puz.value.exit.dir === 'up' ? sm.y : sm.b })
+  buildDecor(path)
+  if (scenery.value) sound.reveal(scenery.value)
   if (timing.revealMs > 0) trainTimer = window.setTimeout(runTrain, timing.revealMs)
   else runTrain()
 }
 function replayTrain(): void {
   trainDone.value = false
   route.value = null
+  // Écran tourné depuis la victoire : le décor est refait pour la nouvelle forme (pendant un trajet on garde celle de départ).
+  if (scenery.value && sceneLandscape !== isLandscape()) {
+    const path = tracePath(connections.value, puz.value)
+    if (path) buildDecor(path)
+  }
   void nextTick(runTrain)
 }
 function runTrain(): void {
