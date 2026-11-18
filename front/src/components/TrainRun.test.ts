@@ -46,3 +46,44 @@ describe.each(levels.map((l) => [l.id, l] as const))('TrainRun niveau %i', (_id,
     vi.useRealTimers()
   })
 })
+
+describe('TrainRun : gares', () => {
+  const lv = levels[10]
+  const route = buildRoute(lv.solution, lv.puzzle, { entry: 8, exit: 8 })
+
+  it('part à l\'arrêt, à quai, attend, puis démarre ; s\'arrête à quai à l\'arrivée et annonce la fin après une pause', async () => {
+    vi.useFakeTimers()
+    const start = route.gridStart - 3
+    const end = route.gridEnd + 3
+    const w = mount(TrainRun, { props: { route, size: lv.puzzle.size, stopStart: start, stopEnd: end } })
+    const progress = () => (w.emitted('progress') ?? []).at(-1)?.[0] as number
+    await vi.advanceTimersByTimeAsync(600)
+    expect(progress()).toBe(start) // il attend à quai
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(progress()).toBeGreaterThan(start) // puis démarre
+    expect(w.emitted('done')).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(progress()).toBe(end) // s'arrête à quai, ni plus loin ni avant
+    expect(w.emitted('done')).toHaveLength(1)
+    w.unmount()
+    vi.useRealTimers()
+  })
+
+  it('ralentit avant la gare d\'arrivée', async () => {
+    vi.useFakeTimers()
+    const end = route.gridEnd + 3
+    const w = mount(TrainRun, { props: { route, size: lv.puzzle.size, stopEnd: end, speed: 4 } })
+    const samples: number[] = []
+    let prev = 0
+    for (let i = 0; i < 4000 && !w.emitted('done'); i++) {
+      await vi.advanceTimersByTimeAsync(30)
+      const s = (w.emitted('progress') ?? []).at(-1)?.[0] as number
+      if (s > end - 3 && s < end) samples.push(s - prev)
+      prev = s
+    }
+    expect(samples.length).toBeGreaterThan(5)
+    expect(samples[samples.length - 1]).toBeLessThan(samples[0]) // le pas diminue vers l'arrêt
+    w.unmount()
+    vi.useRealTimers()
+  })
+})

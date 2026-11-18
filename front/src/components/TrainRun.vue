@@ -7,7 +7,7 @@ import { pointAt, speedFactor, type Route } from '../trainRoute'
 const props = withDefaults(
   // clip : zone (en cases) où le train est visible. Hors de cette zone (le décor), il disparaît : il ne roule jamais sur
   // l'interface (récapitulatif, pouvoirs, bouton Suivant).
-  defineProps<{ route: Route; size: number; speed?: number; wagons?: number; clip?: { x: number; y: number; w: number; h: number } }>(),
+  defineProps<{ route: Route; size: number; speed?: number; wagons?: number; stopStart?: number; stopEnd?: number; clip?: { x: number; y: number; w: number; h: number } }>(),
   { speed: 1.9, wagons: 3 },
 )
 const emit = defineEmits<{ (e: 'done'): void; (e: 'progress', s: number): void }>()
@@ -18,10 +18,14 @@ const total = computed(() => props.wagons * SPACING)
 
 // Distance parcourue par la locomotive. On part avec tout le train déjà posé
 // sur la voie (queue en 0), pour que les wagons ne soient jamais empilés.
-const s = ref(total.value)
+// Avec une gare de départ (`stopStart` : où la locomotive attend), le train démarre à l'arrêt, à quai, et repart après une courte attente.
+// Avec une gare d'arrivée (`stopEnd`), il ralentit sur les 3 dernières cases et s'arrête à quai. Sans gare : comme avant.
+const s = ref(props.stopStart ?? total.value)
 let timer = 0
 let last = 0
-let v = props.speed // vitesse actuelle : rejoint doucement la vitesse voulue
+let v = props.stopStart != null ? 0 : props.speed // vitesse actuelle : rejoint doucement la vitesse voulue
+let hold = props.stopStart != null ? 1.2 : 0 // attente à quai avant de partir (s)
+const BRAKE = 3 // cases de freinage avant la gare d'arrivée
 
 const cars = computed(() =>
   Array.from({ length: props.wagons + 1 }, (_, i) => ({
@@ -35,10 +39,25 @@ onMounted(() => {
   timer = window.setInterval(() => {
     const now = Date.now()
     const dt = Math.min(0.1, (now - last) / 1000)
-    v += (props.speed * speedFactor(props.route, s.value) - v) * Math.min(1, dt * 3.5)
-    s.value += dt * v
     last = now
+    if (hold > 0) {
+      hold -= dt
+      emit('progress', s.value)
+      return
+    }
+    let want = props.speed * speedFactor(props.route, s.value)
+    if (props.stopEnd != null) want = Math.max(0.25, want * Math.min(1, (props.stopEnd - s.value) / BRAKE))
+    v += (want - v) * Math.min(1, dt * 3.5)
+    s.value += dt * v
     emit('progress', s.value)
+    if (props.stopEnd != null && s.value >= props.stopEnd - 0.02) {
+      // arrivé à quai : le train s'arrête, puis la suite s'affiche après une courte pause
+      s.value = props.stopEnd
+      clearInterval(timer)
+      emit('progress', s.value)
+      window.setTimeout(() => emit('done'), 800)
+      return
+    }
     // fini quand la locomotive atteint le bout du trajet, hors de l'écran :
     // les wagons la suivent encore sur la voie, rien ne s'écrase.
     if (s.value >= props.route.length) {
