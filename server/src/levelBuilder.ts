@@ -10,6 +10,27 @@ import { isConsistent } from '../../shared/puzzle.js'
 import { solve } from '../../shared/solver.js'
 import { canon, type LevelSeed } from './journey.js'
 
+// Deux niveaux se jouent pareil quand leur tracé est le même à un miroir, une rotation ou un sens de parcours près : le joueur
+// croit refaire le même niveau. Cette clé est identique pour tous les niveaux équivalents (8 symétries × 2 sens).
+type Cell = [number, number]
+const SYMMETRIES: ((r: number, c: number, n: number) => Cell)[] = [
+  (r, c) => [r, c], (r, c, n) => [r, n - 1 - c], (r, c, n) => [n - 1 - r, c], (r, c, n) => [n - 1 - r, n - 1 - c],
+  (r, c) => [c, r], (r, c, n) => [c, n - 1 - r], (r, c, n) => [n - 1 - c, r], (r, c, n) => [n - 1 - c, n - 1 - r],
+]
+export function symmetryKey(solution: Cell[], size: number): string {
+  let best: string | null = null
+  for (const way of [solution, [...solution].reverse()]) {
+    for (const t of SYMMETRIES) {
+      const k = way.map(([r, c]) => t(r, c, size).join(',')).join(';')
+      if (best === null || k < best) best = k
+    }
+  }
+  return `${size}|${best}`
+}
+// Niveaux déjà publiés (donc gelés) qui répètent un niveau plus ancien à une symétrie près : constatés, tolérés, jamais à imiter.
+// Chaque entrée est le numéro du niveau le plus récent du groupe (13 répète 12, 26 aussi…). Tout nouveau cas fait échouer l'audit.
+export const KNOWN_TWINS = new Set([7, 13, 21, 26, 30, 43, 52, 58])
+
 export const logDifficulty = (nodes: number): number => Math.log10(Math.max(1, nodes))
 
 // Fourchette de difficulté habituelle d'une taille de grille (déciles 10 % et 90 % de grilles tirées au hasard).
@@ -43,6 +64,7 @@ export function buildLevels(opts: BuildOptions = {}): LevelSeed[] {
     if (l.id !== i + 1) throw new Error(`niveaux conservés non contigus au niveau ${i + 1}`)
   })
   const used = new Set(levels.map((l) => canon(l.puzzle)))
+  const usedShape = new Set(levels.map((l) => symmetryKey(l.solution, l.puzzle.size)))
   const range = new Map<number, { lo: number; hi: number }>()
 
   for (let id = levels.length + 1; id <= to; id++) {
@@ -61,7 +83,7 @@ export function buildLevels(opts: BuildOptions = {}): LevelSeed[] {
     let bestGap = Infinity
     for (let i = 0; i < K * 3 && (i < K || !best); i++) {
       const g = generate(`level:${id}:${i}`, plan.size, withGivens ? minGivens + 2 : 0, minGivens, withGivens, rockOpts)
-      if (used.has(canon(g.puzzle))) continue
+      if (used.has(canon(g.puzzle)) || usedShape.has(symmetryKey(g.solution, plan.size))) continue // jamais le même niveau, ni son miroir
       const gap = Math.abs(logDifficulty(g.difficulty) - target)
       if (gap < bestGap) {
         best = g
@@ -70,6 +92,7 @@ export function buildLevels(opts: BuildOptions = {}): LevelSeed[] {
     }
     if (!best) throw new Error(`niveau ${id} : aucune grille nouvelle trouvée`)
     used.add(canon(best.puzzle))
+    usedShape.add(symmetryKey(best.solution, plan.size))
     const intro = plan.intro ? MECHANICS.find((m) => m.id === plan.intro)!.introText : undefined
     levels.push({ id, puzzle: best.puzzle, solution: best.solution, ...(intro ? { intro } : {}) })
     opts.onLevel?.(id)
@@ -138,6 +161,7 @@ export interface Audit {
 export function auditLevels(levels: LevelSeed[]): Audit {
   const issues: string[] = []
   const seen = new Map<string, number>()
+  const shapes = new Map<string, number>()
   const diff: number[] = []
   levels.forEach((l, i) => {
     if (l.id !== i + 1) issues.push(`numéros non contigus : ${i + 1} attendu, ${l.id} trouvé`)
@@ -156,6 +180,10 @@ export function auditLevels(levels: LevelSeed[]): Audit {
     const key = canon(l.puzzle)
     if (seen.has(key)) issues.push(`niveau ${l.id} : identique au niveau ${seen.get(key)}`)
     seen.set(key, l.id)
+    const shape = symmetryKey(l.solution, l.puzzle.size)
+    const twin = shapes.get(shape)
+    if (twin !== undefined && !KNOWN_TWINS.has(l.id)) issues.push(`niveau ${l.id} : se joue comme le niveau ${twin} (miroir, rotation ou sens inverse)`)
+    if (twin === undefined) shapes.set(shape, l.id)
     diff.push(logDifficulty(r.nodes))
   })
   const blocks: AuditBlock[] = []
