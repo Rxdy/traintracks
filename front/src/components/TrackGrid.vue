@@ -125,6 +125,7 @@ const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
 const trainDone = ref(false)
+const stops = ref<{ start?: number; end?: number }>({}) // positions de la locomotive à quai (départ, arrivée)
 // Vitesse du train (cases/s) : trois crans en haut à droite (lent, normal, rapide). Normal par défaut ; le choix reste d'un trajet à l'autre.
 import { speed } from '../speedPref' // le choix est gardé d'un niveau à l'autre
 const SPEEDS: Record<Speed, number> = { slow: 1.2, normal: 1.9, fast: 4.5 }
@@ -306,6 +307,7 @@ function runTrain(): void {
     return
   }
   trainS.value = -1
+  stops.value = {}
   sound.trainStart()
   const sc = scenery.value
   if (sc) {
@@ -314,6 +316,12 @@ function runTrain(): void {
     const below = sc.frame.visibleRows - sc.margin.y - puz.value.size // cases de décor visibles sous la grille
     const lead = (dir: string) => (dir === 'left' || dir === 'right' ? sc.margin.x : dir === 'up' ? sc.margin.y : below) + TRAIN_LENGTH + 1
     route.value = buildRoute(path, puz.value, { entry: lead(puz.value.entry.dir), exit: lead(puz.value.exit.dir) })
+    // Gares : le train part à quai et s'arrête à quai (quand le décor laisse la place).
+    const st = sc.stations
+    stops.value = {
+      start: st?.entry ? route.value.gridStart - st.entry.loco : undefined,
+      end: st?.exit ? route.value.gridEnd + st.exit.loco : undefined,
+    }
     return
   }
   // Pas de décor (cas limite) : la voie est prolongée jusqu'au bord de l'ÉCRAN.
@@ -657,7 +665,7 @@ onMounted(() => {
 
       <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" @frame="emit('land', $event)" />
 
-      <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" :speed="SPEEDS[speed]" @progress="onTrainProgress" @done="trainDone = true" />
+      <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" :stop-start="stops.start" :stop-end="stops.end" :speed="SPEEDS[speed]" @progress="onTrainProgress" @done="trainDone = true" />
     </div>
 
     <!-- La victoire s'affiche par-dessus le décor (position absolue) : elle ne pousse rien. -->

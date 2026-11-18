@@ -34,6 +34,7 @@ const roadFrame = computed(() => {
 const armA = computed(() => -85 + 85 * frame.value.barrier)
 const armB = computed(() => 265 - 85 * frame.value.barrier)
 const uc = computed(() => sim.uc ?? 0)
+const stationList = computed(() => [props.scenery.stations?.entry, props.scenery.stations?.exit].filter((x): x is NonNullable<typeof x> => !!x))
 // Les petites scènes (feu de camp, skieur, cabine de téléphérique…) sont agrandies pour se voir à côté des arbres.
 const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, skier: 1.5, sled: 1.5, goat: 1.3, tractor: 1.3, sheep: 1.3, cow: 1.3 }
 </script>
@@ -79,6 +80,17 @@ const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, 
             <circle cx="0" cy="0.1" r="0.04" :fill="frame.lights ? '#ef4444' : '#7f1d1d'" />
           </g>
         </template>
+      </g>
+
+      <!-- gares de départ et d'arrivée : quai le long de la voie, bâtiment derrière -->
+      <g v-for="(st, i) in stationList" :key="'st' + i" :transform="`translate(${st.x} ${st.y}) rotate(${st.angle}) scale(1 ${st.side})`" data-test="station">
+        <rect x="-1.25" y="0.27" width="2.5" height="0.3" rx="0.04" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.016" />
+        <path d="M-1.2 0.3 H1.2" stroke="#facc15" stroke-width="0.03" />
+        <rect x="-0.55" y="0.68" width="1.1" height="0.6" rx="0.04" :fill="pal.walls[0]" stroke="#7c6a4d" stroke-width="0.016" />
+        <rect x="-0.62" y="0.62" width="1.24" height="0.38" rx="0.04" :fill="pal.roofs[0]" stroke="#00000033" stroke-width="0.016" />
+        <path d="M-0.62 0.81 H0.62" stroke="#00000030" stroke-width="0.012" />
+        <rect x="-0.08" y="1.02" width="0.16" height="0.22" fill="#3b2713" /><rect x="-0.4" y="1.05" width="0.14" height="0.14" fill="#bfdbfe" /><rect x="0.26" y="1.05" width="0.14" height="0.14" fill="#bfdbfe" />
+        <rect x="-1.1" y="0.12" width="0.05" height="0.26" fill="#374151" /><rect x="-1.2" y="0.08" width="0.25" height="0.1" rx="0.02" fill="#2563eb" />
       </g>
 
       <!-- décors fixes : câble du téléphérique, cabane, tas de bois, champignons, chalet, pylônes -->

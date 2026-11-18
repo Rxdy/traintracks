@@ -10,7 +10,7 @@ function decor(items: { r: number; c: number; kind: TileKind; v?: number }[] = [
   for (const it of items) tiles[it.r][it.c] = { kind: it.kind, v: it.v ?? 0 }
   return {
     seed: 1, margin: { x: 0, y: 0, b: 0 }, frame: { k: 1, visibleRows: 14 }, rows: 14, cols: 14, ext: [], road: null, size: 5, theme: 'plaine',
-    tiles, water: new Set(water.map(([r, c]) => `${r},${c}`)), river: null, pond: [], bridges: new Map(), paths: [], props: [], cable: null,
+    tiles, water: new Set(water.map(([r, c]) => `${r},${c}`)), river: null, pond: [], bridges: new Map(), paths: [], props: [], cable: null, stations: { entry: null, exit: null },
   }
 }
 const route = (...pts: [number, number][]): Route => {

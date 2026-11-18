@@ -30,6 +30,14 @@ export interface Prop {
   y: number
   v: number // variante
 }
+// Gare de départ ou d'arrivée, sur le prolongement de la voie, dans le décor : le train y démarre ou s'y arrête à quai.
+export interface Station {
+  x: number // centre du quai, en unités de case
+  y: number
+  angle: number // sens de marche du train, en degrés
+  side: 1 | -1 // côté du quai où se tient le bâtiment (par rapport au sens de marche)
+  loco: number // distance, depuis le bord de la grille, où s'arrête la locomotive
+}
 export interface Pt {
   x: number
   y: number
@@ -56,6 +64,7 @@ export interface Scenery {
   river: Pt[] | null // ligne de la rivière, en unités de case (hors grille aux deux bouts)
   pond: [number, number][] // étang de repli quand aucune rivière ne passe
   bridges: Map<string, 'h' | 'v'> // cases de voie posées sur la rivière → axe de la voie (le pont la porte)
+  stations: { entry: Station | null; exit: Station | null } // gare de départ et d'arrivée (null : pas la place)
   props: Prop[] // décors fixes (cabane, chalet…)
   cable: [Pt, Pt] | null // câble du téléphérique (montagne) : entre deux pylônes
   paths: Pt[][] // sentiers de terre (maisons et moulin vers la route ou un autre sentier), en unités de case ; tuiles « path »
@@ -445,7 +454,8 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
 
   const paths = P.paths ? makePaths(seed, tiles, rows, cols) : []
   const { props, cable } = makeProps(th, seed, tiles, water, rows, cols)
-  return { seed, road, margin: mg, frame, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges, paths, props, cable }
+  const stations = ext.length ? makeStations(puzzle, shifted, mg, frame.visibleRows, tiles, water) : { entry: null, exit: null }
+  return { seed, road, margin: mg, frame, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges, paths, props, cable, stations }
 }
 
 // --- Sentiers : chaque maison et chaque moulin est relié à la route (ou à un sentier déjà tracé, ou à une autre maison) par un chemin de terre qui
@@ -532,4 +542,63 @@ function makeProps(th: Theme, seed: number, tiles: Tile[][], water: Set<string>,
     }
   }
   return { props, cable }
+}
+
+// --- Gares : une au bout de la voie d'entrée, une au bout de la voie de sortie, quand le décor laisse au moins 4,6 cases. Le quai
+// longe la voie, le bâtiment est de l'autre côté du quai (du côté où il y a le plus de place). Les arbres du quai sont abattus.
+// La locomotive s'arrête à `loco` cases du bord de la grille : tout le train tient entre la grille et le bord du décor.
+export const TRAIN_SPAN = 2.4 // longueur du train (locomotive + wagons), en cases
+function makeStations(puzzle: Puzzle, shifted: Cell[], mg: { x: number; y: number; b: number }, visibleRows: number, tiles: Tile[][], water: Set<string>): { entry: Station | null; exit: Station | null } {
+  const OUTV: Record<string, Cell> = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] }
+  const N = puzzle.size
+  const reach = (dir: string) => (dir === 'left' || dir === 'right' ? mg.x : dir === 'up' ? mg.y : visibleRows - mg.y - N) // cases visibles au bout de la voie
+  const build = (cell: Cell, dir: string, arriving: boolean): Station | null => {
+    const L = reach(dir)
+    if (L < TRAIN_SPAN + 2.2) return null // pas la place : pas de gare
+    const o = OUTV[dir]
+    const u = { x: o[1], y: o[0] } // vers l'extérieur de la grille
+    const A = { x: cell[1] + 0.5 + u.x * 0.5, y: cell[0] + 0.5 + u.y * 0.5 } // bord de la grille, au bout de la voie
+    const dirSign = arriving ? 1 : -1 // arrivée : le train va vers l'extérieur ; départ : vers la grille
+    const heading = { x: u.x * dirSign, y: u.y * dirSign }
+    const normal = { x: -heading.y, y: heading.x }
+    const at = (P: Pt, a: number, side: number, b: number) => {
+      const r = Math.floor(P.y + u.y * a + normal.y * side * b), c = Math.floor(P.x + u.x * a + normal.x * side * b)
+      return { r, c, t: tiles[r]?.[c] }
+    }
+    // La locomotive s'arrête un peu en retrait du bord du décor (le quai se voit à l'écran même quand le bord est juste hors champ).
+    // Si la route, la voie ou l'eau coupent le quai, on le décale le long de la voie.
+    const base = arriving ? L - 2.2 : L - TRAIN_SPAN - 1.0
+    const lo = arriving ? TRAIN_SPAN + 0.1 : 1.2
+    const hi = arriving ? L - 1.0 : L - TRAIN_SPAN
+    let chosen: { loco: number; P: Pt; side: 1 | -1 } | null = null
+    for (const shift of [0, -1.5, 1.5, -3, 3]) {
+      const loco = base + shift
+      if (loco < lo || loco > hi) continue
+      const d = arriving ? loco - 0.9 : loco + 0.9 // milieu du quai : le train s'arrête le long
+      const P = { x: A.x + u.x * d, y: A.y + u.y * d }
+      const room = (side: 1 | -1) => {
+        let n = 0, bad = 0
+        for (let a = -1.4; a <= 1.4; a += 0.7) for (let b = 0.4; b <= 1.6; b += 0.6) {
+          const { r, c, t } = at(P, a, side, b)
+          // (la case de la voie elle-même est une case « rail » : seul le côté du quai compte)
+          if (!t || water.has(`${r},${c}`) || ['road', 'house', 'windmill', 'field', 'path'].includes(t.kind) || (t.kind === 'rail' && b >= 0.6)) bad++
+          else if (['grass', 'tree', 'pine', 'clear', 'path'].includes(t.kind)) n++
+        }
+        return bad ? -1 : n
+      }
+      const side: 1 | -1 = room(1) >= room(-1) ? 1 : -1
+      if (room(side) < 0) continue
+      chosen = { loco, P, side }
+      break
+    }
+    if (!chosen) return null
+    const { loco, P, side } = chosen
+    for (let a = -1.5; a <= 1.5; a += 0.5) for (let b = 0.3; b <= 1.6; b += 0.4) {
+      const { r, c, t } = at(P, a, side, b)
+      if (t && !water.has(`${r},${c}`) && !['rail', 'road', 'house', 'windmill', 'field', 'path'].includes(t.kind)) tiles[r][c] = { kind: 'clear', v: 0 } // tout ce qui gêne le quai est enlevé (arbres, immeubles, rochers…)
+    }
+    return { x: P.x, y: P.y, angle: (Math.atan2(heading.y, heading.x) * 180) / Math.PI, side, loco }
+  }
+  if (!shifted.length) return { entry: null, exit: null }
+  return { entry: build(shifted[0], puzzle.entry.dir, false), exit: build(shifted[shifted.length - 1], puzzle.exit.dir, true) }
 }

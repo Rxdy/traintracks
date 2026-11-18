@@ -37,7 +37,7 @@ describe('Cabine du conducteur (décor)', () => {
 function carte(items: { r: number; c: number; kind: TileKind }[]): { route: Route; scenery: Scenery } {
   const tiles: Tile[][] = Array.from({ length: 14 }, () => Array.from({ length: 14 }, () => ({ kind: 'grass' as TileKind, v: 0 })))
   for (const it of items) tiles[it.r][it.c] = { kind: it.kind, v: 0 }
-  const scenery: Scenery = { seed: 1, margin: { x: 0, y: 0, b: 0 }, frame: { k: 1, visibleRows: 14 }, rows: 14, cols: 14, ext: [], road: null, size: 5, theme: 'automne', tiles, water: new Set(), river: null, pond: [], bridges: new Map(), paths: [], props: [], cable: null }
+  const scenery: Scenery = { seed: 1, margin: { x: 0, y: 0, b: 0 }, frame: { k: 1, visibleRows: 14 }, rows: 14, cols: 14, ext: [], road: null, size: 5, theme: 'automne', tiles, water: new Set(), river: null, pond: [], bridges: new Map(), paths: [], props: [], cable: null, stations: { entry: null, exit: null } }
   const route: Route = { points: [{ x: 0.5, y: 5.5 }, { x: 13.5, y: 5.5 }], cum: [0, 13], length: 13, gridStart: 0, gridEnd: 13 }
   return { route, scenery }
 }
