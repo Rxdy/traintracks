@@ -24,7 +24,6 @@ import TrainRun from './TrainRun.vue'
 import SceneryLayer from './SceneryLayer.vue'
 import Scenery3D from './Scenery3D.vue'
 import { webglAvailable } from '../decor'
-import { isTouch } from '../platform'
 import SceneryLife from './SceneryLife.vue'
 import type { LandFrame } from '../scenery/motion'
 import { sound, soundOn } from '../sound/director'
@@ -175,7 +174,6 @@ watch([trainDone, locoOut], ([done, out]) => {
   }
 })
 const boardEl = ref<HTMLElement | null>(null)
-const toolbarEl = ref<HTMLElement | null>(null)
 let startedAt = 0
 let clock = 0
 
@@ -219,15 +217,10 @@ async function checkWin(): Promise<void> {
 }
 // La voie prend l'allure de l'environnement : traverses grises sous la neige, acier plus sombre en forêt…
 const railStyle = computed(() => (scenery.value ? { '--won-rail': PAL[scenery.value.theme].rail.rail, '--won-tie': PAL[scenery.value.theme].rail.tie } : {}))
-// Marges de paysage autour de la grille : en hauteur, de quoi faire ~10 cases.
-//   - téléphone et tablette (les appareils visés), ou fenêtre étroite : le décor couvre TOUT l'écran autour de la grille, sans
-//     bande vide : toute la largeur, jusque sous la barre d'outils (qui reste libre, sans décor derrière) et jusqu'à la cabine ;
-//   - ordinateur : autant sur les côtés qu'en hauteur, le décor est recadré (il ne s'étale pas sur tout un grand écran).
-const FULL_MAX_WIDTH = 1100 // px : au-delà, et sans écran tactile, c'est un ordinateur
+// Marges de paysage autour de la grille : le décor couvre TOUT l'écran (toute la largeur, du haut au bas de l'écran), sur tous les appareils.
 function sceneryMargins(): { x: number; y: number; top?: number; below?: number } {
   const n = puz.value.size
   const y = sceneryMargin(n)
-  if (!isTouch() && window.innerWidth > FULL_MAX_WIDTH) return { x: y, y }
   const rect = boardEl.value?.getBoundingClientRect()
   if (!rect || !(rect.width > 0)) return { x: y, y }
   const k = n / (n + 2 * y) // échelle de la grille à la victoire (voir buildScenery)
@@ -240,12 +233,10 @@ function sceneryMargins(): { x: number; y: number; top?: number; below?: number 
   const oy = rect.top + (n / 2) * cell
   const decorTop = oy - (y + n / 2) * unit
   const decorBottom = rect.bottom
-  const cabin = document.querySelector<HTMLElement>('[data-test=cabin]')?.getBoundingClientRect().top
-  // Le décor ne monte que jusque sous la barre d'outils : Quitter, Niveau, pièces, Relancer le train… restent sur le fond de la page,
-  // jamais posés sur le décor (issue #17). Sans barre d'outils mesurable, on garde le bord de la grille.
-  const limit = toolbarEl.value?.getBoundingClientRect().bottom ?? rect.top
-  const top = Math.max(0, (decorTop - Math.max(0, limit) - 4) / unit)
-  const below = cabin !== undefined && cabin > decorBottom ? (cabin - decorBottom) / unit + 0.05 : 0 // jusqu'à la cabine
+  // Le Trajet est un paysage plein écran : le décor monte jusqu'en haut de l'écran (la barre du haut, le bouton Quitter et les
+  // réglages flottent par-dessus) et descend jusqu'en bas (la cabine, en fenêtre, se pose par-dessus).
+  const top = Math.max(0, decorTop / unit + 0.05)
+  const below = Math.max(0, (window.innerHeight - decorBottom) / unit + 0.05)
   return { x, y, top, below }
 }
 function revealScenery(): void {
@@ -560,7 +551,7 @@ onMounted(() => {
 
 <template>
   <div class="track">
-    <div ref="toolbarEl" class="toolbar">
+    <div class="toolbar">
       <template v-if="!solved">
         <button type="button" class="btn btn--ghost tool" data-test="undo" @click="undo" :disabled="!canUndo" aria-label="Annuler" title="Annuler (Ctrl+Z)">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" /></svg>
@@ -869,14 +860,16 @@ onMounted(() => {
   grid-template-columns: repeat(var(--track), 1fr);
   grid-auto-rows: 1fr;
 
-  /* Taille : limitée par la largeur ET la hauteur de l'écran. */
-  --w: min(80vw, 54vh, 560px);
+  /* Taille du Plateau : la grille (compteurs compris) prend presque tout l'écran, ni cabine ni paysage autour. Portrait : limitée par la
+     largeur, et par la hauteur moins la barre du haut, les outils et les bonus. Paysage : limitée par la hauteur, les bonus sont à droite. */
+  --shift: calc(100% / (var(--size) + 1) / 2);
+  --w: min(calc((100vw - 1rem) * (var(--size) + 1) / (var(--size) + 2)), calc(100dvh - 17rem), 780px);
   width: var(--w);
   aspect-ratio: 1;
   /* La colonne des compteurs est à droite : on décale VERS LA DROITE d'une demi-colonne pour
      que les CASES (pas la grille + compteurs) soient centrées sur la page. */
   /* À la victoire, la grille rétrécit au centre d'un paysage plus grand (--k < 1) : le décor déborde autour. */
-  transform: translateX(calc(100% / (var(--size) + 1) / 2)) scale(var(--k, 1));
+  transform: translateX(var(--shift)) scale(var(--k, 1));
   transform-origin: calc(50% * var(--size) / (var(--size) + 1)) calc(50% * var(--size) / (var(--size) + 1));
   transition: transform 1.8s ease-in-out;
 
@@ -891,5 +884,12 @@ onMounted(() => {
 
 .corner {
   background: transparent;
+}
+
+@media (min-aspect-ratio: 1/1) {
+  .board {
+    --shift: 0px; /* les bonus sont à droite : la grille et ses compteurs restent groupés */
+    --w: min(calc(100dvh - 11rem), 62vw, 820px);
+  }
 }
 </style>

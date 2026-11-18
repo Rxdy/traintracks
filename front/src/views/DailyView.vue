@@ -33,6 +33,7 @@ const trainRunning = ref(false)
 const trainS = ref(0)
 const landFrame = shallowRef<LandFrame | null>(null)
 const cabScene = ref<{ route: Route; scenery: Scenery; rails: Route | null } | null>(null)
+const won = ref(false) // tracé validé : la cabine monte
 const finished = ref(false)
 const storeDown = computed(() => finished.value && !trainRunning.value)
 
@@ -54,6 +55,7 @@ async function start(): Promise<void> {
   puzzle.value = r.puzzle
   date.value = r.date
   outcome.value = null
+  won.value = false
   finished.value = false
   trainRunning.value = false
   trainS.value = 0
@@ -95,6 +97,7 @@ function quit(): void {
           :validate="validate"
           :official-ms="outcome?.timeMs ?? null"
           external-recap
+          @solved="won = true"
           @begin="beginDaily()"
           @finish="finished = true"
           @train="trainRunning = $event"
@@ -102,7 +105,7 @@ function quit(): void {
           @scene="cabScene = $event"
           @land="landFrame = $event"
         />
-        <CabinFrame :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :store-down="storeDown">
+        <CabinFrame :shown="won" :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :store-down="storeDown">
           <template #store>
             <div v-if="finished" class="finish" data-test="finish">
               <template v-if="outcome && outcome.counted">

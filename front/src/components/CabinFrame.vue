@@ -6,9 +6,10 @@ import type { Scenery } from '../scenery/generate'
 import type { LandFrame } from '../scenery/motion'
 import type { Theme } from '../scenery/themes'
 
-// La cabine sous la grille, collée au décor et sur toute la largeur : pare-brise (la voie défile quand le train roule), store qui se
-// ferme à l'arrivée et porte le récapitulatif (slot « store »), tableau de bord. Slot « side » : colonne à droite (pouvoirs du Voyage).
+// La cabine du Trajet : posée par-dessus le paysage, en bas de l'écran, elle monte à la victoire (absente pendant le Plateau).
+// Pare-brise (la voie défile quand le train roule), store qui se ferme à l'arrivée et porte le récapitulatif (slot « store »), tableau de bord.
 defineProps<{
+  shown: boolean
   scene: { route: Route; scenery: Scenery; rails: Route | null } | null
   land: LandFrame | null
   progress: number
@@ -19,7 +20,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="cabin" data-test="cabin">
+  <div class="cabin" :class="{ shown }" data-test="cabin" :aria-hidden="!shown">
     <div class="cab">
       <div class="windshield">
         <CabinWindshield :scene="scene" :land="land" :progress="progress" :running="running" :theme="theme" />
@@ -31,19 +32,27 @@ defineProps<{
         <CabinDash />
       </div>
     </div>
-    <slot name="side" />
   </div>
 </template>
 
 <style scoped>
 /* Cabine sous la grille, collée au décor, sur toute la largeur de l'écran et jusqu'en bas (la page a une marge : on la débord). */
 .cabin {
-  flex: 1 1 auto;
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 8; /* au-dessus du paysage (le plateau : 5) et de la barre du haut (6) */
   display: flex;
   align-items: stretch;
   width: min(100vw, 92vh); /* téléphone : tout l'écran ; ordinateur : bornée par la hauteur pour que le pupitre ne devienne pas géant */
-  margin-top: -0.45rem;
-  margin-bottom: calc(-1 * clamp(1rem, 4vmin, 2rem));
+  height: min(44vh, 26rem);
+  transform: translate(-50%, 105%); /* rangée sous l'écran pendant le Plateau */
+  pointer-events: none;
+  transition: transform 0.9s cubic-bezier(0.3, 0.8, 0.3, 1) 1s; /* monte pendant que le paysage apparaît */
+}
+.cabin.shown {
+  transform: translate(-50%, 0);
+  pointer-events: auto;
 }
 .cab {
   flex: 1 1 0;
@@ -52,7 +61,7 @@ defineProps<{
   flex-direction: column;
   padding: 0.5rem 0.4rem 0;
   border-top: 3px solid #fff;
-  border-radius: 30px 0 0 0 / 22px 0 0 0; /* la colonne des pouvoirs prolonge la cabine à droite */
+  border-radius: 30px 30px 0 0 / 22px 22px 0 0;
   background: #1c2430;
   box-shadow: var(--shadow);
 }
@@ -92,7 +101,8 @@ defineProps<{
   border-top: 2px solid #64748b;
 }
 @media (prefers-reduced-motion: reduce) {
-  .store {
+  .store,
+  .cabin {
     transition: none;
   }
 }
