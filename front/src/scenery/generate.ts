@@ -363,7 +363,7 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
     const dir: 'h' | 'v' = rand() < 0.5 ? 'h' : 'v'
     const group: Cell[] = [[sr, sc]]
     taken.add(key(sr, sc))
-    const want = 2 + Math.floor(rand() * 2)
+    const want = (th === 'plaine' ? 3 : 2) + Math.floor(rand() * 2) // la plaine a de grands champs : de la place pour le tracteur
     while (group.length < want) {
       const nb: Cell[] = []
       group.forEach(([r, c]) => DIRS.forEach(([dr, dc]) => free(r + dr, c + dc) && !touchesField(r + dr, c + dc) && nb.push([r + dr, c + dc])))

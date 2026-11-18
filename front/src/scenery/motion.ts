@@ -154,7 +154,7 @@ export interface CarState {
   kind: 0 | 1 // voiture / camion
   color: string
 }
-export type AnimalKind = 'owl' | 'squirrel' | 'deer' | 'rabbit' | 'hedgehog' | 'butterfly' | 'cat' | 'lizard' | 'scorpion' | 'alien'
+export type AnimalKind = 'owl' | 'squirrel' | 'deer' | 'rabbit' | 'hedgehog' | 'butterfly' | 'cat' | 'lizard' | 'scorpion' | 'alien' | 'sheep' | 'cow' | 'tractor'
 export interface AnimalState {
   id: number
   kind: AnimalKind
@@ -288,6 +288,55 @@ export function createLandSim(sc: Scenery) {
     if (th === 'volcan' || th === 'desert' || th === 'fusion') walker('lizard', 1, 0.5, [2, 3])
     if (th === 'enfer' || th === 'canyon') walker('scorpion', 2, 0.25, [3, 4])
     if (th === 'lune') { walker('alien', 0, 0.22, [4, 4]); walker('alien', 3, 0.22, [5, 4]) }
+  }
+  // Plaine : un troupeau (moutons ou vaches, selon la graine) qui broute autour d'une case d'herbe, de préférence près d'un champ,
+  // et un tracteur qui fait des allers-retours dans un grand champ (au moins 2 cases côte à côte).
+  if (th === 'plaine' && grass.length) {
+    const fieldKeys = new Set(cells('field').map(([r, c]) => `${r},${c}`))
+    const nearField = grass.filter(([r, c]) => [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].some(([a, b]) => fieldKeys.has(`${a},${b}`)))
+    const home = (nearField.length ? nearField : grass)[0]
+    const kind: AnimalKind = rand() < 0.5 ? 'sheep' : 'cow'
+    const count = kind === 'sheep' ? 3 : 2
+    for (let i = 0; i < count; i++) {
+      let cell = home
+      const s = mkAnimal(kind, { x: cell[1] + 0.3 + rand() * 0.4, y: cell[0] + 0.5 + rand() * 0.2 })
+      let tgt: Pt = { x: s.x, y: s.y }, nxt = 1 + rand() * 4
+      actors.push({ s, step: (dt, t) => {
+        if (t > nxt) {
+          const nb = neighbours(cell).filter(([r, c]) => Math.hypot(r - home[0], c - home[1]) <= 1.5)
+          if (nb.length && rand() < 0.5) cell = pick(nb)
+          tgt = { x: cell[1] + 0.25 + rand() * 0.5, y: cell[0] + 0.5 + rand() * 0.25 }
+          nxt = t + 3 + rand() * 6 // il broute longtemps avant de changer de place
+        }
+        const dx = tgt.x - s.x, dy = tgt.y - s.y, d = Math.hypot(dx, dy)
+        if (d > 0.03) { s.x += (dx / d) * 0.1 * dt; s.y += (dy / d) * 0.1 * dt; s.face = dx < 0 ? -1 : 1 }
+        s.t = t + i * 1.7
+      } })
+    }
+    // tracteur : la plus longue rangée horizontale de cases de champ
+    const fields = cells('field')
+    const fk = new Set(fields.map(([r, c]) => `${r},${c}`))
+    let run: [number, number][] = []
+    for (const [r, c] of fields) {
+      if (fk.has(`${r},${c - 1}`)) continue // début de rangée seulement
+      const cur: [number, number][] = [[r, c]]
+      while (fk.has(`${r},${c + cur.length}`)) cur.push([r, c + cur.length])
+      if (cur.length > run.length) run = cur
+    }
+    if (run.length >= 2) {
+      const x0 = run[0][1] + 0.3, x1 = run[run.length - 1][1] + 0.7, y = run[0][0] + 0.55
+      const s = mkAnimal('tractor', { x: x0, y })
+      let dir: 1 | -1 = 1, wait = 0
+      actors.push({ s, step: (dt, t) => {
+        if (wait > 0) { wait -= dt }
+        else {
+          s.x += dir * 0.16 * dt
+          if (s.x >= x1) { s.x = x1; dir = -1; wait = 1.5 } else if (s.x <= x0) { s.x = x0; dir = 1; wait = 1.5 }
+        }
+        s.face = dir
+        s.t = t
+      } })
+    }
   }
   if ((th === 'plaine' || th === 'hiver' || th === 'desert' || th === 'canyon' || th === 'fusion') && grass.length) {
     let cell = grass[0]
