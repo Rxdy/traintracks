@@ -533,4 +533,23 @@ section {
 .cta:hover:not(:disabled) {
   background: #15803d;
 }
+
+/* Téléphone couché : la barre du haut flotte par-dessus (elle ne prend plus de hauteur à la grille), le titre se range près de Quitter. */
+@media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  .bar {
+    position: absolute;
+    top: 0.5rem;
+    left: 0;
+    right: 0;
+    grid-template-columns: auto 1fr auto;
+    pointer-events: none;
+  }
+  .bar > * {
+    pointer-events: auto;
+  }
+  .bar .title {
+    justify-self: start;
+    margin-left: 0.6rem;
+  }
+}
 </style>

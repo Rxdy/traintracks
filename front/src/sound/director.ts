@@ -71,6 +71,7 @@ export function createDirector(engine: Engine, now: () => number = () => perform
   function duck(seconds: number) {
     engine.setBus('amb', BUS_LEVEL.amb * 0.25, 0.1)
     clearTimeout(duckTimer)
+    if (typeof window === 'undefined') return // minuteur tardif, après la fermeture de la page (tests)
     duckTimer = window.setTimeout(() => engine.setBus('amb', BUS_LEVEL.amb, 0.8), seconds * 1000)
   }
   function bedFor(sc: Scenery): LoopName | null {
