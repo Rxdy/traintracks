@@ -130,7 +130,7 @@ defineExpose({ onPick })
       <button type="button" class="btn btn--ghost btn--small" data-test="aid-cancel" @click="cancel">Annuler</button>
     </div>
 
-    <!-- Les pouvoirs : un rond avec une image, un compteur qui baisse à chaque usage. -->
+    <!-- Les pouvoirs : un rectangle arrondi avec une image, un compteur qui baisse à chaque usage. -->
     <div class="row">
       <button
         v-for="a in slots"
@@ -159,7 +159,7 @@ defineExpose({ onPick })
       <span class="icon"><AidIcon :name="fresh.id" /></span>
       <div class="txt">
         <strong>Nouveau pouvoir : {{ LABEL[fresh.id] }}</strong>
-        <span>{{ HELP[fresh.id] }} Tu en as {{ count(fresh) }} pour commencer (le rond au-dessus de la grille, avec son compteur) ; une fois épuisées, tu peux en racheter avec tes pièces.</span>
+        <span>{{ HELP[fresh.id] }} Tu en as {{ count(fresh) }} pour commencer (le bouton avec son compteur) ; une fois épuisées, tu peux en racheter avec tes pièces.</span>
       </div>
       <button type="button" class="btn btn--ghost btn--small" data-test="aid-new-ok" @click="dismissed = true">OK</button>
     </div>
@@ -183,11 +183,11 @@ defineExpose({ onPick })
   position: relative;
   display: grid;
   place-items: center;
-  width: 3.4rem;
+  width: 4.2rem;
   height: 3.4rem;
   padding: 0;
   border: 3px solid #fff;
-  border-radius: 50%;
+  border-radius: 0.85rem; /* un rectangle aux angles légèrement arrondis, pas un rond */
   background: linear-gradient(#ffffff, #e8f1fb);
   box-shadow: var(--shadow);
   color: #1d4ed8;
@@ -207,7 +207,7 @@ defineExpose({ onPick })
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: 0.5rem;
   background: #1f2937;
   color: #fff;
   font-size: 0.8rem;
