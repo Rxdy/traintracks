@@ -5,6 +5,7 @@ import MenuIcon from '../components/MenuIcon.vue'
 import TrackGrid from '../components/TrackGrid.vue'
 import AidBar from '../components/AidBar.vue'
 import CabinFrame from '../components/CabinFrame.vue'
+import { cabinEnabled } from '../features'
 import FinishDialog from '../components/FinishDialog.vue'
 import type { Route } from '../trainRoute'
 import type { LandFrame } from '../scenery/motion'
@@ -221,7 +222,7 @@ function quit(): void {
           </div>
         </div>
         <!-- La vue du conducteur : petite fenêtre rangeable, qui entre à la victoire. -->
-        <CabinFrame :shown="won" :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :theme="themeForLevel(current.id)" />
+        <CabinFrame v-if="cabinEnabled" :shown="won" :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :theme="themeForLevel(current.id)" />
         <!-- À l'arrivée du train : le récapitulatif au centre de l'écran. -->
         <FinishDialog :open="storeDown" :can-next="hasNext" :busy="loading" end-message="Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt." @replay="grid?.replayTrain()" @next="play">
           <template v-if="earned">

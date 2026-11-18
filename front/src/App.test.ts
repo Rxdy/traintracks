@@ -5,6 +5,7 @@ import App from './App.vue'
 import TrackGrid from './components/TrackGrid.vue'
 import TrainRun from './components/TrainRun.vue'
 import { logout, user } from './auth'
+import { cabinEnabled } from './features'
 
 const IDS: Record<string, string> = {
   'Puzzle du jour': 'daily',
@@ -25,6 +26,7 @@ async function signUp(w: ReturnType<typeof mount>, email = 'rudy@example.com') {
 
 describe('App', () => {
   beforeEach(() => {
+    cabinEnabled.value = true // la cabine est cachée par défaut (voir features.ts) ; ces tests la veulent
     localStorage.clear()
     logout()
     fakeServer()
@@ -287,5 +289,18 @@ describe('icônes du menu', () => {
     user.value = { name: 'rudy', email: 'ini@b.fr', provider: 'local' }
     await w.vm.$nextTick()
     expect(w.find('[data-test=nav-account] [data-test=initial]').text()).toBe('R')
+  })
+})
+
+describe('App : cabine masquée par défaut', () => {
+  it('sans le réglage, aucune fenêtre de cabine n\'est dans la page', async () => {
+    cabinEnabled.value = false
+    localStorage.clear()
+    logout()
+    fakeServer()
+    const w = mount(App, { attachTo: document.body })
+    await flushPromises()
+    expect(w.find('[data-test=cabin]').exists()).toBe(false)
+    w.unmount()
   })
 })
