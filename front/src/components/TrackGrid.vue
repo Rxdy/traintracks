@@ -226,8 +226,10 @@ function sceneryMargins(): { x: number; y: number; top?: number; below?: number 
   const k = n / (n + 2 * y) // échelle de la grille à la victoire (voir buildScenery)
   const cell = rect.width / (n + 1) // taille d'une case à l'écran avant le rétrécissement (px)
   const unit = cell * k // une case du décor à l'écran, après le rétrécissement (px)
-  const visible = window.innerWidth / unit // cases de décor qu'il faut pour couvrir la largeur
-  const x = Math.min(28, Math.max(y, Math.ceil((visible - n) / 2) + 1))
+  // La grille n'est pas toujours au milieu de l'écran (en paysage, les bonus sont à sa droite) : le décor doit couvrir le côté le plus éloigné.
+  const cx = rect.left + (n / 2) * cell
+  const farthest = Math.max(cx, window.innerWidth - cx) // distance du centre des cases au bord de l'écran le plus loin (px)
+  const x = Math.min(40, Math.max(y, Math.ceil(farthest / unit - n / 2) + 1))
   // La grille rétrécit autour du centre de sa zone de jeu (sans la rangée des indices) : on situe à l'écran le haut et le bas
   // du décor qu'on aurait sans complément. Le bas tombe pile sur le bas d'origine de la grille (rangée des indices comprise).
   const oy = rect.top + (n / 2) * cell
@@ -543,7 +545,7 @@ function snapshotForAid(): { edges: string[]; crosses: string[]; marks: number }
   // marks : ce que le joueur a posé lui-même (ni rails imposés, ni rails révélés).
   return { edges, crosses: [...crosses.value], marks: edges.filter((e) => !fixed.has(e)).length + crosses.value.size }
 }
-defineExpose({ reveal, snapshotForAid })
+defineExpose({ reveal, snapshotForAid, replayTrain })
 onMounted(() => {
   if (props.initial && (props.initial.givens.length || props.initial.crosses.length)) reveal(props.initial.givens, props.initial.crosses)
 })

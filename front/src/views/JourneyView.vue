@@ -5,6 +5,7 @@ import MenuIcon from '../components/MenuIcon.vue'
 import TrackGrid from '../components/TrackGrid.vue'
 import AidBar from '../components/AidBar.vue'
 import CabinFrame from '../components/CabinFrame.vue'
+import FinishDialog from '../components/FinishDialog.vue'
 import type { Route } from '../trainRoute'
 import type { LandFrame } from '../scenery/motion'
 import type { Scenery } from '../scenery'
@@ -219,29 +220,20 @@ function quit(): void {
             />
           </div>
         </div>
-        <!-- Cabine sous la grille, collée au décor et sur toute la largeur. Pare-brise : la voie défile quand le train roule ; à l'arrivée un store
-             se ferme et porte le récapitulatif, avec « Niveau suivant » juste dessous. Pouvoirs : colonne à droite. -->
-        <CabinFrame :shown="won" :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :theme="themeForLevel(current.id)" :store-down="storeDown">
-          <template #store>
-            <div v-if="levelFinished" class="finish" data-test="finish">
-              <template v-if="earned">
-                <div class="head">
-                  <p class="win" data-test="win">Niveau terminé</p>
-                  <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? 0) }}</p>
-                </div>
-                <WinReceipt
-                  :lines="[
-                    { label: 'Victoire', amount: earned.base },
-                    { label: 'Sans aide', amount: earned.bonus },
-                  ]"
-                />
-              </template>
-              <!-- « Niveau suivant » juste sous le récapitulatif, sur le store -->
-              <button v-if="hasNext" type="button" class="btn cta next" data-test="next" :disabled="loading" @click="play">Niveau suivant</button>
-              <p v-else class="trophy" data-test="coming-soon">Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt.</p>
-            </div>
+        <!-- La vue du conducteur : petite fenêtre rangeable, qui entre à la victoire. -->
+        <CabinFrame :shown="won" :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :theme="themeForLevel(current.id)" />
+        <!-- À l'arrivée du train : le récapitulatif au centre de l'écran. -->
+        <FinishDialog :open="storeDown" :can-next="hasNext" :busy="loading" end-message="Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt." @replay="grid?.replayTrain()" @next="play">
+          <template v-if="earned">
+            <p class="time" data-test="result-time"><span>Temps</span> {{ fmt(officialMs ?? 0) }}</p>
+            <WinReceipt
+              :lines="[
+                { label: 'Victoire', amount: earned.base },
+                { label: 'Sans aide', amount: earned.bonus },
+              ]"
+            />
           </template>
-        </CabinFrame>
+        </FinishDialog>
       </div>
     </template>
   </section>
@@ -266,60 +258,20 @@ section {
   justify-content: center;
   gap: 0.75rem;
 }
-.store .finish {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  width: min(100%, 22rem);
-  padding: 0.45rem 0.8rem 0.5rem;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+/* Corps de la fenêtre de fin : le temps officiel, puis la facture. */
+.time {
+  margin: 0;
   text-align: center;
-}
-.store .head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.8rem;
-  width: 100%;
-}
-.store .win {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: #15803d;
-}
-.store .time {
-  font-size: 1.1rem;
+  font-size: 1.5rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: #1f2937;
 }
-.store .time span {
-  margin-right: 0.25rem;
-  font-size: 0.8rem;
+.time span {
+  margin-right: 0.35rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #6b7280;
-}
-.store .finish :deep(.receipt) {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.6rem;
-  width: 100%;
-  padding-top: 0;
-}
-.store .finish :deep(.receipt .row) {
-  flex: none;
-  gap: 0.3rem;
-  font-size: 0.8rem;
-}
-.store .finish :deep(.receipt .total) {
-  font-size: 0.85rem;
-}
-.store .finish :deep(.receipt .fill),
-.store .finish :deep(.receipt .rule) {
-  display: none;
 }
 
 /* Le plateau : la grille, et les bonus dessous (portrait) ou à droite (paysage). */
@@ -387,19 +339,6 @@ section {
     width: max-content;
     max-width: 16rem;
   }
-}
-.store .next {
-  width: 100%;
-  margin-top: 0.35rem;
-  padding: 0.45rem 0;
-  font-size: 1rem;
-  font-weight: 800;
-}
-.store .trophy {
-  margin: 0.3rem 0 0;
-  font-size: 0.8rem;
-  line-height: 1.25;
-  color: #374151;
 }
 .intro {
   display: flex;
