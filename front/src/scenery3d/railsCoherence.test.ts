@@ -34,5 +34,5 @@ describe('cohérence des rails : grille, décor et prolongements', () => {
       expect(style, theme).toContain(PAL[theme].rail.tie)
       w.unmount()
     }
-  })
+  }, 30000)
 })

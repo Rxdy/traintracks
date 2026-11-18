@@ -927,4 +927,23 @@ onMounted(() => {
     --w: min(calc(100dvh - 11rem), 62vw, 820px);
   }
 }
+
+/* Téléphone couché (peu de hauteur) : la grille prend toute la hauteur, les outils passent en colonne sur le bord gauche. */
+@media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  .board {
+    --w: calc(100dvh - 1.5rem);
+  }
+  .toolbar {
+    position: fixed;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  .win-zone {
+    min-height: 0;
+  }
+}
 </style>
