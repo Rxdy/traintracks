@@ -183,8 +183,8 @@ defineExpose({ onPick })
   position: relative;
   display: grid;
   place-items: center;
-  width: 4.2rem;
-  height: 3.4rem;
+  width: 3.8rem;
+  height: 3.8rem; /* un carré aux angles arrondis */
   padding: 0;
   border: 3px solid #fff;
   border-radius: 0.85rem; /* un rectangle aux angles légèrement arrondis, pas un rond */

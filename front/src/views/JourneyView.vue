@@ -300,10 +300,9 @@ section {
   gap: 0.6rem;
 }
 .bonus-dock :deep(.aid) {
-  flex: 1 1 0;
-  width: auto;
-  max-width: 5.5rem;
-  height: 3.6rem;
+  flex: none;
+  width: 3.8rem;
+  height: 3.8rem; /* carrés aux angles arrondis */
 }
 /* Paysage (l'écran est plus large que haut) : les bonus forment une colonne à droite de la grille. */
 @media (min-aspect-ratio: 1/1) {
@@ -312,16 +311,14 @@ section {
     gap: 1.5rem;
   }
   .bonus-dock {
-    width: 5.5rem;
+    width: 4.2rem;
   }
   .bonus-dock :deep(.row) {
     flex-direction: column;
-    width: 100%; /* sinon la colonne se réduit à son contenu et les boutons deviennent minuscules */
+    align-items: center;
   }
   .bonus-dock :deep(.aid) {
     flex: none;
-    width: 100%;
-    max-width: none;
   }
   .bonus-dock.gone {
     transform: translateX(1.5rem);
