@@ -175,8 +175,8 @@ function quit(): void {
     <template v-else>
       <div class="bar">
         <QuitButton class="back" data-test="quit" @click="quit" />
-        <span class="title" data-test="level-title">Niveau {{ current.id }}</span>
-        <CoinBadge />
+        <span class="title" :class="{ gone: won }" data-test="level-title">Niveau {{ current.id }}</span>
+        <CoinBadge class="coins-hud" :class="{ gone: won }" />
       </div>
 
       <div class="play-area">
@@ -501,6 +501,16 @@ section {
 }
 .back {
   justify-self: start;
+}
+/* Pendant le Trajet, le niveau et les pièces s'effacent : il ne reste que Quitter (à gauche) et la vitesse (à droite). */
+.title,
+.coins-hud {
+  transition: opacity 0.5s ease;
+}
+.title.gone,
+.coins-hud.gone {
+  opacity: 0;
+  pointer-events: none;
 }
 .title {
   justify-self: center;

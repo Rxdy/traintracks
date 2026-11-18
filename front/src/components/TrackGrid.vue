@@ -29,6 +29,7 @@ import type { LandFrame } from '../scenery/motion'
 import { sound, soundOn } from '../sound/director'
 import TrackCell from './TrackCell.vue'
 import ClueNumber from './ClueNumber.vue'
+import SpeedControl, { type Speed } from './SpeedControl.vue'
 
 const props = defineProps<{
   puzzle: Puzzle
@@ -123,11 +124,9 @@ const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
 const trainDone = ref(false)
-// Vitesse du train (cases/s) : tranquille pour apprécier le décor, et un bouton à côté de « Relancer » pour passer la cinématique.
-const CRUISE_SPEED = 1.9
-const FAST_SPEED = 7.6
-const fast = ref(false)
-watch(trainDone, (v) => v && (fast.value = false)) // la prochaine fois, on repart tranquillement
+// Vitesse du train (cases/s) : trois crans en haut à droite (lent, normal, rapide). Normal par défaut ; le choix reste d'un trajet à l'autre.
+const SPEEDS: Record<Speed, number> = { slow: 1.2, normal: 1.9, fast: 4.5 }
+const speed = ref<Speed>('normal')
 // Sons : la fin du trajet laisse la place au décor ; la barrière du passage à niveau a ses propres sons.
 watch(trainDone, (v) => v && sound.trainEnd())
 // L'écran de jeu suit le train (vue de la cabine) : il roule dès que sa route existe, jusqu'à son arrivée.
@@ -553,7 +552,7 @@ onMounted(() => {
 
 <template>
   <div class="track">
-    <div class="toolbar">
+    <div class="toolbar" :class="{ gone: solved }" :aria-hidden="solved">
       <template v-if="!solved">
         <button type="button" class="btn btn--ghost tool" data-test="undo" @click="undo" :disabled="!canUndo" aria-label="Annuler" title="Annuler (Ctrl+Z)">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" /></svg>
@@ -565,16 +564,7 @@ onMounted(() => {
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
         </button>
       </template>
-      <!-- fin de partie : revoir le train (les deux autres places restent vides : rien ne bouge) -->
-      <template v-else>
-        <button type="button" class="btn btn--ghost tool" data-test="replay" @click="replayTrain" :disabled="!trainDone" aria-label="Relancer le train" title="Relancer le train">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z" /></svg>
-        </button>
-        <button type="button" class="btn btn--ghost tool" :class="{ on: fast }" data-test="fast" :disabled="trainDone" :aria-pressed="fast" aria-label="Accélérer le train" :title="fast ? 'Vitesse normale' : 'Accélérer le train'" @click="fast = !fast">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14l8-7zM12 5v14l8-7z" /></svg>
-        </button>
-      </template>
-      <span v-if="solved" class="tool ghost" aria-hidden="true"></span>
+      <!-- fin de partie : les outils de tracé partent ; la vitesse du train est en haut à droite, « Revoir le trajet » dans la fenêtre de fin -->
       <button type="button" class="btn btn--ghost tool sound" data-test="sound" :aria-pressed="soundOn" :aria-label="soundOn ? 'Couper le son' : 'Activer le son'" :title="soundOn ? 'Couper le son' : 'Activer le son'" @click="sound.setOn(!soundOn)">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 9v6h4l5 4V5L8 9z" />
@@ -582,8 +572,10 @@ onMounted(() => {
           <path v-else d="m17 9 4 6M21 9l-4 6" />
         </svg>
       </button>
-      <span class="timer" data-test="timer">⏱ {{ fmt(elapsed) }}</span>
+      <span v-if="!solved" class="timer" data-test="timer">⏱ {{ fmt(elapsed) }}</span>
     </div>
+
+    <SpeedControl v-if="solved" v-model="speed" />
 
     <div
       ref="boardEl"
@@ -631,7 +623,7 @@ onMounted(() => {
 
       <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" @frame="emit('land', $event)" />
 
-      <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" :speed="fast ? FAST_SPEED : CRUISE_SPEED" @progress="onTrainProgress" @done="trainDone = true" />
+      <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" :speed="SPEEDS[speed]" @progress="onTrainProgress" @done="trainDone = true" />
     </div>
 
     <!-- La victoire s'affiche par-dessus le décor (position absolue) : elle ne pousse rien. -->
@@ -670,6 +662,9 @@ onMounted(() => {
   justify-content: center;
 }
 
+.toolbar.gone {
+  visibility: hidden; /* Trajet : plus d'outils sur le paysage (la place reste réservée, rien ne saute) */
+}
 .tool {
   width: 2.6rem;
   height: 2.6rem;
