@@ -102,9 +102,13 @@ defineEmits<{ (e: 'replay'): void; (e: 'next'): void }>()
   border-radius: 0.8rem;
 }
 .replay {
-  border: 2px solid #8fa0bb;
+  border: 2px solid #d1d5db;
   background: #fff;
   color: #1c2430;
+  box-shadow: 0 0.15rem 0 #d1d5db; /* gris, pas le halo bleu des boutons par défaut */
+}
+.replay:hover:not(:disabled) {
+  background: #f3f4f6;
 }
 .next {
   background: #16a34a;
