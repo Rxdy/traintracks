@@ -89,8 +89,8 @@ function quit(): void {
     <template v-else-if="playing && puzzle">
       <div class="bar">
         <QuitButton data-test="quit" @click="quit" />
-        <span class="title">Puzzle du jour</span>
-        <CoinBadge />
+        <span class="title" :class="{ gone: won }">Puzzle du jour</span>
+        <CoinBadge class="coins-hud" :class="{ gone: won }" />
       </div>
       <div class="play-area">
         <TrackGrid
@@ -234,6 +234,15 @@ h2 {
 .bar .btn,
 .bar .quit {
   justify-self: start;
+}
+.title.gone,
+.coins-hud.gone {
+  opacity: 0;
+  pointer-events: none;
+}
+.title,
+.coins-hud {
+  transition: opacity 0.5s ease;
 }
 .title {
   justify-self: center;
