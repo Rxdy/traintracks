@@ -9,6 +9,7 @@ import type { Route } from '../trainRoute'
 import type { LandFrame } from '../scenery/motion'
 import type { Scenery } from '../scenery'
 import CoinBadge from '../components/CoinBadge.vue'
+import QuitButton from '../components/QuitButton.vue'
 import WinReceipt from '../components/WinReceipt.vue'
 import { beginLevel, fetchStatus, setHomeLevel, startLevel, submitLevel, type JourneyStatus, type PlayLevel, type StartedLevel } from '../journey'
 import { refreshWallet, setCoins } from '../wallet'
@@ -170,9 +171,7 @@ function quit(): void {
     <!-- En jeu : aucun menu, juste de quoi quitter / naviguer -->
     <template v-else>
       <div class="bar">
-        <button type="button" class="btn btn--ghost btn--small back" data-test="quit" @click="quit">
-          ← Quitter
-        </button>
+        <QuitButton class="back" data-test="quit" @click="quit" />
         <span class="title" data-test="level-title">Niveau {{ current.id }}</span>
         <CoinBadge />
       </div>

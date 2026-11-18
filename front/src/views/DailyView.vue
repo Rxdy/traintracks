@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import TrackGrid from '../components/TrackGrid.vue'
 import AuthPanel from '../components/AuthPanel.vue'
 import CoinBadge from '../components/CoinBadge.vue'
+import QuitButton from '../components/QuitButton.vue'
 import WinReceipt from '../components/WinReceipt.vue'
 import CabinFrame from '../components/CabinFrame.vue'
 import type { Route } from '../trainRoute'
@@ -83,7 +84,7 @@ function quit(): void {
     <!-- En jeu : plus de menu -->
     <template v-else-if="playing && puzzle">
       <div class="bar">
-        <button type="button" class="btn btn--ghost btn--small" data-test="quit" @click="quit">← Quitter</button>
+        <QuitButton data-test="quit" @click="quit" />
         <span class="title">Puzzle du jour</span>
         <CoinBadge />
       </div>
@@ -234,7 +235,8 @@ h2 {
   align-items: center;
   width: min(92vw, 560px);
 }
-.bar .btn {
+.bar .btn,
+.bar .quit {
   justify-self: start;
 }
 .title {
