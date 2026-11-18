@@ -30,13 +30,16 @@ export function leadCells(
 ): number {
   const cell = rect.width / (size + 1)
   if (!(cell > 0)) return 30 // pas de mesure possible (ex. test) : valeur large
-  const gridRight = rect.left + size * cell
-  const gridBottom = rect.top + size * cell
+  // la boîte contient les indices, à gauche et en haut : les cases commencent une case plus loin
+  const gridLeft = rect.left + cell
+  const gridTop = rect.top + cell
+  const gridRight = gridLeft + size * cell
+  const gridBottom = gridTop + size * cell
   const px =
     dir === 'left'
-      ? rect.left
+      ? gridLeft
       : dir === 'up'
-        ? rect.top
+        ? gridTop
         : dir === 'right'
           ? viewport.width - gridRight
           : viewport.height - gridBottom

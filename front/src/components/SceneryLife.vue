@@ -8,7 +8,7 @@ import { sound } from '../sound/director'
 
 // Le décor qui vit AU-DESSUS des rails : voitures et barrières du passage à niveau, animaux, oiseaux, feuilles ou
 // neige qui tombent. Les voitures s'arrêtent quand le train approche (`trainNear`) et repartent après son passage.
-// Même repère que le train : 1 case = 1×1, la grille occupe 0..size (le reste, c'est la colonne des indices).
+// Même repère que le train : 1 case = 1×1, la grille occupe 0..size (le reste, c'est la colonne et la rangée des indices, à gauche et en haut : -1..0).
 const props = defineProps<{ scenery: Scenery; trainNear: boolean }>()
 const emit = defineEmits<{ (e: 'frame', f: LandFrame): void }>()
 const cols = computed(() => props.scenery.cols)
@@ -37,7 +37,7 @@ const uc = computed(() => sim.uc ?? 0)
 </script>
 
 <template>
-  <svg class="life" :viewBox="`0 0 ${board + 1} ${board + 1}`" data-test="scenery-life" aria-hidden="true">
+  <svg class="life" :viewBox="`-1 -1 ${board + 1} ${board + 1}`" data-test="scenery-life" aria-hidden="true">
     <defs>
       <clipPath id="life-clip"><rect x="0" y="0" :width="cols" :height="scenery.frame.visibleRows" rx="0.18" /></clipPath>
     </defs>

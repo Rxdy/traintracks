@@ -54,7 +54,7 @@ onUnmounted(() => clearInterval(timer))
 <template>
   <svg
     class="train"
-    :viewBox="`0 0 ${size + 1} ${size + 1}`"
+    :viewBox="`-1 -1 ${size + 1} ${size + 1}`"
     data-test="train"
     aria-hidden="true"
   >
