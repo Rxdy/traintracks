@@ -218,12 +218,12 @@ describe('chaque environnement a ses animaux', () => {
     }
   })
 
-  it('hiver : des étangs de tailles différentes (1, 2 ou 4 cases)', () => {
+  it('hiver : des étangs de tailles différentes (1, 2, 4 ou 9 cases : 1×1, 2×1, 2×2, 3×3)', () => {
     const sizes = new Set<number>()
     for (const lv of levels) {
       const s = buildScenery(lv.puzzle, lv.solution, 'hiver', seedOf(lv.puzzle), { x: 3, y: 3 })
       if (s.pond.length) sizes.add(s.pond.length)
     }
-    expect([...sizes].sort()).toEqual([1, 2, 4])
+    expect([...sizes].sort((a, b) => a - b)).toEqual([1, 2, 4, 9])
   })
 })
