@@ -95,7 +95,7 @@ function clipNear(poly: { f: number; l: number }[]): { f: number; l: number }[] 
   return out
 }
 
-const NO_SPRITE = new Set<TileKind>(['rail', 'grass', 'field', 'road', 'path'])
+const NO_SPRITE = new Set<TileKind>(['rail', 'grass', 'field', 'road', 'path', 'clear'])
 
 /** Cap naturel du train (radians) : celui que la caméra suit, avant lissage. */
 export function trackHeading(route: Route, s: number): number {

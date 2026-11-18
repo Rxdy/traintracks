@@ -51,7 +51,7 @@ const items = computed(() => {
   const out: { r: number; c: number; kind: string; v: number; dir?: 'h' | 'v'; d: number }[] = []
   props.scenery.tiles.forEach((row, r) =>
     row.forEach((t, c) => {
-      if (t.kind === 'rail' || t.kind === 'road' || t.kind === 'path' || props.scenery.water.has(`${r},${c}`)) return
+      if (t.kind === 'rail' || t.kind === 'road' || t.kind === 'path' || t.kind === 'clear' || props.scenery.water.has(`${r},${c}`)) return
       out.push({ r, c, kind: t.kind, v: t.v, dir: t.dir, d: 500 + (r + c) * 120 })
     }),
   )

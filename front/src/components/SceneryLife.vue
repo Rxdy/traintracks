@@ -34,6 +34,8 @@ const roadFrame = computed(() => {
 const armA = computed(() => -85 + 85 * frame.value.barrier)
 const armB = computed(() => 265 - 85 * frame.value.barrier)
 const uc = computed(() => sim.uc ?? 0)
+// Les petites scènes (feu de camp, skieur, cabine de téléphérique…) sont agrandies pour se voir à côté des arbres.
+const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, skier: 1.5, sled: 1.5, goat: 1.3, tractor: 1.3, sheep: 1.3, cow: 1.3 }
 </script>
 
 <template>
@@ -79,8 +81,35 @@ const uc = computed(() => sim.uc ?? 0)
         </template>
       </g>
 
+      <!-- décors fixes : câble du téléphérique, cabane, tas de bois, champignons, chalet, pylônes -->
+      <line v-if="scenery.cable" :x1="scenery.cable[0].x" :y1="scenery.cable[0].y" :x2="scenery.cable[1].x" :y2="scenery.cable[1].y" stroke="#374151" stroke-width="0.012" data-test="cable" />
+      <g v-for="(p, i) in scenery.props" :key="'prop' + i" :transform="`translate(${p.x} ${p.y}) scale(${p.kind === 'pylon' ? 1.6 : p.kind === 'mushroom' ? 1.5 : 1.15})`" :data-test="'prop-' + p.kind">
+        <template v-if="p.kind === 'cabin'">
+          <rect x="-0.26" y="-0.12" width="0.52" height="0.3" rx="0.015" fill="#a16207" stroke="#5b3a21" stroke-width="0.014" />
+          <path d="M-0.3 -0.1 L0 -0.32 L0.3 -0.1 Z" fill="#5b3a21" /><path d="M-0.26 -0.01 h0.52 M-0.26 0.07 h0.52" stroke="#7c4a05" stroke-width="0.012" />
+          <rect x="-0.05" y="0.03" width="0.1" height="0.15" fill="#3b2713" /><rect x="0.11" y="-0.06" width="0.09" height="0.08" fill="#fde68a" stroke="#5b3a21" stroke-width="0.01" />
+          <rect x="0.12" y="-0.4" width="0.07" height="0.14" fill="#78716c" />
+        </template>
+        <template v-else-if="p.kind === 'woodpile'">
+          <g fill="#c58a4a" stroke="#7a4e2d" stroke-width="0.01"><circle v-for="(c, j) in [[-0.15, 0.1], [-0.05, 0.1], [0.05, 0.1], [0.15, 0.1], [-0.1, 0.01], [0, 0.01], [0.1, 0.01], [-0.05, -0.08], [0.05, -0.08]]" :key="j" :cx="c[0]" :cy="c[1]" r="0.05" /></g>
+          <g fill="#e8c59a"><circle v-for="(c, j) in [[-0.15, 0.1], [0.05, 0.1], [0, 0.01], [-0.05, -0.08]]" :key="j" :cx="c[0]" :cy="c[1]" r="0.022" /></g>
+        </template>
+        <template v-else-if="p.kind === 'mushroom'">
+          <rect x="-0.018" y="-0.02" width="0.036" height="0.1" rx="0.01" fill="#f5e9d4" />
+          <path d="M-0.15 -0.02 q0.15 -0.25 0.3 0 Z" :fill="p.v ? '#dc2626' : '#a16207'" /><g :fill="p.v ? '#fff' : '#fde68a'"><circle cx="-0.05" cy="-0.08" r="0.022" /><circle cx="0.05" cy="-0.05" r="0.017" /><circle cx="0.01" cy="-0.12" r="0.015" /></g>
+        </template>
+        <template v-else-if="p.kind === 'chalet'">
+          <rect x="-0.26" y="-0.1" width="0.52" height="0.28" rx="0.015" fill="#b45309" stroke="#5b3a21" stroke-width="0.014" />
+          <path d="M-0.34 -0.08 L0 -0.34 L0.34 -0.08 Z" fill="#f8fafc" stroke="#94a3b8" stroke-width="0.014" />
+          <rect x="-0.05" y="0.04" width="0.1" height="0.14" fill="#3b2713" /><rect x="-0.2" y="-0.04" width="0.09" height="0.08" fill="#fde68a" stroke="#5b3a21" stroke-width="0.01" /><rect x="0.11" y="-0.04" width="0.09" height="0.08" fill="#fde68a" stroke="#5b3a21" stroke-width="0.01" />
+        </template>
+        <template v-else-if="p.kind === 'pylon'">
+          <path d="M-0.06 0.1 L0 -0.12 L0.06 0.1 M-0.04 0.04 h0.08" stroke="#374151" stroke-width="0.02" fill="none" /><rect x="-0.05" y="-0.15" width="0.1" height="0.03" fill="#374151" />
+        </template>
+      </g>
+
       <!-- animaux -->
-      <g v-for="a in frame.animals" :key="a.id" :transform="`translate(${a.x} ${a.y}) scale(${a.face * 1.45} 1.45)`">
+      <g v-for="a in frame.animals" :key="a.id" :transform="`translate(${a.x} ${a.y}) scale(${a.face * 1.45 * (BIG[a.kind] ?? 1)} ${1.45 * (BIG[a.kind] ?? 1)})`">
         <template v-if="a.kind === 'owl'">
           <g :transform="`rotate(${Math.sin(a.t * 0.5) * 4})`">
             <ellipse cx="0" cy="0.05" rx="0.12" ry="0.14" fill="#8b6f47" />
@@ -120,6 +149,49 @@ const uc = computed(() => sim.uc ?? 0)
           </g>
           <circle cx="-0.07" r="0.02" fill="#fff" />
           <circle cx="0.085" cy="-0.005" r="0.008" fill="#111827" />
+        </template>
+        <template v-else-if="a.kind === 'goat'">
+          <g :transform="`translate(0 ${Math.max(0, Math.sin(a.t * 1.3)) * 0.01})`">
+            <g stroke="#78716c" stroke-width="0.014" stroke-linecap="round"><line x1="-0.05" y1="0.03" x2="-0.05" y2="0.085" /><line x1="0.05" y1="0.03" x2="0.05" y2="0.085" /></g>
+            <ellipse cx="0" cy="0" rx="0.085" ry="0.045" fill="#e7e5e4" stroke="#a8a29e" stroke-width="0.012" />
+            <path d="M0.07 -0.02 l0.045 -0.03 l0.02 0.02 l-0.01 0.05 l-0.05 0.01 Z" fill="#e7e5e4" stroke="#a8a29e" stroke-width="0.012" />
+            <path d="M0.1 -0.05 q-0.01 -0.045 -0.045 -0.05 M0.115 -0.045 q0.02 -0.04 -0.005 -0.06" stroke="#57534e" stroke-width="0.012" fill="none" stroke-linecap="round" />
+            <path d="M0.13 0.01 l0.005 0.03" stroke="#a8a29e" stroke-width="0.012" />
+          </g>
+        </template>
+        <template v-else-if="a.kind === 'campfire'">
+          <ellipse cx="0" cy="0.04" rx="0.06" ry="0.02" fill="#57534e" />
+          <path d="M-0.05 0.035 l0.1 -0.012 M-0.05 0.015 l0.1 0.02" stroke="#7a4e2d" stroke-width="0.022" stroke-linecap="round" />
+          <path :d="`M-0.03 0.03 q-0.02 -0.05 0.02 -0.08 q0 ${0.03 + Math.sin(a.t * 11) * 0.01} 0.02 0.03 q0.03 -0.03 0.01 -0.08 q0.06 0.05 0.03 0.12 Z`" fill="#f97316" />
+          <path d="M-0.012 0.03 q-0.01 -0.03 0.012 -0.05 q0.02 0.02 0.012 0.05 Z" fill="#fde047" />
+          <circle v-for="i in 3" :key="i" :cx="Math.sin(a.t * 0.9 + i) * 0.03 + (i - 2) * 0.012" :cy="-0.09 - (((a.t * 0.35 + i / 3) % 1)) * 0.16" :r="0.016 + ((a.t * 0.35 + i / 3) % 1) * 0.02" fill="#9ca3af" :opacity="0.55 - ((a.t * 0.35 + i / 3) % 1) * 0.5" />
+        </template>
+        <template v-else-if="a.kind === 'skater'">
+          <ellipse cx="0" cy="0.07" rx="0.05" ry="0.012" fill="#fff" opacity="0.5" />
+          <g :transform="`rotate(${-12 * Math.sin(a.t * 2)} 0 0.06)`">
+            <path d="M-0.012 0.06 l-0.014 -0.07 M0.012 0.06 l0.03 -0.05" stroke="#1e3a8a" stroke-width="0.022" stroke-linecap="round" />
+            <rect x="-0.03" y="-0.07" width="0.06" height="0.075" rx="0.02" fill="#dc2626" />
+            <circle cx="0" cy="-0.09" r="0.028" fill="#fcd9b6" /><path d="M-0.03 -0.1 q0.03 -0.04 0.06 0 Z" fill="#2563eb" />
+            <path d="M-0.03 -0.04 l-0.04 0.02 M0.03 -0.04 l0.045 -0.03" stroke="#dc2626" stroke-width="0.016" stroke-linecap="round" />
+          </g>
+        </template>
+        <template v-else-if="a.kind === 'skier'">
+          <path d="M-0.1 0.075 h0.2" stroke="#1d4ed8" stroke-width="0.016" stroke-linecap="round" />
+          <path d="M-0.01 0.07 l-0.03 -0.07 M0.012 0.07 l0.03 -0.06" stroke="#111827" stroke-width="0.02" stroke-linecap="round" />
+          <rect x="-0.035" y="-0.07" width="0.07" height="0.075" rx="0.02" fill="#f97316" />
+          <circle cx="0.01" cy="-0.095" r="0.028" fill="#fcd9b6" /><path d="M-0.02 -0.105 q0.03 -0.04 0.06 0 Z" fill="#111827" />
+          <path d="M0.03 -0.04 l0.06 0.05 M-0.03 -0.04 l0.05 0.07" stroke="#92400e" stroke-width="0.012" stroke-linecap="round" />
+        </template>
+        <template v-else-if="a.kind === 'sled'">
+          <path d="M-0.1 0.07 q-0.03 0 -0.03 -0.03 M0.1 0.07 q0.04 0 0.04 -0.04" stroke="#7a4e2d" stroke-width="0.016" fill="none" stroke-linecap="round" />
+          <path d="M-0.1 0.07 h0.2" stroke="#7a4e2d" stroke-width="0.016" />
+          <rect x="-0.09" y="0.025" width="0.18" height="0.03" rx="0.01" fill="#b45309" />
+          <rect x="-0.04" y="-0.04" width="0.06" height="0.07" rx="0.02" fill="#16a34a" /><circle cx="-0.01" cy="-0.065" r="0.026" fill="#fcd9b6" /><path d="M-0.037 -0.075 q0.027 -0.04 0.054 0 Z" fill="#dc2626" />
+        </template>
+        <template v-else-if="a.kind === 'gondola'">
+          <path d="M0 -0.18 v0.06" stroke="#374151" stroke-width="0.012" />
+          <rect x="-0.07" y="-0.12" width="0.14" height="0.1" rx="0.02" fill="#dc2626" stroke="#7f1d1d" stroke-width="0.012" />
+          <rect x="-0.055" y="-0.1" width="0.04" height="0.045" rx="0.008" fill="#bfdbfe" /><rect x="0.015" y="-0.1" width="0.04" height="0.045" rx="0.008" fill="#bfdbfe" />
         </template>
         <template v-else-if="a.kind === 'sheep'">
           <g :transform="`translate(0 ${Math.max(0, Math.sin(a.t * 0.9)) * 0.012})`">

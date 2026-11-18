@@ -15,12 +15,20 @@ import { PARAMS, THEMES, type Theme } from './themes'
 export { THEMES, themeForLevel, LEVELS_PER_THEME, timing, type Theme } from './themes'
 
 
-export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'path' | 'windmill' | 'cactus' | 'palm' | 'crater' | 'obsidian' | 'vent' | 'deadtree' | 'skull' | 'building' | 'mesa' | 'dune'
+export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'path' | 'clear' | 'windmill' | 'cactus' | 'palm' | 'crater' | 'obsidian' | 'vent' | 'deadtree' | 'skull' | 'building' | 'mesa' | 'dune'
 
 export interface Tile {
   kind: TileKind
   v: number // variante (couleur, forme) : 0..n
   dir?: 'h' | 'v' // sens des sillons d'un champ
+}
+// Décors fixes posés sur une case dégagée : cabane et tas de bois (forêt), champignons géants, chalet (montagne), pylônes du téléphérique.
+export type PropKind = 'cabin' | 'woodpile' | 'mushroom' | 'chalet' | 'pylon'
+export interface Prop {
+  kind: PropKind
+  x: number // centre, en unités de case
+  y: number
+  v: number // variante
 }
 export interface Pt {
   x: number
@@ -48,6 +56,8 @@ export interface Scenery {
   river: Pt[] | null // ligne de la rivière, en unités de case (hors grille aux deux bouts)
   pond: [number, number][] // étang de repli quand aucune rivière ne passe
   bridges: Map<string, 'h' | 'v'> // cases de voie posées sur la rivière → axe de la voie (le pont la porte)
+  props: Prop[] // décors fixes (cabane, chalet…)
+  cable: [Pt, Pt] | null // câble du téléphérique (montagne) : entre deux pylônes
   paths: Pt[][] // sentiers de terre (maisons et moulin vers la route ou un autre sentier), en unités de case ; tuiles « path »
 }
 
@@ -248,14 +258,17 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
 
   // --- Étang de repli : deux cases voisines libres ---
   const pond: Cell[] = []
-  if (!river && wantsRiver) {
+  if (!river && (wantsRiver || th === 'hiver')) { // l'hiver a toujours un étang quand il n'y a pas de rivière
     const free: Cell[] = []
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (isFree(r, c)) free.push([r, c])
     const pairs: Cell[][] = []
     free.forEach(([r, c]) => {
       if (isFree(r, c + 1)) pairs.push([[r, c], [r, c + 1]])
       if (isFree(r + 1, c)) pairs.push([[r, c], [r + 1, c]])
+      // l'hiver a des étangs de tailles différentes : une case, deux cases, ou un carré de quatre
+      if (th === 'hiver' && isFree(r, c + 1) && isFree(r + 1, c) && isFree(r + 1, c + 1)) pairs.push([[r, c], [r, c + 1], [r + 1, c], [r + 1, c + 1]])
     })
+    if (th === 'hiver') free.forEach((x) => pairs.push([x]))
     if (pairs.length >= 1 && free.length >= 5) {
       const p = pairs[Math.floor(rand() * pairs.length)]
       p.forEach(([r, c]) => {
@@ -426,7 +439,8 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
   }
 
   const paths = P.paths ? makePaths(seed, tiles, rows, cols) : []
-  return { seed, road, margin: mg, frame, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges, paths }
+  const { props, cable } = makeProps(th, seed, tiles, water, rows, cols)
+  return { seed, road, margin: mg, frame, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges, paths, props, cable }
 }
 
 // --- Sentiers : chaque maison et chaque moulin est relié à la route (ou à un sentier déjà tracé, ou à une autre maison) par un chemin de terre qui
@@ -463,4 +477,54 @@ function makePaths(seed: number, tiles: Tile[][], rows: number, cols: number): P
     out.push(cells.map(([r, c]) => ({ x: c + 0.5, y: r + 0.5 })))
   }
   return out
+}
+
+// --- Décors fixes par environnement. Tirés d'une graine à part : le reste du décor ne change pas.
+//   forêt : une cabane de bûcheron avec son tas de bois, des champignons géants ;
+//   montagne : un chalet, et deux pylônes sur des sommets (le téléphérique : câble et cabine, voir motion.ts).
+// Chaque décor se pose sur une case d'herbe loin de la voie, qui devient « clear » (plus d'herbe dessinée dessus).
+function makeProps(th: Theme, seed: number, tiles: Tile[][], water: Set<string>, rows: number, cols: number): { props: Prop[]; cable: [Pt, Pt] | null } {
+  const props: Prop[] = []
+  let cable: [Pt, Pt] | null = null
+  if (th !== 'foret' && th !== 'montagne') return { props, cable }
+  const pr = rng(seed ^ 0x5eed0b)
+  const nearRail = (r: number, c: number) => [-1, 0, 1].some((dr) => [-1, 0, 1].some((dc) => tiles[r + dr]?.[c + dc]?.kind === 'rail'))
+  const spots = (): Cell[] => {
+    const out: Cell[] = []
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (tiles[r][c].kind === 'grass' && !water.has(key(r, c)) && !nearRail(r, c)) out.push([r, c])
+    return shuffle(out, pr)
+  }
+  const put = (kind: PropKind, [r, c]: Cell, v = 0, dx = 0.5, dy = 0.55) => {
+    tiles[r][c] = { kind: 'clear', v: 0 }
+    props.push({ kind, x: c + dx, y: r + dy, v })
+  }
+  const free = spots()
+  if (th === 'foret') {
+    // cabane + tas de bois sur la case voisine
+    const home = free.find(([r, c]) => DIRS.some(([dr, dc]) => tiles[r + dr]?.[c + dc]?.kind === 'grass' && !water.has(key(r + dr, c + dc)) && !nearRail(r + dr, c + dc)))
+    if (home) {
+      const [r, c] = home
+      const side = DIRS.find(([dr, dc]) => tiles[r + dr]?.[c + dc]?.kind === 'grass' && !water.has(key(r + dr, c + dc)) && !nearRail(r + dr, c + dc))!
+      put('cabin', home)
+      put('woodpile', [r + side[0], c + side[1]])
+    }
+    free.filter(([r, c]) => tiles[r][c].kind === 'grass').slice(0, 3).forEach((cell, i) => put('mushroom', cell, i % 2, 0.35 + pr() * 0.3, 0.5 + pr() * 0.2))
+  } else {
+    const home = free.find(([r, c]) => tiles[r][c].kind === 'grass')
+    if (home) put('chalet', home)
+    // téléphérique : deux sommets distants de 3 à 7 cases
+    const peaks: Cell[] = []
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (tiles[r][c].kind === 'mountain') peaks.push([r, c])
+    const pairs: [Cell, Cell][] = []
+    for (const a of peaks) for (const b of peaks) {
+      const d = Math.hypot(a[0] - b[0], a[1] - b[1])
+      if (a < b && d >= 3 && d <= 7) pairs.push([a, b])
+    }
+    if (pairs.length) {
+      const [a, b] = pairs[Math.floor(pr() * pairs.length)]
+      props.push({ kind: 'pylon', x: a[1] + 0.5, y: a[0] + 0.35, v: 0 }, { kind: 'pylon', x: b[1] + 0.5, y: b[0] + 0.35, v: 0 })
+      cable = [{ x: a[1] + 0.5, y: a[0] + 0.2 }, { x: b[1] + 0.5, y: b[0] + 0.2 }]
+    }
+  }
+  return { props, cable }
 }
