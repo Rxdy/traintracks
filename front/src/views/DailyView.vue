@@ -6,6 +6,7 @@ import CoinBadge from '../components/CoinBadge.vue'
 import QuitButton from '../components/QuitButton.vue'
 import WinReceipt from '../components/WinReceipt.vue'
 import CabinFrame from '../components/CabinFrame.vue'
+import { cabinEnabled } from '../features'
 import FinishDialog from '../components/FinishDialog.vue'
 import type { Route } from '../trainRoute'
 import type { Scenery } from '../scenery/generate'
@@ -108,7 +109,7 @@ function quit(): void {
           @scene="cabScene = $event"
           @land="landFrame = $event"
         />
-        <CabinFrame :shown="won" :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" />
+        <CabinFrame v-if="cabinEnabled" :shown="won" :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" />
         <!-- À l'arrivée du train : le récapitulatif au centre de l'écran. « Suivant » ramène au salon. -->
         <FinishDialog :open="storeDown" next-label="Retour" @replay="grid?.replayTrain()" @next="quit">
           <template v-if="outcome">
