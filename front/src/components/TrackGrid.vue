@@ -118,6 +118,7 @@ const elapsed = ref(0)
 const route = ref<Route | null>(null)
 // Décor : d'abord il se dévoile (voie posée), PUIS le train démarre.
 const scenery = ref<Scenery | null>(null)
+const glideY = ref(0) // de combien la grille glisse (px) vers le milieu de l'écran quand le paysage apparaît
 const failed3d = ref(false) // le décor 3D n'a pas pu s'afficher : décor classique jusqu'à la fin de la visite
 const use3d = computed(() => !failed3d.value && webglAvailable())
 const sceneryRoute = ref<Route | null>(null)
@@ -233,7 +234,7 @@ function boardRect(): DOMRect | undefined {
 }
 const isLandscape = (): boolean => window.innerWidth >= window.innerHeight
 let sceneLandscape = isLandscape() // forme d'écran pour laquelle le décor a été généré
-function sceneryMargins(): { x: number; y: number; top?: number; below?: number } {
+function sceneryMargins(): { x: number; y: number; top?: number; below?: number; dy?: number } {
   const n = puz.value.size
   const y = sceneryMargin(n)
   const rect = boardRect()
@@ -247,18 +248,21 @@ function sceneryMargins(): { x: number; y: number; top?: number; below?: number 
   const x = Math.min(40, Math.max(y, Math.ceil(farthest / unit - n / 2) + 1))
   // La grille rétrécit autour du centre de sa zone de jeu (sans la rangée des indices) : on situe à l'écran le haut et le bas
   // du décor qu'on aurait sans complément. Le bas tombe pile sur le bas d'origine de la grille (rangée des indices comprise).
-  const oy = rect.top + (n / 2) * cell
+  // À la victoire la grille glisse aussi vers le milieu de l'écran (dy) : le paysage se calcule depuis sa place d'arrivée.
+  const dy = Math.round(window.innerHeight / 2 - (rect.top + (n / 2) * cell))
+  const oy = rect.top + dy + (n / 2) * cell
   const decorTop = oy - (y + n / 2) * unit
-  const decorBottom = rect.bottom
+  const decorBottom = rect.bottom + dy
   // Le Trajet est un paysage plein écran : le décor monte jusqu'en haut de l'écran (la barre du haut, le bouton Quitter et les
   // réglages flottent par-dessus) et descend jusqu'en bas (la cabine, en fenêtre, se pose par-dessus).
   const top = Math.max(0, decorTop / unit + 0.05)
   const below = Math.max(0, (window.innerHeight - decorBottom) / unit + 0.05)
-  return { x, y, top, below }
+  return { x, y, top, below, dy }
 }
 function buildDecor(path: [number, number][]): void {
   sceneLandscape = isLandscape()
   const mg = sceneryMargins()
+  glideY.value = mg.dy ?? 0
   scenery.value = buildScenery(puz.value, path, props.theme, seedOf(puz.value), mg)
   const horiz = (d: string) => d === 'left' || d === 'right'
   const sm = scenery.value.margin // marges réelles (avec le complément du haut) : la voie va jusqu'au bord du décor
@@ -606,14 +610,16 @@ onMounted(() => {
       ref="boardEl"
       class="board"
       :class="{ picking, 'board--won': scenery}"
-      :style="{ '--size': puzzle.size, '--k': scenery ? scenery.frame.k : 1, ...railStyle }"
+      :style="{ '--size': puzzle.size, '--k': scenery ? scenery.frame.k : 1, '--dy': glideY + 'px', ...railStyle }"
       role="grid"
       aria-label="Grille de jeu"
       @pointermove="onMove"
     >
       <!-- Décor : en 3D si le joueur le veut et que l'appareil sait le faire ; sinon (ou en cas d'échec) le décor classique en SVG. -->
-      <Scenery3D v-if="scenery && use3d" :key="'3d-' + scenery.seed" :scenery="scenery" :route="sceneryRoute" @fail="failed3d = true" />
-      <SceneryLayer v-else-if="scenery" :scenery="scenery" :route="sceneryRoute" />
+      <Transition name="decor">
+        <Scenery3D v-if="scenery && use3d" :key="'3d-' + scenery.seed" :scenery="scenery" :route="sceneryRoute" @fail="failed3d = true" />
+        <SceneryLayer v-else-if="scenery" :scenery="scenery" :route="sceneryRoute" />
+      </Transition>
 
       <template v-for="r in indices" :key="'row-' + r">
         <TrackCell
@@ -755,9 +761,16 @@ onMounted(() => {
   justify-content: flex-start;
   gap: 0.6rem;
 }
+/* « Réduire les animations » : pas de glissement ni de rétrécissement, le paysage apparaît en fondu. */
 @media (prefers-reduced-motion: reduce) {
   .board {
     transition: none;
+  }
+  .decor-enter-active {
+    transition: opacity 0.6s ease;
+  }
+  .decor-enter-from {
+    opacity: 0;
   }
 }
 @keyframes win-in {
@@ -891,7 +904,7 @@ onMounted(() => {
   /* La colonne des compteurs est à droite : on décale VERS LA DROITE d'une demi-colonne pour
      que les CASES (pas la grille + compteurs) soient centrées sur la page. */
   /* À la victoire, la grille rétrécit au centre d'un paysage plus grand (--k < 1) : le décor déborde autour. */
-  transform: translateX(var(--shift)) scale(var(--k, 1));
+  transform: translate(var(--shift), var(--dy, 0px)) scale(var(--k, 1));
   transform-origin: calc(50% * var(--size) / (var(--size) + 1)) calc(50% * var(--size) / (var(--size) + 1));
   transition: transform 1.8s ease-in-out;
 
