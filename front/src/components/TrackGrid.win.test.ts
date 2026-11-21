@@ -1,3 +1,4 @@
+import SceneryLife from './SceneryLife.vue'
 import { describe, it, expect, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mount } from '@vue/test-utils'
@@ -388,7 +389,8 @@ describe('TrackGrid : accélérer le train', () => {
     taille(390, 844)
     const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
     await tracer(w)
-    const scene = () => (w.emitted('scene') ?? []).filter((e) => e[0]).at(-1)?.[0] as { scenery: unknown } | undefined
+    // le décor affiché (celui que reçoit la couche du décor vivant)
+    const scene = () => { const l = w.findComponent(SceneryLife); return l.exists() ? { scenery: l.props('scenery') as unknown } : undefined }
     const depart = scene()?.scenery
     expect(depart).toBeTruthy()
     const rejouer = () => (w.vm as unknown as { replayTrain: () => void }).replayTrain()

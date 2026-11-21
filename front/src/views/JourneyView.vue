@@ -1,15 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import HeroArt from '../components/HeroArt.vue'
 import MenuIcon from '../components/MenuIcon.vue'
 import TrackGrid from '../components/TrackGrid.vue'
 import AidBar from '../components/AidBar.vue'
-import CabinFrame from '../components/CabinFrame.vue'
-import { cabinEnabled } from '../features'
 import FinishDialog from '../components/FinishDialog.vue'
-import type { Route } from '../trainRoute'
-import type { LandFrame } from '../scenery/motion'
-import type { Scenery } from '../scenery'
 import CoinBadge from '../components/CoinBadge.vue'
 import QuitButton from '../components/QuitButton.vue'
 import WinReceipt from '../components/WinReceipt.vue'
@@ -18,6 +13,8 @@ import { refreshWallet, setCoins } from '../wallet'
 import { user } from '../auth'
 import { themeForLevel } from '../scenery'
 import { sound } from '../sound/director'
+import LevelLoading from '../components/LevelLoading.vue'
+import { loadingTiming, preloadWorld, preloadWorldWhenIdle } from '../preload'
 
 // Le Voyage : page principale. On ne montre que le niveau en cours (pas de
 // liste, pas de taille de grille) et un gros bouton pour jouer.
@@ -65,16 +62,13 @@ const resume = ref<Pick<StartedLevel, 'reveals' | 'crosses'>>({ reveals: [], cro
 const grid = ref<InstanceType<typeof TrackGrid> | null>(null)
 const aidBar = ref<InstanceType<typeof AidBar> | null>(null)
 const picking = ref(false)
-const trainRunning = ref(false) // le train roule : la cabine montre la carte vue de la locomotive
-const trainS = ref(0) // position de la locomotive sur son trajet (cases)
-const landFrame = shallowRef<LandFrame | null>(null) // voitures, barrières, animaux : l'image du décor vivant, reprise par la cabine
-const cabScene = ref<{ route: Route; scenery: Scenery; rails: Route | null } | null>(null) // le trajet et le décor de la carte, pour la vue de la cabine
-const storeDown = computed(() => levelFinished.value && !trainRunning.value) // le store de la cabine se ferme sur le récapitulatif
+const trainRunning = ref(false) // le train roule (la fenêtre de fin attend qu'il soit arrivé)
+const storeDown = computed(() => levelFinished.value && !trainRunning.value) // la fenêtre de fin s'ouvre sur le récapitulatif
 const fmt = (ms: number): string => {
   const t = Math.floor(ms / 1000)
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`
 }
-const won = ref(false) // le tracé est validé : le Plateau cède la place au Trajet (la cabine monte, les bonus partent)
+const won = ref(false) // le tracé est validé : le Plateau cède la place au Trajet (les bonus partent)
 const levelFinished = ref(false) // le train est passé : le récapitulatif et « Niveau suivant » apparaissent sur le store
 const colorHints = ref(false) // indicateurs de couleur : désactivés par défaut, l'aide « Couleurs » les active sur ce niveau
 // Une pièce sonne par ligne de gain, quand le récapitulatif apparaît (le décor se tait un instant).
@@ -83,12 +77,28 @@ watch(levelFinished, (v) => {
   const lines = [earned.value.base, earned.value.bonus].filter((a) => a > 0).length
   for (let i = 0; i < lines; i++) window.setTimeout(() => sound.coin(), i * 350)
 })
-watch(current, (c) => emit('playing', c !== null), { immediate: true })
+
+// Écran de chargement : toujours affiché entre « Jouer » et la grille. Le niveau (serveur) et le décor 3D (fichier) arrivent ensemble ;
+// si tout est déjà prêt, la barre se remplit vite. Durée minimale courte (loadingTiming.minMs) pour qu'elle se voie arriver au bout.
+const showLoading = ref(false)
+const loadSteps = ref({ level: false, scenery: false })
+const loadProgress = computed(() => (Number(loadSteps.value.level) + Number(loadSteps.value.scenery)) / 2)
+onMounted(preloadWorldWhenIdle) // à l'accueil, le décor se charge pendant que le joueur lit le menu
+// En partie dès l'écran de chargement : plus de menu, et la page ne défile plus (App.vue).
+watch([current, showLoading], ([c, l]) => emit('playing', c !== null || l), { immediate: true })
 
 async function play(): Promise<void> {
   loading.value = true
   loadError.value = ''
-  const r = await startLevel()
+  loadSteps.value = { level: false, scenery: false }
+  showLoading.value = true
+  const minimum = new Promise<void>((done) => window.setTimeout(done, loadingTiming.minMs))
+  const [r] = await Promise.all([
+    startLevel().then((v) => ((loadSteps.value.level = true), v)),
+    preloadWorld().then(() => (loadSteps.value.scenery = true)),
+    minimum,
+  ])
+  showLoading.value = false
   loading.value = false
   if (!r) {
     loadError.value = 'Serveur injoignable : vérifie ta connexion.'
@@ -105,9 +115,6 @@ async function play(): Promise<void> {
   won.value = false
   levelFinished.value = false
   trainRunning.value = false
-  trainS.value = 0
-  cabScene.value = null
-  landFrame.value = null
   earned.value = null
   officialMs.value = null
   current.value = r.level
@@ -137,8 +144,10 @@ function quit(): void {
 
 <template>
   <section data-test="journey">
+    <LevelLoading v-if="showLoading" :level="target" :theme="themeForLevel(target)" :progress="loadProgress" />
+
     <!-- Accueil du Voyage -->
-    <div v-if="!current" class="home">
+    <div v-else-if="!current" class="home">
       <div class="side">
         <button v-for="c in leftCubes" :key="c.id" type="button" class="mini" :data-test="'nav-' + c.id" :disabled="isLocked(c.id)" :title="isLocked(c.id) ? 'Connecte-toi (cube Compte) pour y accéder' : undefined" @click="emit('navigate', c.id)">
           <span class="ico" aria-hidden="true"><MenuIcon :name="c.id" /></span>
@@ -173,7 +182,7 @@ function quit(): void {
     </div>
 
     <!-- En jeu : aucun menu, juste de quoi quitter / naviguer -->
-    <template v-else>
+    <template v-else-if="current">
       <div class="bar">
         <QuitButton class="back" data-test="quit" @click="quit" />
         <span class="title" :class="{ gone: won }" data-test="level-title">Niveau {{ current.id }}</span>
@@ -201,9 +210,6 @@ function quit(): void {
             external-recap
             @finish="levelFinished = true"
             @train="trainRunning = $event"
-            @progress="trainS = $event"
-            @scene="cabScene = $event"
-            @land="landFrame = $event"
             :initial="{ givens: resume.reveals, crosses: resume.crosses }"
             @pick="(r, c) => aidBar?.onPick(r, c)"
           />
@@ -221,8 +227,6 @@ function quit(): void {
             />
           </div>
         </div>
-        <!-- La vue du conducteur : petite fenêtre rangeable, qui entre à la victoire. -->
-        <CabinFrame v-if="cabinEnabled" :shown="won" :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :theme="themeForLevel(current.id)" />
         <!-- À l'arrivée du train : le récapitulatif au centre de l'écran. -->
         <FinishDialog :open="storeDown" :can-next="hasNext" :busy="loading" end-message="Dernier niveau disponible terminé. De nouveaux niveaux arrivent bientôt." @replay="grid?.replayTrain()" @next="play">
           <template v-if="earned">

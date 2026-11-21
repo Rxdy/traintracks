@@ -1,19 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { pointAt, speedFactor, type Route } from '../trainRoute'
+import { CAR_SPACING, WAGONS } from '../trainStyle'
+import TrainCar from './TrainCar.vue'
 
 // Locomotive + wagons qui roulent le long du trajet, entrée → sortie.
 // `speed` : cases/s en ligne droite. Le train ralentit dans les virages (voir speedFactor) et change de vitesse en douceur (inertie).
 const props = withDefaults(
   // clip : zone (en cases) où le train est visible. Hors de cette zone (le décor), il disparaît : il ne roule jamais sur
   // l'interface (récapitulatif, pouvoirs, bouton Suivant).
-  defineProps<{ route: Route; size: number; speed?: number; wagons?: number; stopStart?: number; stopEnd?: number; clip?: { x: number; y: number; w: number; h: number } }>(),
-  { speed: 1.9, wagons: 3 },
+  defineProps<{ route: Route; size: number; ghost?: boolean; speed?: number; wagons?: number; stopStart?: number; stopEnd?: number; clip?: { x: number; y: number; w: number; h: number } }>(),
+  { speed: 1.9, wagons: WAGONS },
 )
 const emit = defineEmits<{ (e: 'done'): void; (e: 'progress', s: number): void }>()
 
-const SPACING = 0.62
-const COLORS = ['#2563eb', '#f59e0b', '#16a34a', '#8b5cf6', '#ec4899']
+const SPACING = CAR_SPACING
 const total = computed(() => props.wagons * SPACING)
 
 // Distance parcourue par la locomotive. On part avec tout le train déjà posé
@@ -71,7 +72,9 @@ onUnmounted(() => clearInterval(timer))
 </script>
 
 <template>
+  <!-- ghost : le train est dessiné par la scène 3D (Scenery3D) ; ici on ne garde que la marche (vitesse, position, arrivée) -->
   <svg
+    v-show="!ghost"
     class="train"
     :viewBox="`-1 -1 ${size + 1} ${size + 1}`"
     data-test="train"
@@ -86,17 +89,7 @@ onUnmounted(() => clearInterval(timer))
       :key="car.i"
       :transform="`translate(${car.x} ${car.y}) rotate(${car.angle})`"
     >
-      <template v-if="car.i === 0">
-        <!-- locomotive (avance vers +x) : capot rouge, cabine sombre, phare -->
-        <rect x="-0.2" y="-0.11" width="0.42" height="0.22" rx="0.05" fill="#dc2626" stroke="#00000044" stroke-width="0.012" />
-        <rect x="0.02" y="-0.085" width="0.12" height="0.17" rx="0.02" fill="#7f1d1d" />
-        <rect x="-0.18" y="-0.07" width="0.13" height="0.14" rx="0.02" fill="#fecaca" opacity="0.6" />
-        <circle cx="0.18" cy="0" r="0.05" fill="#fde68a" />
-      </template>
-      <template v-else>
-        <rect x="-0.26" y="-0.1" width="0.52" height="0.2" rx="0.04" :fill="COLORS[car.i % COLORS.length]" stroke="#00000044" stroke-width="0.012" />
-        <rect x="-0.2" y="-0.07" width="0.4" height="0.14" rx="0.02" fill="#fff" opacity="0.28" />
-      </template>
+      <TrainCar :i="car.i" />
     </g>
     <g v-if="cars[0]" class="smoke" :style="{ transform: `translate(${cars[0].x}px, ${cars[0].y}px)` }">
       <circle v-for="i in 3" :key="'s' + i" cx="0" cy="-0.1" r="0.03" fill="#f8fafc" opacity="0">

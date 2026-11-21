@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { Scenery } from '../scenery'
-import type { Route } from '../trainRoute'
+import { pointAt, type Route } from '../trainRoute'
+import { CAR_SPACING, WAGONS } from '../trainStyle'
 
 // Décor 3D d'un niveau gagné : même place et même taille que le décor SVG (SceneryLayer), sous les rails de la grille.
 // Vue du dessus calée sur les cases. Three.js n'est chargé qu'ici, à la première victoire (fichier à part).
 // En cas d'échec (pas de WebGL, chargement raté), on prévient le parent, qui remet le décor classique.
-const props = defineProps<{ scenery: Scenery; route: Route | null }>()
+// `train` : la voie suivie et la position de la locomotive (cases) ; le train roule DANS la scène 3D, les arbres devant la voie le cachent.
+const props = defineProps<{ scenery: Scenery; route: Route | null; train?: { route: Route; s: number } | null }>()
 const emit = defineEmits<{ (e: 'fail'): void; (e: 'ready'): void }>()
 
 const box = computed(() => {
@@ -39,13 +41,38 @@ onMounted(async () => {
       top.updateProjectionMatrix()
     }
     r.fit(onSize)
+    // le train, en 3D (même modèle que les icônes) : posé sur la voie à chaque image d'après la position de la locomotive
+    const { makeCar } = await import('../scenery3d/trainModel')
+    if (gone) return releaseWorld(sc)
+    const train = new THREE.Group()
+    const cars = Array.from({ length: WAGONS + 1 }, (_, i) => makeCar(i))
+    cars.forEach((c) => train.add(c))
+    train.visible = false
+    const unTrain = world.add(train)
+    const placeTrain = () => {
+      const tr = props.train
+      train.visible = !!tr && tr.s >= 0
+      if (!tr || tr.s < 0) return
+      cars.forEach((car, i) => {
+        const p = pointAt(tr.route, tr.s - i * CAR_SPACING)
+        car.position.set(p.x + sc.margin.x, 0, p.y + sc.margin.y)
+        car.rotation.y = (-p.angle * Math.PI) / 180
+      })
+    }
     const remove = world.addView(() => {
       r.check(onSize)
-      world.setMode('top')
+      placeTrain()
       r.draw(world.scene, top)
     })
     stop = () => {
       remove()
+      unTrain()
+      train.traverse((o) => {
+        const m = o as InstanceType<typeof THREE.Mesh>
+        if (!m.isMesh) return
+        m.geometry.dispose()
+        ;([] as { dispose(): void }[]).concat(m.material as never).forEach((x) => x.dispose())
+      })
       r.dispose()
       releaseWorld(sc)
     }

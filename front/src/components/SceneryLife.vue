@@ -2,6 +2,7 @@
 import { computed, ref, shallowRef } from 'vue'
 import type { Scenery } from '../scenery/generate'
 import { useClock } from '../scenery/clock'
+import { REVEAL, revealDelay } from '../scenery/reveal'
 import { createLandSim, type LandFrame } from '../scenery/motion'
 import { PAL } from '../scenery/themes'
 import { sound } from '../sound/director'
@@ -17,15 +18,22 @@ const pal = computed(() => PAL[props.scenery.theme])
 const sim = createLandSim(props.scenery)
 const empty: LandFrame = { cars: [], barrier: 0, lights: false, animals: [], birds: [], flakes: [], leaves: [], embers: [], events: [] }
 const frame = shallowRef<LandFrame>(empty)
-// Apparition : tout ce qui vit sur le décor (animaux, oiseaux, voitures, cabane, tunnels…) apparaît dans la même vague diagonale que
-// les arbres et le sol (500 ms, puis 120 ms par case en diagonale), à partir du moment où le décor est prêt (`start`).
+// Apparition : tout ce qui vit sur le décor (animaux, oiseaux, voitures, cabane, tunnels…) apparaît case par case, chaque case à un
+// moment tiré au hasard (scenery/reveal.ts, le même tirage que les arbres et les maisons), à partir du moment où le décor est prêt (`start`).
 const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
-const wave = ref(reduce ? 2 : 0) // position du front de la vague, de 0 (coin haut gauche) à 1 (coin bas droit) ; > 1.05 : fini, plus de masque
-let waveT0 = -1
+const REVEAL_END = REVEAL.start + REVEAL.spread + 100
+const elapsed = ref(reduce ? REVEAL_END : 0) // ms depuis le début de l'apparition ; au-delà de REVEAL_END, plus de masque
+let revealT0 = -1
+const cellDelays = computed(() => {
+  const out: { r: number; c: number; d: number }[] = []
+  for (let r = 0; r < props.scenery.rows; r++) for (let c = 0; c < props.scenery.cols; c++) out.push({ r, c, d: revealDelay(props.scenery.seed, r, c) })
+  return out
+})
+const shown = computed(() => cellDelays.value.filter((x) => x.d <= elapsed.value))
 useClock((dt, t) => {
-  if (wave.value <= 1.05 && props.start) {
-    if (waveT0 < 0) waveT0 = t
-    wave.value = Math.max(0, ((t - waveT0) * 1000 - 500) / 120 / (props.scenery.cols + props.scenery.rows))
+  if (elapsed.value < REVEAL_END && props.start) {
+    if (revealT0 < 0) revealT0 = t
+    elapsed.value = (t - revealT0) * 1000
   }
   frame.value = sim.step(dt, t, props.trainNear)
   frame.value.events.forEach((e) => sound.ambient(e))
@@ -51,19 +59,14 @@ const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, 
 <template>
   <svg class="life" :viewBox="`-1 -1 ${board + 1} ${board + 1}`" data-test="scenery-life" aria-hidden="true">
     <defs>
-      <linearGradient id="life-wave" gradientUnits="userSpaceOnUse" x1="0" y1="0" :x2="(scenery.cols + scenery.rows) / 2" :y2="(scenery.cols + scenery.rows) / 2">
-        <stop offset="0" stop-color="#fff" />
-        <stop :offset="Math.min(1, wave)" stop-color="#fff" />
-        <stop :offset="Math.min(1, wave + 0.03)" stop-color="#000" />
-        <stop offset="1" stop-color="#000" />
-      </linearGradient>
       <mask id="life-mask" maskUnits="userSpaceOnUse" :x="-2" :y="-2" :width="scenery.cols + 4" :height="scenery.rows + 4">
-        <rect :x="-2" :y="-2" :width="scenery.cols + 4" :height="scenery.rows + 4" fill="url(#life-wave)" />
+        <rect :x="-2" :y="-2" :width="scenery.cols + 4" :height="scenery.rows + 4" fill="#000" />
+        <rect v-for="x in shown" :key="x.r * 1000 + x.c" :x="x.c - 0.02" :y="x.r - 0.02" width="1.04" height="1.04" fill="#fff" />
       </mask>
       <clipPath id="life-clip"><rect x="0" y="0" :width="cols" :height="scenery.frame.visibleRows" rx="0.18" /></clipPath>
     </defs>
     <g :transform="`translate(${-scenery.margin.x} ${-scenery.margin.y})`">
-    <g clip-path="url(#life-clip)" :mask="wave <= 1.05 ? 'url(#life-mask)' : undefined">
+    <g clip-path="url(#life-clip)" :mask="elapsed < REVEAL_END ? 'url(#life-mask)' : undefined">
       <!-- route : voitures et barrières -->
       <g v-if="scenery.road" :transform="roadFrame">
         <g v-for="c in frame.cars" :key="c.id" :transform="`translate(${c.lane} ${c.u}) rotate(${c.dir > 0 ? 90 : -90})`">
@@ -102,9 +105,9 @@ const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, 
 
       <!-- tunnels : une montagne percée au bout de chaque voie, d'où le train sort et où il entre -->
       <g v-for="(tn, i) in tunnelList" :key="'tn' + i" :transform="`translate(${tn.x} ${tn.y}) rotate(${(Math.atan2(tn.out.y, tn.out.x) * 180) / Math.PI})`" data-test="tunnel">
-        <rect x="-0.05" y="-0.95" :width="tn.inset + 6" height="1.9" rx="0.32" :fill="pal.rock[1]" />
-        <rect x="-0.05" y="-0.95" :width="tn.inset + 6" height="1.9" rx="0.32" fill="none" stroke="#00000040" stroke-width="0.04" />
-        <path :d="`M0.3 -0.8 H${tn.inset + 6} M0.5 -0.45 H${tn.inset + 6} M0.5 0.45 H${tn.inset + 6} M0.3 0.8 H${tn.inset + 6}`" :stroke="pal.rock[0]" stroke-width="0.1" stroke-linecap="round" opacity="0.5" />
+        <rect x="-0.05" y="-0.78" :width="tn.inset + 6" height="1.56" rx="0.5" :fill="pal.rock[1]" />
+        <rect x="-0.05" y="-0.78" :width="tn.inset + 6" height="1.56" rx="0.5" fill="none" stroke="#00000040" stroke-width="0.04" />
+        <path :d="`M0.3 -0.64 H${tn.inset + 6} M0.5 -0.45 H${tn.inset + 6} M0.5 0.45 H${tn.inset + 6} M0.3 0.64 H${tn.inset + 6}`" :stroke="pal.rock[0]" stroke-width="0.1" stroke-linecap="round" opacity="0.5" />
         <rect x="-0.07" y="-0.42" width="0.3" height="0.84" rx="0.1" :fill="pal.rock[0]" stroke="#00000055" stroke-width="0.03" />
         <rect x="-0.07" y="-0.3" width="0.22" height="0.6" rx="0.07" fill="#0b0f14" />
       </g>

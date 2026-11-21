@@ -363,12 +363,13 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
   const houses: Cell[] = []
   const touchesHouse = (r: number, c: number) => [-1, 0, 1].some((dr) => [-1, 0, 1].some((dc) => houses.some(([a, b]) => a === r + dr && b === c + dc)))
   for (let guard = 0; houses.length < houseCount && guard < 60; guard++) {
-    // Hameaux de 1 à 3 maisons (la ville : quartiers de 9) ; deux hameaux ne se touchent jamais, sinon les maisons « se suivent ».
+    // Villages (la ville : quartiers de 9) ; deux villages ne se touchent jamais, sinon les maisons « se suivent ».
     const seeds = freeCells.filter(([r, c]) => free(r, c) && (dense || !touchesHouse(r, c)))
     if (!seeds.length) break
     const cluster: Cell[] = [seeds[Math.floor(rand() * seeds.length)]]
     const roll = rand()
-    const perHamlet = dense ? 9 : roll < 0.4 ? 1 : roll < 0.75 ? 2 : 3
+    // une maison seule reste possible, mais le plus souvent c'est un village (3 à 6 maisons) ; la ville : quartiers de 9
+    const perHamlet = dense ? 9 : roll < 0.25 ? 1 : roll < 0.55 ? 3 : roll < 0.85 ? 4 : 6
     const want = Math.min(perHamlet, houseCount - houses.length)
     while (cluster.length < want) {
       const around = cluster.flatMap(([r, c]) => DIRS.map(([dr, dc]) => [r + dr, c + dc] as Cell)).filter(([r, c]) => free(r, c) && (dense || !touchesHouse(r, c)) && !cluster.some(([a, b]) => a === r && b === c))
@@ -467,6 +468,23 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
       tiles[r][c] = { kind, v: variant }
     }
   }
+
+  // Une montagne seule rend mal (un petit tas isolé) : elle s'adjoint une case voisine (herbe ou arbre, loin de la voie) pour former un
+  // petit massif de deux sommets ; sans place, elle devient un rocher (ou de l'herbe, si un rocher est déjà à côté). Les dunes et les mesas ne sont pas concernées.
+  if (peakKind === 'mountain')
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++) {
+        if (tiles[r][c].kind !== 'mountain') continue
+        if (DIRS.some(([dr, dc]) => tiles[r + dr]?.[c + dc]?.kind === 'mountain')) continue
+        const room = DIRS.map(([dr, dc]) => [r + dr, c + dc] as Cell).filter(
+          ([a, b]) => ['grass', 'tree', 'pine'].includes(tiles[a]?.[b]?.kind ?? '') && !taken.has(key(a, b)) && !water.has(key(a, b)) && (!nearPath(a, b) || P.peaks >= 0.3),
+        )
+        if (room.length) {
+          const [a, b] = room[Math.floor(rand() * room.length)]
+          tiles[a][b] = { kind: 'mountain', v: tiles[r][c].v }
+        } else if (!rocks.has(key(r, c))) tiles[r][c] = { kind: touchesBoulder(r, c) ? 'grass' : 'boulder', v: tiles[r][c].v } // jamais deux pierres collées
+        // (un rocher de la grille reste une montagne : c'est un obstacle du puzzle)
+      }
 
   const paths = P.paths ? makePaths(seed, tiles, rows, cols) : []
   const { props, cable } = makeProps(th, seed, tiles, water, rows, cols)
@@ -619,8 +637,8 @@ export function makeStations(puzzle: Puzzle, shifted: Cell[], mg: { x: number; y
   return { entry: build(shifted[0], puzzle.entry.dir, false), exit: build(shifted[shifted.length - 1], puzzle.exit.dir, true) }
 }
 
-// --- Tunnels : au bout de chaque voie, une montagne percée. L'entrée est à 1,5 case du bord du décor (plus en retrait si la route,
-// l'eau ou une maison gênent). Sans place (moins de 3 cases), pas de tunnel : le train sort simplement du décor.
+// --- Tunnels : au bout de chaque voie, une montagne percée. L'entrée est à une demi-case du bord de l'écran (plus en retrait si la
+// route, l'eau ou une maison gênent). Sans place (moins de 1,3 case entre la grille et le bord), pas de tunnel.
 function makeTunnels(puzzle: Puzzle, shifted: Cell[], mg: { x: number; y: number; b: number }, visibleRows: number, tiles: Tile[][], water: Set<string>, view?: View): { entry: Tunnel | null; exit: Tunnel | null } {
   const OUTV: Record<string, Cell> = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] }
   const N = puzzle.size
@@ -631,30 +649,34 @@ function makeTunnels(puzzle: Puzzle, shifted: Cell[], mg: { x: number; y: number
   const build = (cell: Cell, dir: string): Tunnel | null => {
     const L = reach(dir)
     const decorL = dir === 'left' || dir === 'right' ? mg.x : dir === 'up' ? mg.y : visibleRows - mg.y - N
-    if (L < 3) return null
+    if (L < 1.3) return null // il faut au moins un peu de décor entre la grille et le bord de l'écran
     const o = OUTV[dir]
     const u = { x: o[1], y: o[0] }
     const A = { x: cell[1] + 0.5 + u.x * 0.5, y: cell[0] + 0.5 + u.y * 0.5 }
     const normal = { x: -u.y, y: u.x }
-    // 1,5 case du bord de l'écran ; si quelque chose gêne : de plus en plus en retrait ; en dernier recours tout près du bord
-    // (au-delà d'une route qui croise la voie près de l'écran)
-    const insets: number[] = []
-    for (let i = 1.5; L - i >= 1.2; i += 1) insets.push(i)
-    insets.push(1, 0.6)
+    // Collé au bord de l'écran (entrée à une demi-case du bord) : on ne voit que l'entrée et un petit rebord de montagne, pas un gros
+    // bloc posé sur le paysage. Si quelque chose gêne (route, eau, maison), de plus en plus en retrait, sans jamais toucher la grille.
+    const insets = [0.5, 0.9, 1.5, 2.5, 3.5].filter((i) => L - i >= 0.8)
     for (const inset of insets) {
       const d = L - inset
-      // la montagne couvre de l'entrée du tunnel au bord du décor, 1,8 case de large
-      const cells: { r: number; c: number }[] = []
+      // la montagne couvre de l'entrée du tunnel au bord du décor, 1,5 case de large. Le cœur (sur la voie) doit être dégagé ; les flancs
+      // peuvent recouvrir un bout de rivière, de sentier ou de champ, mais jamais une maison, un moulin, une route ou une autre voie.
+      const core: { r: number; c: number }[] = []
+      const side: { r: number; c: number }[] = []
       let bad = false
-      for (let a = d; a <= L + 0.5 && !bad; a += 0.5) for (let b = -0.9; b <= 0.9; b += 0.45) {
+      for (let a = d; a <= L + 0.5 && !bad; a += 0.5) for (const b of [-0.7, -0.35, 0, 0.35, 0.7]) {
         const r = Math.floor(A.y + u.y * a + normal.y * b), c = Math.floor(A.x + u.x * a + normal.x * b)
         const t = tiles[r]?.[c]
         if (!t) continue
-        if (water.has(`${r},${c}`) || ['road', 'house', 'windmill', 'field', 'path'].includes(t.kind) || (t.kind === 'rail' && Math.abs(b) > 0.6)) { bad = true; break }
-        cells.push({ r, c })
+        const inCore = Math.abs(b) <= 0.35
+        if (['road', 'house', 'windmill'].includes(t.kind) || (t.kind === 'rail' && !inCore)) { bad = true; break }
+        if (inCore && (water.has(`${r},${c}`) || t.kind === 'field' || t.kind === 'path')) { bad = true; break }
+        ;(inCore ? core : side).push({ r, c })
       }
       if (bad) continue
-      for (const { r, c } of cells) if (tiles[r][c].kind !== 'rail') tiles[r][c] = { kind: 'clear', v: 0 }
+      // le cœur est dégagé ; sur les flancs, seuls les objets debout (arbres, rochers…) s'effacent : l'eau, les sentiers et les champs restent
+      for (const { r, c } of core) if (tiles[r][c].kind !== 'rail') tiles[r][c] = { kind: 'clear', v: 0 }
+      for (const { r, c } of side) if (!water.has(`${r},${c}`) && !['rail', 'path', 'field', 'clear', 'grass'].includes(tiles[r][c].kind)) tiles[r][c] = { kind: 'clear', v: 0 }
       return { x: A.x + u.x * d, y: A.y + u.y * d, out: u, inset: inset + (decorL - L) } // `inset` : distance au bord du décor
     }
     return null

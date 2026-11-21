@@ -4,13 +4,22 @@
 //   ?scene=maskable  la même, plus loin, pour les écrans d'accueil qui découpent l'icône en cercle ou en goutte
 // Rendu à la taille de la fenêtre ; `scripts/render-art.sh` en fait des captures, puis les redimensionne.
 import * as THREE from 'three'
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { PAL, type Scenery } from '../src/scenery'
 import { SKY } from '../src/scenery/sky'
+import { CAR_SPACING, WAGONS } from '../src/trainStyle'
+import { buildForest, buildMassif } from '../src/scenery3d/clusters'
+import { makeCar, makeSmoke } from '../src/scenery3d/trainModel'
 import { build, canvasTex, dark, groundSvg, light, loadSvgTexture, makeKit, makeTextures, tickAnims, type Anim } from '../src/scenery3d/world'
 
 const scene3 = new URLSearchParams(location.search).get('scene') ?? 'hero'
-const pal = PAL.plaine
-const sky = SKY.plaine
+// ?style=soft : essai d'un rendu plus rond et brillant (formes arrondies, matériaux vernis), pour comparer ; pas adopté.
+const soft = new URLSearchParams(location.search).get('style') === 'soft'
+// ?smoke=1 : trois ronds de fumée sur la cheminée (images fixes)
+const smoke = new URLSearchParams(location.search).get('smoke') === '1'
+const theme = (new URLSearchParams(location.search).get('theme') ?? 'plaine') as keyof typeof PAL
+const pal = PAL[theme]
+const sky = SKY[theme]
 document.body.style.margin = '0'
 document.body.style.overflow = 'hidden'
 const canvas = document.createElement('canvas')
@@ -24,7 +33,44 @@ renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFShadowMap
 const scene = new THREE.Scene()
 const texs = makeTextures(3)
-const kit = makeKit(texs)
+const baseKit = makeKit(texs)
+// Style « doux » : coins arrondis sur les boîtes, matériaux vernis, lissage des facettes, couleurs un peu plus vives.
+function softenKit(k: typeof baseKit): typeof baseKit {
+  const col = new THREE.Color()
+  const vivid = (c: string) => {
+    col.set(c)
+    const hsl = { h: 0, s: 0, l: 0 }
+    col.getHSL(hsl)
+    return col.setHSL(hsl.h, Math.min(1, hsl.s * 1.25), hsl.l).getStyle()
+  }
+  const mats = new Map<string, THREE.Material>()
+  const mat: typeof baseKit.mat = (color, map, o = {}) => {
+    const key = color + (map?.uuid ?? '') + JSON.stringify(o)
+    let m = mats.get(key)
+    if (!m) mats.set(key, (m = new THREE.MeshPhysicalMaterial({ color: vivid(color), map: map ?? null, roughness: 0.38, clearcoat: 0.8, clearcoatRoughness: 0.15, ...o, flatShading: false })))
+    return m
+  }
+  const geo: typeof baseKit.geo = (key, make) =>
+    k.geo('soft:' + key, () => {
+      const g = make()
+      if (g instanceof THREE.BoxGeometry) {
+        const { width: w, height: h, depth: d } = g.parameters
+        return new RoundedBoxGeometry(w, h, d, 3, Math.min(w, h, d) * 0.22) as unknown as typeof g
+      }
+      if (g instanceof THREE.DodecahedronGeometry) return new THREE.IcosahedronGeometry(g.parameters.radius, 3) as unknown as typeof g // rocher : galet lisse
+      if (g instanceof THREE.ExtrudeGeometry) {
+        // toit : bords biseautés au lieu d'arêtes vives (même longueur qu'avant : le biseau déborde un peu)
+        const o = g.parameters.options ?? {}
+        const depth = o.depth ?? 0.5
+        const r = new THREE.ExtrudeGeometry(g.parameters.shapes, { depth, bevelEnabled: true, bevelSize: 0.025, bevelThickness: 0.025, bevelSegments: 4 })
+        r.translate(0, 0, -depth / 2)
+        return r as unknown as typeof g
+      }
+      return g
+    })
+  return { ...k, mat, geo }
+}
+const kit = soft ? softenKit(baseKit) : baseKit
 
 scene.background = canvasTex(4, 256, (g, w, h) => {
   const gr = g.createLinearGradient(0, 0, 0, h)
@@ -113,22 +159,22 @@ function track(path: ReturnType<typeof sampler>, y0: number, keep: (x: number, z
     if (keep(q.x, q.z)) put(ties, q.x, y0 + 0.06, q.z, Math.atan2(-q.tz, q.tx))
   }
 }
-function trainOn(path: ReturnType<typeof sampler>, head: number, y0: number, cars = 3) {
-  ;['#dc2626', '#2563eb', '#f59e0b', '#16a34a'].slice(0, cars).forEach((c, i) => {
-    const g = new THREE.Group()
-    kit.mesh(kit.geo('carbody', () => new THREE.BoxGeometry(0.52, 0.22, 0.32)), kit.mat(c, texs.plaster, { roughness: 0.45 }), 0, 0.2, 0, g)
-    if (i === 0) {
-      kit.mesh(kit.geo('cabin', () => new THREE.BoxGeometry(0.2, 0.2, 0.32)), kit.mat(dark(c, 0.3)), -0.16, 0.41, 0, g)
-      kit.mesh(kit.geo('cabwin', () => new THREE.BoxGeometry(0.205, 0.07, 0.2)), kit.mat('#bfe3fa', null, { roughness: 0.2, flatShading: false }), -0.16, 0.44, 0, g)
-      kit.mesh(kit.geo('chimney', () => new THREE.CylinderGeometry(0.05, 0.04, 0.16, 12)), kit.mat('#1f2937'), 0.15, 0.39, 0, g)
-      kit.mesh(kit.geo('lamp', () => new THREE.SphereGeometry(0.045, 10, 8)), new THREE.MeshBasicMaterial({ color: '#fde68a' }), 0.27, 0.24, 0, g)
-    } else kit.mesh(kit.geo('carroof', () => new THREE.BoxGeometry(0.5, 0.035, 0.3)), kit.mat(light(c, 0.3)), 0, 0.33, 0, g)
-    for (const x of [-0.16, 0.16]) for (const z of [-0.17, 0.17]) kit.mesh(kit.geo('wheel', () => new THREE.CylinderGeometry(0.075, 0.075, 0.035, 16).rotateX(Math.PI / 2)), kit.mat('#1f2937'), x, 0.09, z, g)
-    const q = path.at(head - i * 0.62)
+function trainOn(path: ReturnType<typeof sampler>, head: number, y0: number, wagons = WAGONS) {
+  // le train du jeu (src/scenery3d/trainModel.ts) : locomotive + wagons, mêmes couleurs que le Trajet
+  for (let i = 0; i <= wagons; i++) {
+    const g = makeCar(i)
+    const q = path.at(head - i * CAR_SPACING)
     g.position.set(q.x, y0, q.z)
     g.rotation.y = Math.atan2(-q.tz, q.tx)
     scene.add(g)
-  })
+  }
+  if (smoke) {
+    const g = makeSmoke()
+    const q = path.at(head)
+    g.position.set(q.x, y0, q.z)
+    g.rotation.y = Math.atan2(-q.tz, q.tx)
+    scene.add(g)
+  }
 }
 
 const anims: Anim[] = []
@@ -199,7 +245,7 @@ async function icon(far: boolean) {
   scene.add(ground)
   const path = sampler(rounded([[-6, -3], [0, -3], [0, 3.5]], 1.6))
   track(path, 0, () => true)
-  trainOn(path, path.len - 4.3, 0, 3)
+  trainOn(path, path.len - 4.3, 0)
   put('tree', -1.3, -0.6, 0, 0, 1.5)
   put('pine', 1.5, -1.6, 0, 0, 1.5)
   put('tree', 1.7, 0.9, 2, 0, 1.4)
@@ -213,7 +259,99 @@ async function icon(far: boolean) {
   return cam
 }
 
-const cam = scene3 === 'hero' ? await hero() : await icon(scene3 === 'maskable')
+// ?scene=show&kind=tree|pine|house|… : un seul élément sur un carré d'herbe (pour comparer l'ancien et le nouveau rendu).
+async function show(kind: string) {
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: await meadow(8, false), roughness: 1 }))
+  ground.receiveShadow = true
+  const t = (ground.material as THREE.MeshStandardMaterial).map!
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  t.repeat.set(7, 7)
+  scene.add(ground)
+  if (kind === 'train' || kind === 'rail') {
+    const path = sampler(rounded([[-3, -1], [0, -1], [0, 2]], 1.0))
+    track(path, 0, () => true)
+    if (kind === 'train') trainOn(path, path.len - 1.3, 0)
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 80)
+    cam.position.set(1.9, 1.5, 2.3)
+    cam.lookAt(-0.1, 0.15, 0.2)
+    return cam
+  }
+  const g = build(kind as Parameters<typeof build>[0], 1, pal, kit, anims, 0)
+  if (g) {
+    g.userData.base = 1
+    scene.add(g)
+  }
+  const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 80)
+  cam.position.set(1.5, 1.25, 2.1)
+  cam.lookAt(0, 0.33, 0)
+  return cam
+}
+
+// ?scene=cluster&kind=mountain|forest[&old=1] : un groupe de cases voisines, regroupé (nouveau) ou case par case (old=1, avant).
+async function cluster(kind: string) {
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: await meadow(8, false), roughness: 1 }))
+  ground.receiveShadow = true
+  const t = (ground.material as THREE.MeshStandardMaterial).map!
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  t.repeat.set(7, 7)
+  scene.add(ground)
+  const old = new URLSearchParams(location.search).get('old') === '1'
+  const cells: [number, number][] = kind === 'mountain' ? [[0, 0], [0, 1], [0, 2], [1, 1], [1, 2]] : [[0, 0], [0, 1], [0, 2], [0, 3], [1, 0], [1, 1], [1, 2], [2, 1], [2, 2], [2, 3]]
+  const tk = kind === 'mountain' ? 'mountain' : 'tree'
+  if (old) {
+    cells.forEach(([r, c], i) => {
+      const g = build(i % 4 === 3 && kind !== 'mountain' ? 'pine' : (tk as Parameters<typeof build>[0]), i, pal, kit, anims, 0)
+      if (!g) return
+      g.position.set(c + 0.5, 0, r + 0.5)
+      g.userData.base = kind === 'mountain' ? 1 : 1.3
+      scene.add(g)
+    })
+  } else if (kind === 'mountain') buildMassif(cells, pal, kit, anims, () => 0, (g) => scene.add(g))
+  else
+    buildForest(cells, (r, c) => ((r + c) % 4 === 3 ? 'pine' : 'tree'), (r, c) => r * 3 + c, (k, v) => build(k as Parameters<typeof build>[0], v, pal, kit, anims, 0), () => 0, (g) => scene.add(g))
+  const cam = new THREE.PerspectiveCamera(34, 1, 0.1, 80)
+  cam.position.set(kind === 'mountain' ? 1.6 : 2.2, 3.2, kind === 'mountain' ? 6.2 : 6.4)
+  cam.lookAt(kind === 'mountain' ? 1.6 : 2, 0.2, 1)
+  return cam
+}
+
+// ?scene=og : le paysage final (voie, train, massif, forêt, maison, moulin), à la taille de l'image de partage (1200×630).
+async function og() {
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: await meadow(8, false), roughness: 1 }))
+  ground.receiveShadow = true
+  const t = (ground.material as THREE.MeshStandardMaterial).map!
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  t.repeat.set(10, 10)
+  scene.add(ground)
+  scene.fog = null
+  sun.position.set(-1, 9, 4)
+  sun.target.position.set(4, 0, -2)
+  Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 0.5, far: 40 })
+  const path = sampler(rounded([[-6, -1.2], [2.5, -1.2], [2.5, 1.4], [11, 1.4]], 1.3))
+  track(path, 0, () => true)
+  trainOn(path, 11.6, 0)
+  const cells = (list: [number, number][]) => list
+  buildMassif(cells([[-6, 3], [-6, 4], [-6, 5], [-5, 4], [-5, 5]]), pal, kit, anims, () => 0, (g) => scene.add(g))
+  buildMassif(cells([[-6, 9], [-6, 10], [-5, 10]]), pal, kit, anims, () => 0, (g) => scene.add(g))
+  const forest = (list: [number, number][]) => buildForest(list, (r, c) => ((r * 3 + c) % 4 === 0 ? 'pine' : 'tree'), (r, c) => Math.abs(r * 3 + c), (k, v) => build(k as Parameters<typeof build>[0], v, pal, kit, anims, 0), () => 0, (g) => scene.add(g))
+  forest([[-4, -4], [-4, -3], [-4, -2], [-3, -4], [-3, -3], [-3, -2], [-3, -1], [-2, -3], [-2, -2], [-5, -3], [-5, -2]])
+  forest([[-4, 7], [-4, 8], [-4, 9], [-3, 7], [-3, 8], [-3, 9], [-3, 10], [-2, 8], [-2, 9]])
+  put('house', 4.6, -0.2, 0, 0, 1.55)
+  put('house', 5.9, -0.5, 1, 0, 1.45)
+  put('windmill', 9.3, -1.6, 0, 0, 1.6)
+  put('tree', 1.2, -2.4, 0, 0, 1.5)
+  put('tree', 7.3, 3.3, 1, 0, 1.5)
+  put('pine', 0.2, 3.1, 0, 0, 1.5)
+  put('tree', -2.5, 2.6, 2, 0, 1.5)
+  put('tree', 4.4, 3.8, 0, 0, 1.5)
+  put('boulder', 8.2, 3.0, 0, 0, 1.6)
+  const cam = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 90)
+  cam.position.set(2.4, 4.6, 8.4) // le train à droite : la carte de texte prend la gauche de l'image
+  cam.lookAt(2.4, 0.1, -1.6)
+  return cam
+}
+
+const cam = scene3 === 'og' ? await og() : scene3 === 'cluster' ? await cluster(new URLSearchParams(location.search).get('kind') ?? 'mountain') : scene3 === 'hero' ? await hero() : scene3 === 'show' ? await show(new URLSearchParams(location.search).get('kind') ?? 'tree') : await icon(scene3 === 'maskable')
 tickAnims(anims, 1e6, 0, true) // tout à sa taille finale, immobile
 renderer.render(scene, cam)
 document.title = 'pret'
