@@ -239,6 +239,18 @@ export function tracePath(
   }
 }
 
+// Les liaisons à l'intérieur d'une grille de taille `size`. Un rail imposé ou révélé sur la case d'entrée ou de sortie a un côté
+// tourné vers l'extérieur : edgeKey en fait une liaison hors de la grille (« h:3:-1 », « h:1:5 »). Elle ne sert qu'à l'affichage ;
+// le serveur n'accepte que des liaisons dans la grille, d'où ce tri avant tout envoi.
+export function edgesInGrid(edges: Iterable<string>, size: number): string[] {
+  return [...edges].filter((e) => {
+    const m = /^([hv]):(\d+):(\d+)$/.exec(e)
+    if (!m) return false
+    const r = Number(m[2]), c = Number(m[3])
+    return m[1] === 'h' ? r < size && c + 1 < size : r + 1 < size && c < size
+  })
+}
+
 // Puzzle résolu : voie continue de l'entrée à la sortie, et chaque compteur
 // de ligne / colonne respecté.
 export function isSolved(connections: Connections, puzzle: Puzzle): boolean {
