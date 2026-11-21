@@ -6,13 +6,28 @@ withDefaults(
     value: number
     orientation: 'row' | 'col'
     status?: ClueStatus
+    // Pouvoir « Une ligne » en attente : le compteur s'éclaire et se touche pour choisir sa ligne ou sa colonne.
+    pickable?: boolean
   }>(),
   { status: 'open' },
 )
+defineEmits<{ (e: 'pick'): void }>()
 </script>
 
 <template>
+  <button
+    v-if="pickable"
+    type="button"
+    class="clue clue--pick"
+    :class="['clue--' + orientation, 'clue--' + status]"
+    data-test="clue"
+    :aria-label="orientation === 'row' ? 'Révéler cette ligne' : 'Révéler cette colonne'"
+    @click="$emit('pick')"
+  >
+    {{ value }}
+  </button>
   <div
+    v-else
     class="clue"
     :class="['clue--' + orientation, 'clue--' + status]"
     data-test="clue"
@@ -23,6 +38,25 @@ withDefaults(
 </template>
 
 <style scoped>
+/* À choisir (pouvoir « Une ligne ») : cerclé d'orange, il pulse doucement. */
+.clue--pick {
+  border: 3px solid #f59e0b;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 0 0 0.2rem rgba(245, 158, 11, 0.35);
+  animation: clue-pick 1.2s ease-in-out infinite;
+}
+@keyframes clue-pick {
+  50% {
+    box-shadow: 0 0 0 0.35rem rgba(245, 158, 11, 0.2);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .clue--pick {
+    animation: none;
+  }
+}
 /* Un compteur : une plaque bleu nuit, chiffre blanc. Elle vire au vert quand la ligne est faite (ou forcée), au rouge quand elle déborde. */
 .clue {
   display: flex;

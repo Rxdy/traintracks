@@ -62,6 +62,7 @@ const resume = ref<Pick<StartedLevel, 'reveals' | 'crosses'>>({ reveals: [], cro
 const grid = ref<InstanceType<typeof TrackGrid> | null>(null)
 const aidBar = ref<InstanceType<typeof AidBar> | null>(null)
 const picking = ref(false)
+const pickingLine = ref(false) // pouvoir « Une ligne » : on touche un compteur de la grille
 const forcedAid = ref(false) // niveau de déblocage d'un pouvoir : la grille attend que le joueur essaie le pouvoir offert
 const trainRunning = ref(false) // le train roule (la fenêtre de fin attend qu'il soit arrivé)
 const storeDown = computed(() => levelFinished.value && !trainRunning.value) // la fenêtre de fin s'ouvre sur le récapitulatif
@@ -210,11 +211,6 @@ function quit(): void {
       </div>
 
       <div class="play-area">
-        <!-- Présentation d'une nouveauté : fixe pendant tout le niveau (pas de saut). -->
-        <p v-if="current.intro" class="intro" data-test="intro">
-          <span class="swatch" aria-hidden="true"></span>
-          {{ current.intro }}
-        </p>
         <div class="stage">
           <TrackGrid
             ref="grid"
@@ -233,8 +229,18 @@ function quit(): void {
             @finish="levelFinished = true"
             @train="trainRunning = $event"
             :initial="{ givens: resume.reveals, crosses: resume.crosses }"
+            :picking-line="pickingLine"
+            @pick-line="(axis, index) => aidBar?.onPickLine(axis, index)"
             @pick="(r, c) => aidBar?.onPick(r, c)"
-          />
+          >
+            <!-- Présentation d'une nouveauté : dans la bande « partie », fixe pendant tout le niveau (pas de saut). -->
+            <template #intro>
+              <p v-if="current.intro" class="intro" data-test="intro">
+                <span class="swatch" aria-hidden="true"></span>
+                {{ current.intro }}
+              </p>
+            </template>
+          </TrackGrid>
           <!-- Les bonus : sous la grille (portrait) ou à sa droite (paysage), seulement pendant le Plateau. -->
           <div class="bonus-dock" :class="{ gone: won }" data-test="bonus-col">
             <AidBar
@@ -247,6 +253,7 @@ function quit(): void {
               @colors="colorHints = true"
               @picking="picking = $event"
               @forced="forcedAid = $event"
+              @picking-line="pickingLine = $event"
             />
           </div>
         </div>
@@ -341,9 +348,14 @@ section {
 }
 /* Paysage (l'écran est plus large que haut) : les bonus forment une colonne à droite de la grille. */
 @media (min-aspect-ratio: 1/1) {
+  /* Bandes de part et d'autre de la grille : « partie » à gauche (dans TrackGrid), « pouvoirs » à droite (ici). Leur largeur est ce
+     qui reste de l'écran une fois la grille, les outils et les pouvoirs posés, partagé en deux. */
+  .play-area {
+    --band: clamp(1.25rem, calc((100vw - min(100dvh - 11rem, 62vw, 820px) - 13rem) / 2), 15rem);
+  }
   .stage {
     flex-direction: row;
-    gap: 1.5rem;
+    gap: var(--band);
   }
   /* Paysage : une colonne de grands carrés, à la mesure de l'écran (environ 100 px sur un ordinateur). */
   .bonus-dock {
@@ -373,15 +385,31 @@ section {
   .bonus-dock {
     position: relative;
   }
+  /* Détail d'un pouvoir, message, achat, consigne : dans la bande entre la grille et la colonne, en face du pouvoir concerné. */
   .bonus-dock :deep(.panel),
   .bonus-dock :deep(.msg),
   .bonus-dock :deep(div.fresh) {
     position: absolute;
-    top: 0;
-    left: calc(100% + 0.6rem);
+    top: calc(var(--i, 0) * var(--aid) * 1.18);
+    right: calc(100% + 0.6rem);
     z-index: 8;
-    width: max-content;
-    max-width: 16rem;
+    box-sizing: border-box;
+    width: max(9rem, calc(var(--band) - 1.2rem));
+    max-width: none;
+  }
+  .bonus-dock :deep(.low) {
+    top: auto;
+    bottom: calc(var(--j, 0) * var(--aid) * 1.18);
+  }
+  .bonus-dock :deep(div.fresh) {
+    flex-wrap: wrap;
+  }
+  /* la nouveauté du niveau, dans la bande « partie » : en colonne, sur toute sa largeur */
+  .intro {
+    max-width: none;
+    width: 100%;
+    box-sizing: border-box;
+    align-items: flex-start;
   }
 }
 .intro {
@@ -596,15 +624,18 @@ section {
 
 /* Téléphone couché : les messages des bonus tiennent entre la colonne et le bord de l'écran. */
 @media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  /* la grille prend toute la hauteur et les outils flottent au bord gauche : les bandes se partagent le reste */
+  /* la barre du haut flotte : on laisse sa hauteur libre au-dessus de la grille (sinon elle recouvre les compteurs des colonnes),
+     et la largeur des outils, qui flottent au bord gauche */
+  .play-area {
+    --band: clamp(1rem, calc((100vw - 100dvh - 10rem) / 2), 11rem);
+    box-sizing: border-box;
+    padding: 2.9rem 0 0 4.6rem;
+  }
   .bonus-dock :deep(.panel),
   .bonus-dock :deep(.msg),
   .bonus-dock :deep(div.fresh) {
-    max-width: 11rem;
-    font-size: 0.72rem;
-  }
-  .bonus-dock :deep(div.fresh) {
-    flex-wrap: wrap;
-    width: 11rem;
+    font-size: 0.76rem;
   }
   .bonus-dock :deep(div.fresh .icon) {
     display: none;
