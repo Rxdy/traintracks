@@ -30,15 +30,15 @@ async function at(level: number) {
 }
 
 describe('pièces gagnées', () => {
-  it('un niveau rapporte selon la taille de grille, +5 sans aide ; jamais deux fois', async () => {
+  it('un niveau rapporte 10, quelle que soit la grille, +5 sans aide ; jamais deux fois', async () => {
     const { db } = await makeGame()
     await start(db, A, now())
     expect(await submit(db, A, { level: 1, edges: edgesOf(1) }, now())).toMatchObject({ ok: true, earned: { base: 10, bonus: 5 }, coins: 15 }) // 4×4 : 10
     const B = 'a:22222222-2222-2222-2222-222222222222'
     await reach(db, B, 61) // 5×5
     await start(db, B, now())
-    expect(await submit(db, B, { level: 61, edges: edgesOf(61) }, now())).toMatchObject({ earned: { base: 15, bonus: 5 } })
-    expect([4, 5, 6, 7, 8].map(levelReward)).toEqual([10, 15, 20, 25, 30]) // 6×6 et plus : pas encore de niveaux fabriqués
+    expect(await submit(db, B, { level: 61, edges: edgesOf(61) }, now())).toMatchObject({ earned: { base: 10, bonus: 5 } })
+    expect([4, 5, 6, 7, 8].map(levelReward)).toEqual([10, 10, 10, 10, 10]) // fixe : 15 au plus avec le bonus sans aide
     expect(await submit(db, A, { level: 1, edges: edgesOf(1) }, now())).toMatchObject({ ok: false })
     expect(await balance(db, A)).toBe(15)
   })

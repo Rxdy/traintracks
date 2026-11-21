@@ -8,9 +8,8 @@ import type { Puzzle } from '../../shared/puzzle.js'
 import { isSolved, lockedEdges } from '../../shared/track.js'
 import { balance, credit } from './wallet.js'
 
+// Le puzzle du jour rapporte un peu plus qu'un niveau (15 au plus), sans bonus de série.
 export const DAILY_REWARD = 20
-export const STREAK_BONUS_PER_DAY = 2
-export const STREAK_BONUS_MAX = 10
 
 // Date du jour (AAAA-MM-JJ) dans le fuseau horaire du jeu : le jour change à minuit chez les joueurs, pas à minuit UTC.
 export function dateKey(now: Date, tz: string): string {
@@ -124,7 +123,7 @@ export async function submitDaily(db: Db, owner: string, date: string, edges: un
     const counted = first.rows.length > 0
     const streak = await streakUntil(t, owner, date)
     const base = counted ? DAILY_REWARD : 0
-    const streakBonus = counted ? Math.min(STREAK_BONUS_MAX, STREAK_BONUS_PER_DAY * (streak - 1)) : 0
+    const streakBonus = 0 // plus de bonus de série (champ gardé pour les anciennes versions du jeu)
     if (counted) await credit(t, owner, base + streakBonus, 'daily', date, now)
     return { ok: true, counted, timeMs, earned: { base, streakBonus }, streak, coins: await balance(t, owner) } as const
   })

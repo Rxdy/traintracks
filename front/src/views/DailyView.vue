@@ -101,7 +101,7 @@ function quit(): void {
             <p class="time" data-test="result-time"><span>Temps</span> {{ formatTime(outcome.timeMs) }}</p>
             <template v-if="outcome.counted">
               <p class="note" data-test="saved">Temps enregistré<template v-if="outcome.streak > 1"> · série de {{ outcome.streak }} jours</template></p>
-              <WinReceipt :lines="[{ label: 'Puzzle du jour', amount: outcome.earned.base }, { label: 'Série de ' + outcome.streak + ' jours', amount: outcome.earned.streakBonus }]" />
+              <WinReceipt :lines="[{ label: 'Puzzle du jour', amount: outcome.earned.base }]" />
             </template>
             <p v-else class="note" data-test="not-counted">Temps non retenu : seul le premier essai du jour compte.</p>
           </template>

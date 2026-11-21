@@ -22,8 +22,9 @@ export interface PublicLevel {
   intro?: string
 }
 
-// Pièces gagnées : selon la taille de la grille, plus un bonus si aucune aide payante n'a servi.
-export const levelReward = (size: number): number => Math.max(10, (size - 2) * 5)
+// Pièces gagnées : 10 par niveau quelle que soit la taille, plus 5 si aucune aide payante n'a servi (15 au plus).
+// Volontairement fixe : les wagons de la machine (50 pièces) doivent se mériter, même sur les grandes grilles.
+export const levelReward = (_size: number): number => 10
 export const NO_AID_BONUS = 5
 
 export interface JourneyStatus {
