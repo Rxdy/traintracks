@@ -92,7 +92,19 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
       </h1>
       <div class="right">
         <button v-if="view === 'home'" type="button" class="surprise" data-test="nav-machine" aria-label="Wagon surprise" title="Wagon surprise" @click="openMachine">
-          <span class="mini-reels" aria-hidden="true"><i /><i /><i /></span>Wagon surprise
+          <!-- une petite machine à sous : trois fenêtres, un fronton, une manette -->
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <rect x="3" y="9" width="21" height="18" rx="3.5" fill="#dc2626" stroke="#e2b33c" stroke-width="1.6" />
+            <path d="M6 9 Q13.5 2.5 21 9 Z" fill="#991b1b" stroke="#e2b33c" stroke-width="1.4" />
+            <rect x="6" y="13" width="15" height="7.5" rx="1.6" fill="#5b1212" />
+            <rect x="7" y="14" width="4" height="5.5" rx="1" fill="#fffbeb" />
+            <rect x="11.5" y="14" width="4" height="5.5" rx="1" fill="#fffbeb" />
+            <rect x="16" y="14" width="4" height="5.5" rx="1" fill="#fffbeb" />
+            <path d="M8 17.5h2M12.5 17.5h2M17 17.5h2" stroke="#14b8a6" stroke-width="2" stroke-linecap="round" />
+            <rect x="8" y="22.5" width="11" height="2.4" rx="1" fill="#fde68a" />
+            <path d="M24 18h3v-9" fill="none" stroke="#9ca3af" stroke-width="1.8" stroke-linecap="round" />
+            <circle cx="27" cy="7.5" r="2.6" fill="#ef4444" stroke="#7f1d1d" stroke-width="0.8" />
+          </svg>
         </button>
         <CoinBadge />
         <!-- musique des menus et train de l'accueil : même réglage que le bouton son du jeu -->
@@ -131,47 +143,25 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
 </template>
 
 <style scoped>
-/* bouton de la machine Wagon surprise, à côté des pièces sur l'accueil */
+/* bouton de la machine Wagon surprise, à côté des pièces sur l'accueil : l'icône seule */
 .surprise {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.7rem 0.3rem 0.35rem;
-  border-radius: 999px;
-  border: 2px solid #e2b33c;
-  background: linear-gradient(#dc2626, #991b1b);
-  color: #fde68a;
-  font: inherit;
-  font-weight: 800;
-  font-size: 0.85rem;
-  box-shadow: 0 2px 6px rgba(127, 29, 29, 0.4), 0 0 0 3px rgba(245, 158, 11, 0.3);
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 0;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(245, 158, 11, 0.35);
   cursor: pointer;
-  white-space: nowrap;
 }
-.mini-reels {
-  display: flex;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 6px;
-  background: #5b1212;
+.surprise svg {
+  width: 1.8rem;
+  height: 1.8rem;
 }
-.mini-reels i {
-  width: 7px;
-  height: 10px;
-  border-radius: 2px;
-  background: #14b8a6;
-}
-/* écran étroit (téléphone) : l'icône seule, pour ne pas couvrir le titre */
-@media (max-width: 60rem) {
-  .surprise {
-    font-size: 0;
-    gap: 0;
-    padding: 0.3rem;
-  }
-  .mini-reels i {
-    width: 9px;
-    height: 14px;
-  }
+.surprise:hover svg {
+  transform: rotate(-6deg) scale(1.08);
 }
 
 /* Avis général : une bulle DANS la barre du haut, par-dessus le titre (jamais sur les chiffres de la grille), entre
