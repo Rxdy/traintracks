@@ -290,6 +290,7 @@ describe('grille : rails révélés', () => {
     await w.find(`[data-r="${r}"][data-c="${c}"]`).trigger('pointerdown')
     window.dispatchEvent(new Event('pointerup'))
     await w.find('.clear').trigger('click')
+    await w.find('.clear').trigger('click') // effacer tout se confirme d'un second toucher
     await w.vm.$nextTick()
     expect(api.snapshotForAid().edges).toHaveLength(2)
     await w.find('[data-test=undo]').trigger('click')

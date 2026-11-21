@@ -72,8 +72,20 @@ describe('rails imposés : jeu', () => {
     expect(cell().classes()).toContain('cell--given')
     expect(w.findAll('[data-variant=given]').length).toBeGreaterThan(0)
     await w.find('.clear').trigger('click')
+    await w.find('.clear').trigger('click') // effacer tout se confirme d'un second toucher
     expect(cell().classes()).toContain('cell--rail')
     expect(cell().classes()).toContain('cell--given')
+  })
+
+  it('effacer tout se confirme : le premier toucher arme le bouton, le second efface', async () => {
+    const w = mount(TrackGrid, { props: { puzzle } })
+    const btn = () => w.find('[data-test=clear]')
+    expect(btn().classes()).not.toContain('armed')
+    await btn().trigger('click')
+    expect(btn().classes()).toContain('armed')
+    expect(btn().attributes('aria-label')).toBe('Toucher encore pour tout effacer')
+    await btn().trigger('click')
+    expect(btn().classes()).not.toContain('armed')
   })
 
   it('un clic sur un rail imposé ne l\'efface pas', async () => {
