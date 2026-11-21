@@ -5,7 +5,6 @@ import App from './App.vue'
 import TrackGrid from './components/TrackGrid.vue'
 import TrainRun from './components/TrainRun.vue'
 import { logout, user } from './auth'
-import { cabinEnabled } from './features'
 
 const IDS: Record<string, string> = {
   'Puzzle du jour': 'daily',
@@ -26,7 +25,6 @@ async function signUp(w: ReturnType<typeof mount>, email = 'rudy@example.com') {
 
 describe('App', () => {
   beforeEach(() => {
-    cabinEnabled.value = true // la cabine est cachée par défaut (voir features.ts) ; ces tests la veulent
     localStorage.clear()
     logout()
     fakeServer()
@@ -236,13 +234,9 @@ describe('App', () => {
     // 1) le train passe ; le résultat n'existe pas encore
     expect(w.find('[data-test=train]').exists()).toBe(true)
     expect(w.find('.overlay').classes()).not.toContain('open') // la fenêtre de fin arrive avec le récapitulatif, à l'arrivée du train
-    // la fenêtre de cabine est entrée et montre la voie qui défile tant que le train roule
-    expect(w.find('[data-test=cabin]').classes()).toContain('shown')
-    expect(w.find('[data-test=cabin-windshield]').attributes('data-running')).toBe('true')
     // 2) le train est arrivé : la fenêtre de fin s'ouvre au centre avec le récapitulatif ; « Niveau suivant » est proposé
     w.findComponent(TrainRun).vm.$emit('done')
     await flushPromises()
-    expect(w.find('[data-test=cabin-windshield]').attributes('data-running')).toBe('false')
     expect(w.find('.overlay').classes()).toContain('open')
     expect(w.find('.overlay [data-test=finish]').exists()).toBe(true) // le récapitulatif est dans la fenêtre de fin, pas sur le décor
     expect(w.find('.finish--inline').exists()).toBe(false)
@@ -292,9 +286,8 @@ describe('icônes du menu', () => {
   })
 })
 
-describe('App : cabine masquée par défaut', () => {
-  it('sans le réglage, aucune fenêtre de cabine n\'est dans la page', async () => {
-    cabinEnabled.value = false
+describe('App : plus de vue cabine', () => {
+  it('aucune fenêtre de cabine dans la page : le Trajet se regarde vu du dessus', async () => {
     localStorage.clear()
     logout()
     fakeServer()

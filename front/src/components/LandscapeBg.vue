@@ -42,9 +42,9 @@ const STARS = [[30, 60], [90, 140], [150, 40], [210, 110], [260, 70], [350, 90],
           <rect x="0" y="-33" width="13" height="24" rx="2" fill="#991b1b" />
           <rect x="25" y="-33" width="6" height="8" fill="#111827" />
           <circle cx="34" cy="-17" r="2.4" fill="#fde68a" />
-          <rect x="40" y="-24" width="30" height="15" rx="2" fill="#2563eb" />
-          <rect x="74" y="-24" width="30" height="15" rx="2" fill="#f59e0b" />
-          <rect x="108" y="-24" width="30" height="15" rx="2" fill="#16a34a" />
+          <rect x="40" y="-24" width="30" height="15" rx="2" fill="#f59e0b" />
+          <rect x="74" y="-24" width="30" height="15" rx="2" fill="#16a34a" />
+          <rect x="108" y="-24" width="30" height="15" rx="2" fill="#8b5cf6" />
           <rect x="36" y="-14" width="4" height="2" fill="#374151" />
           <rect x="70" y="-14" width="4" height="2" fill="#374151" />
           <rect x="104" y="-14" width="4" height="2" fill="#374151" />

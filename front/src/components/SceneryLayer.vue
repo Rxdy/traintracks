@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { revealDelay } from '../scenery/reveal'
 import { computed } from 'vue'
 import type { Scenery } from '../scenery'
 import { PAL } from '../scenery'
@@ -52,7 +53,7 @@ const items = computed(() => {
   props.scenery.tiles.forEach((row, r) =>
     row.forEach((t, c) => {
       if (t.kind === 'rail' || t.kind === 'road' || t.kind === 'path' || t.kind === 'clear' || props.scenery.water.has(`${r},${c}`)) return
-      out.push({ r, c, kind: t.kind, v: t.v, dir: t.dir, d: 500 + (r + c) * 120 })
+      out.push({ r, c, kind: t.kind, v: t.v, dir: t.dir, d: revealDelay(props.scenery.seed, r, c) })
     }),
   )
   return out

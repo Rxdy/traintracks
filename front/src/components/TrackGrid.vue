@@ -25,7 +25,6 @@ import SceneryLayer from './SceneryLayer.vue'
 import Scenery3D from './Scenery3D.vue'
 import { webglAvailable } from '../decor'
 import SceneryLife from './SceneryLife.vue'
-import type { LandFrame } from '../scenery/motion'
 import { sound, soundOn } from '../sound/director'
 import TrackCell from './TrackCell.vue'
 import ClueNumber from './ClueNumber.vue'
@@ -48,7 +47,7 @@ const props = defineProps<{
   // Vrai : le récapitulatif de victoire n'est pas dessiné ici, l'écran de jeu l'affiche ailleurs (store de la cabine).
   externalRecap?: boolean
 }>()
-const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void; (e: 'train', running: boolean): void; (e: 'progress', s: number): void; (e: 'scene', v: { route: Route; scenery: Scenery; rails: Route | null } | null): void; (e: 'land', f: LandFrame): void }>()
+const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void; (e: 'train', running: boolean): void }>()
 
 // Puzzle « effectif » : le puzzle + les rails révélés par les aides, qui se comportent comme des rails imposés
 // (verrouillés, dans le bon sens).
@@ -118,9 +117,15 @@ const elapsed = ref(0)
 const route = ref<Route | null>(null)
 // Décor : d'abord il se dévoile (voie posée), PUIS le train démarre.
 const scenery = ref<Scenery | null>(null)
+// Numéro du décor : il change à chaque décor refait (écran tourné puis « Revoir le trajet »). Les couches qui calculent à leur création
+// (3D, voitures et barrières, animaux) sont recréées, sinon elles gardent l'ancien décor (barrières décalées de la voie, par exemple).
+const decorId = ref(0)
+const decorReady = ref(false) // le décor 3D est prêt : la vague d'apparition part de là, pour tout ce qui vit dessus
 const glideY = ref(0) // de combien la grille glisse (px) vers le milieu de l'écran quand le paysage apparaît
 const failed3d = ref(false) // le décor 3D n'a pas pu s'afficher : décor classique jusqu'à la fin de la visite
 const use3d = computed(() => !failed3d.value && webglAvailable())
+// Le décor 3D est prêt : le train roule dans la scène 3D (caché par les arbres devant la voie) et la voie de la grille y est peinte.
+const train3d = computed(() => use3d.value && decorReady.value)
 const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
@@ -130,14 +135,8 @@ import { speed } from '../speedPref' // le choix est gardé d'un niveau à l'aut
 const SPEEDS: Record<Speed, number> = { slow: 1.2, normal: 1.9, fast: 4.5 }
 // Sons : la fin du trajet laisse la place au décor ; la barrière du passage à niveau a ses propres sons.
 watch(trainDone, (v) => v && sound.trainEnd())
-// L'écran de jeu suit le train (vue de la cabine) : il roule dès que sa route existe, jusqu'à son arrivée.
-// ... et la cabine montre la VRAIE carte vue du train : elle reçoit le trajet, le décor et la position de la locomotive.
-watch([route, scenery], () => emit('scene', route.value && scenery.value ? { route: route.value, scenery: scenery.value, rails: sceneryRoute.value } : null))
 function onTrainProgress(s: number): void {
   trainS.value = s
-  // La cabine s'arrête quand la locomotive sort du décor : au-delà, le pare-brise ne montrerait plus que du vide (la voie dépasse
-  // le bord de la longueur du train, pour que les wagons sortent aussi).
-  emit('progress', route.value ? Math.min(s, route.value.length - exitLead.value) : s)
 }
 
 // Zone où le train est visible : exactement celle du décor (en cases de la grille de jeu).
@@ -278,10 +277,12 @@ function sceneryMargins(): { x: number; y: number; top?: number; below?: number;
   return { x, y, top, below, dy, view }
 }
 function buildDecor(path: [number, number][]): void {
+  decorReady.value = false
   sceneLandscape = isLandscape()
   const mg = sceneryMargins()
   glideY.value = mg.dy ?? 0
   scenery.value = buildScenery(puz.value, path, props.theme, seedOf(puz.value), mg)
+  decorId.value++
   const horiz = (d: string) => d === 'left' || d === 'right'
   const sm = scenery.value.margin // marges réelles (avec le complément du haut) : la voie va jusqu'au bord du décor
   sceneryRoute.value = buildRoute(path, puz.value, { entry: horiz(puz.value.entry.dir) ? sm.x : puz.value.entry.dir === 'up' ? sm.y : sm.b, exit: horiz(puz.value.exit.dir) ? sm.x : puz.value.exit.dir === 'up' ? sm.y : sm.b })
@@ -623,11 +624,19 @@ onMounted(() => {
     </div>
 
     <SpeedControl v-if="solved" v-model="speed" />
+    <!-- Trajet : la barre d'outils part, mais le son reste réglable (à gauche de la vitesse, en haut à droite) -->
+    <button v-if="solved" type="button" class="trip-sound" data-test="trip-sound" :aria-pressed="soundOn" :aria-label="soundOn ? 'Couper le son' : 'Activer le son'" :title="soundOn ? 'Couper le son' : 'Activer le son'" @click="sound.setOn(!soundOn)">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 9v6h4l5 4V5L8 9z" />
+        <path v-if="soundOn" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" />
+        <path v-else d="m17 9 4 6M21 9l-4 6" />
+      </svg>
+    </button>
 
     <div
       ref="boardEl"
       class="board"
-      :class="{ picking, 'board--won': scenery}"
+      :class="{ picking, 'board--won': scenery, 'rails-3d': train3d }"
       :style="{ '--size': puzzle.size, '--k': scenery ? scenery.frame.k : 1, '--dy': glideY + 'px', ...railStyle }"
       role="grid"
       aria-label="Grille de jeu"
@@ -635,7 +644,7 @@ onMounted(() => {
     >
       <!-- Décor : en 3D si le joueur le veut et que l'appareil sait le faire ; sinon (ou en cas d'échec) le décor classique en SVG. -->
       <Transition name="decor">
-        <Scenery3D v-if="scenery && use3d" :key="'3d-' + scenery.seed" :scenery="scenery" :route="sceneryRoute" @fail="failed3d = true" />
+        <Scenery3D v-if="scenery && use3d" :key="'3d-' + decorId" :scenery="scenery" :route="sceneryRoute" :train="route && trainS >= 0 ? { route, s: trainS } : null" @fail="failed3d = true" @ready="decorReady = true" />
         <SceneryLayer v-else-if="scenery" :scenery="scenery" :route="sceneryRoute" />
       </Transition>
 
@@ -673,9 +682,9 @@ onMounted(() => {
 
       <div class="corner" style="grid-row: 1; grid-column: 1"></div>
 
-      <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" @frame="emit('land', $event)" />
+      <SceneryLife v-if="scenery" :key="'life-' + decorId" :scenery="scenery" :train-near="trainNear" :start="!use3d || decorReady" />
 
-      <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" :speed="SPEEDS[speed]" @progress="onTrainProgress" @done="trainDone = true" />
+      <TrainRun v-if="route" :ghost="train3d" :route="route" :size="puzzle.size" :clip="trainClip" :speed="SPEEDS[speed]" @progress="onTrainProgress" @done="trainDone = true" />
     </div>
 
     <!-- Trajet : les bords de l'écran s'assombrissent, comme les parois d'un tunnel -->
@@ -717,6 +726,40 @@ onMounted(() => {
   justify-content: center;
 }
 
+/* Trajet : bouton son flottant, même allure que la vitesse (pastille blanche), juste à sa gauche */
+.trip-sound {
+  position: fixed;
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: calc(max(0.75rem, env(safe-area-inset-right)) + 9.3rem);
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.7rem;
+  height: 2.7rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  color: #1f2937;
+  cursor: pointer;
+}
+.trip-sound svg {
+  width: 1.3rem;
+  height: 1.3rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.trip-sound[aria-pressed='false'] {
+  color: #9ca3af;
+}
+/* Trajet en 3D : la voie de la grille est peinte dans la scène (sous le train), celle des cases s'efface */
+.board.rails-3d :deep(.rail) {
+  visibility: hidden;
+}
 .toolbar.gone {
   visibility: hidden; /* Trajet : plus d'outils sur le paysage (la place reste réservée, rien ne saute) */
 }

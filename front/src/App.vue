@@ -42,6 +42,8 @@ onUnmounted(() => {
 const view = ref<View>('home')
 // Vrai pendant une partie : on cache alors tout le reste.
 const playing = ref(false)
+// En partie (chargement, grille, Trajet) : la page ne défile plus et ne déborde plus (style.css, `lock-screen`).
+watch(playing, (v) => document.documentElement.classList.toggle('lock-screen', v), { immediate: true })
 // Le paysage suit tous les écrans de menu ; seule une partie en cours reste blanche.
 const scenery = computed(() => !playing.value)
 const panel = computed(() => view.value !== 'home' && !playing.value)

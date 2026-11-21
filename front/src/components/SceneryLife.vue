@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, shallowRef } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import type { Scenery } from '../scenery/generate'
 import { useClock } from '../scenery/clock'
+import { REVEAL, revealDelay } from '../scenery/reveal'
 import { createLandSim, type LandFrame } from '../scenery/motion'
 import { PAL } from '../scenery/themes'
 import { sound } from '../sound/director'
@@ -9,7 +10,7 @@ import { sound } from '../sound/director'
 // Le décor qui vit AU-DESSUS des rails : voitures et barrières du passage à niveau, animaux, oiseaux, feuilles ou
 // neige qui tombent. Les voitures s'arrêtent quand le train approche (`trainNear`) et repartent après son passage.
 // Même repère que le train : 1 case = 1×1, la grille occupe 0..size (le reste, c'est la colonne et la rangée des indices, à gauche et en haut : -1..0).
-const props = defineProps<{ scenery: Scenery; trainNear: boolean }>()
+const props = withDefaults(defineProps<{ scenery: Scenery; trainNear: boolean; start?: boolean }>(), { start: true })
 const emit = defineEmits<{ (e: 'frame', f: LandFrame): void }>()
 const cols = computed(() => props.scenery.cols)
 const board = computed(() => props.scenery.rows - props.scenery.margin.y - props.scenery.margin.b) // taille de la grille de jeu : le repère de la page
@@ -17,7 +18,23 @@ const pal = computed(() => PAL[props.scenery.theme])
 const sim = createLandSim(props.scenery)
 const empty: LandFrame = { cars: [], barrier: 0, lights: false, animals: [], birds: [], flakes: [], leaves: [], embers: [], events: [] }
 const frame = shallowRef<LandFrame>(empty)
+// Apparition : tout ce qui vit sur le décor (animaux, oiseaux, voitures, cabane, tunnels…) apparaît case par case, chaque case à un
+// moment tiré au hasard (scenery/reveal.ts, le même tirage que les arbres et les maisons), à partir du moment où le décor est prêt (`start`).
+const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+const REVEAL_END = REVEAL.start + REVEAL.spread + 100
+const elapsed = ref(reduce ? REVEAL_END : 0) // ms depuis le début de l'apparition ; au-delà de REVEAL_END, plus de masque
+let revealT0 = -1
+const cellDelays = computed(() => {
+  const out: { r: number; c: number; d: number }[] = []
+  for (let r = 0; r < props.scenery.rows; r++) for (let c = 0; c < props.scenery.cols; c++) out.push({ r, c, d: revealDelay(props.scenery.seed, r, c) })
+  return out
+})
+const shown = computed(() => cellDelays.value.filter((x) => x.d <= elapsed.value))
 useClock((dt, t) => {
+  if (elapsed.value < REVEAL_END && props.start) {
+    if (revealT0 < 0) revealT0 = t
+    elapsed.value = (t - revealT0) * 1000
+  }
   frame.value = sim.step(dt, t, props.trainNear)
   frame.value.events.forEach((e) => sound.ambient(e))
   emit('frame', frame.value) // la cabine du conducteur montre les mêmes voitures, barrières et animaux
@@ -42,10 +59,14 @@ const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, 
 <template>
   <svg class="life" :viewBox="`-1 -1 ${board + 1} ${board + 1}`" data-test="scenery-life" aria-hidden="true">
     <defs>
+      <mask id="life-mask" maskUnits="userSpaceOnUse" :x="-2" :y="-2" :width="scenery.cols + 4" :height="scenery.rows + 4">
+        <rect :x="-2" :y="-2" :width="scenery.cols + 4" :height="scenery.rows + 4" fill="#000" />
+        <rect v-for="x in shown" :key="x.r * 1000 + x.c" :x="x.c - 0.02" :y="x.r - 0.02" width="1.04" height="1.04" fill="#fff" />
+      </mask>
       <clipPath id="life-clip"><rect x="0" y="0" :width="cols" :height="scenery.frame.visibleRows" rx="0.18" /></clipPath>
     </defs>
     <g :transform="`translate(${-scenery.margin.x} ${-scenery.margin.y})`">
-    <g clip-path="url(#life-clip)">
+    <g clip-path="url(#life-clip)" :mask="elapsed < REVEAL_END ? 'url(#life-mask)' : undefined">
       <!-- route : voitures et barrières -->
       <g v-if="scenery.road" :transform="roadFrame">
         <g v-for="c in frame.cars" :key="c.id" :transform="`translate(${c.lane} ${c.u}) rotate(${c.dir > 0 ? 90 : -90})`">
@@ -84,9 +105,9 @@ const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, 
 
       <!-- tunnels : une montagne percée au bout de chaque voie, d'où le train sort et où il entre -->
       <g v-for="(tn, i) in tunnelList" :key="'tn' + i" :transform="`translate(${tn.x} ${tn.y}) rotate(${(Math.atan2(tn.out.y, tn.out.x) * 180) / Math.PI})`" data-test="tunnel">
-        <rect x="-0.05" y="-0.95" :width="tn.inset + 6" height="1.9" rx="0.32" :fill="pal.rock[1]" />
-        <rect x="-0.05" y="-0.95" :width="tn.inset + 6" height="1.9" rx="0.32" fill="none" stroke="#00000040" stroke-width="0.04" />
-        <path :d="`M0.3 -0.8 H${tn.inset + 6} M0.5 -0.45 H${tn.inset + 6} M0.5 0.45 H${tn.inset + 6} M0.3 0.8 H${tn.inset + 6}`" :stroke="pal.rock[0]" stroke-width="0.1" stroke-linecap="round" opacity="0.5" />
+        <rect x="-0.05" y="-0.78" :width="tn.inset + 6" height="1.56" rx="0.5" :fill="pal.rock[1]" />
+        <rect x="-0.05" y="-0.78" :width="tn.inset + 6" height="1.56" rx="0.5" fill="none" stroke="#00000040" stroke-width="0.04" />
+        <path :d="`M0.3 -0.64 H${tn.inset + 6} M0.5 -0.45 H${tn.inset + 6} M0.5 0.45 H${tn.inset + 6} M0.3 0.64 H${tn.inset + 6}`" :stroke="pal.rock[0]" stroke-width="0.1" stroke-linecap="round" opacity="0.5" />
         <rect x="-0.07" y="-0.42" width="0.3" height="0.84" rx="0.1" :fill="pal.rock[0]" stroke="#00000055" stroke-width="0.03" />
         <rect x="-0.07" y="-0.3" width="0.22" height="0.6" rx="0.07" fill="#0b0f14" />
       </g>

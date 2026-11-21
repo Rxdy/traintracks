@@ -1,16 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import TrackGrid from '../components/TrackGrid.vue'
 import AuthPanel from '../components/AuthPanel.vue'
 import CoinBadge from '../components/CoinBadge.vue'
 import QuitButton from '../components/QuitButton.vue'
 import WinReceipt from '../components/WinReceipt.vue'
-import CabinFrame from '../components/CabinFrame.vue'
-import { cabinEnabled } from '../features'
 import FinishDialog from '../components/FinishDialog.vue'
-import type { Route } from '../trainRoute'
-import type { Scenery } from '../scenery/generate'
-import type { LandFrame } from '../scenery/motion'
 import type { Puzzle } from '../puzzle'
 import { user, logout } from '../auth'
 import { beginDaily, fetchDaily, startDaily, submitDaily, type DailyResult, type DailyStatus } from '../daily'
@@ -32,9 +27,6 @@ const loading = ref(false)
 const error = ref('')
 // Cabine : comme au Voyage, le pare-brise suit le train et le store porte le récapitulatif à l'arrivée.
 const trainRunning = ref(false)
-const trainS = ref(0)
-const landFrame = shallowRef<LandFrame | null>(null)
-const cabScene = ref<{ route: Route; scenery: Scenery; rails: Route | null } | null>(null)
 const grid = ref<InstanceType<typeof TrackGrid> | null>(null)
 const won = ref(false) // tracé validé : la cabine monte
 const finished = ref(false)
@@ -61,9 +53,6 @@ async function start(): Promise<void> {
   won.value = false
   finished.value = false
   trainRunning.value = false
-  trainS.value = 0
-  cabScene.value = null
-  landFrame.value = null
   playing.value = true
 }
 
@@ -105,11 +94,7 @@ function quit(): void {
           @begin="beginDaily()"
           @finish="finished = true"
           @train="trainRunning = $event"
-          @progress="trainS = $event"
-          @scene="cabScene = $event"
-          @land="landFrame = $event"
         />
-        <CabinFrame v-if="cabinEnabled" :shown="won" :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" />
         <!-- À l'arrivée du train : le récapitulatif au centre de l'écran. « Suivant » ramène au salon. -->
         <FinishDialog :open="storeDown" next-label="Retour" @replay="grid?.replayTrain()" @next="quit">
           <template v-if="outcome">

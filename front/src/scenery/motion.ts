@@ -213,8 +213,11 @@ export function createLandSim(sc: Scenery) {
   // Les animaux de terre ne passent que d'une case d'herbe à une case d'herbe voisine : jamais dans la rivière,
   // sur la route ni sur la voie.
   const grassKeys = new Set(grass.map(([r, c]) => `${r},${c}`))
+  // Dans une forêt dense il reste peu d'herbe : les animaux de terre circulent aussi entre les arbres (cases d'arbres et de sapins).
+  const woods = [...trees, ...pines]
+  const walkKeys = new Set([...grassKeys, ...woods.map(([r, c]) => `${r},${c}`)])
   const neighbours = ([r, c]: [number, number]): [number, number][] =>
-    ([[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]] as [number, number][]).filter(([a, b]) => grassKeys.has(`${a},${b}`))
+    ([[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]] as [number, number][]).filter(([a, b]) => walkKeys.has(`${a},${b}`))
   const centre = (rc: [number, number]): Pt => ({ x: rc[1] + 0.5, y: rc[0] + 0.6 })
   const pick = <T>(a: T[]): T => a[Math.floor(rand() * a.length)]
 
@@ -268,7 +271,8 @@ export function createLandSim(sc: Scenery) {
   }
   // Marcheur : va de case d'herbe en case d'herbe voisine, s'arrête entre deux (cerf, chat, lézard, scorpion, extraterrestre).
   const walker = (kind: AnimalKind, from: number, speed: number, pause: [number, number]) => {
-    let cell = grass[Math.min(from, grass.length - 1)]
+    const land = grass.length ? grass : woods // plus d'herbe : on part d'une case boisée
+    let cell = land[Math.min(from, land.length - 1)]
     const s = mkAnimal(kind, { x: cell[1] + 0.5, y: cell[0] + 0.55 })
     let tgt: Pt = { x: s.x, y: s.y }, nxt = 3
     actors.push({ s, step: (dt, t) => {
@@ -282,6 +286,7 @@ export function createLandSim(sc: Scenery) {
       s.t = t
     } })
   }
+  if (!grass.length && woods.length && (th === 'foret' || th === 'montagne')) walker('deer', 0, 0.35, [6, 4]) // forêt sans clairière : le cerf passe entre les arbres
   if (grass.length) {
     if (th === 'foret' || th === 'montagne' || th === 'canyon') walker('deer', 0, 0.35, [6, 4])
     if (th === 'ville' || th === 'neon') walker('cat', 1, 0.3, [3, 4])

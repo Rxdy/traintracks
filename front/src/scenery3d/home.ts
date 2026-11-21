@@ -2,10 +2,12 @@
 // et ses nuages, et au premier plan une voie où un petit train passe de temps en temps, dans un sens puis dans l'autre.
 // Mêmes objets, mêmes textures et même lumière que le décor des niveaux (world.ts) : le menu et le jeu se ressemblent.
 // Économe : 30 images par seconde au plus, rien quand l'onglet est caché, image fixe si l'on préfère moins d'animations.
+import { makeCar } from './trainModel'
+import { CAR_SPACING, WAGONS } from '../trainStyle'
 import * as THREE from 'three'
 import { PAL, PARAMS, rng, type Scenery, type Theme, type TileKind } from '../scenery'
 import { SKY } from '../scenery/sky'
-import { build, canvasTex, finish, dark, groundSvg, light, loadSvgTexture, makeKit, makeTextures, tickAnims, type Anim } from './world'
+import { build, canvasTex, finish, dark, groundSvg, loadSvgTexture, makeKit, makeTextures, tickAnims, type Anim } from './world'
 
 const NIGHT = new Set<Theme>(['lune', 'neon'])
 const HOT = new Set<Theme>(['volcan', 'enfer'])
@@ -176,18 +178,11 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
 
   // le train : locomotive rouge et trois voitures, vu de côté sur la voie
   const train = new THREE.Group()
-  ;['#dc2626', '#2563eb', '#f59e0b', '#16a34a'].forEach((c, i) => {
-    const g = new THREE.Group()
-    g.position.x = -i * 0.62
-    kit.mesh(kit.geo('carbody', () => new THREE.BoxGeometry(0.52, 0.22, 0.32)), kit.mat(c, texs.plaster, { roughness: 0.5 }), 0, 0.2, 0, g)
-    if (i === 0) {
-      kit.mesh(kit.geo('cabin', () => new THREE.BoxGeometry(0.2, 0.18, 0.32)), kit.mat(dark(c, 0.3)), -0.16, 0.4, 0, g)
-      kit.mesh(kit.geo('chimney', () => new THREE.CylinderGeometry(0.045, 0.045, 0.14, 10)), kit.mat('#1f2937'), 0.16, 0.38, 0, g)
-      kit.mesh(kit.geo('lamp', () => new THREE.SphereGeometry(0.04, 8, 6)), new THREE.MeshBasicMaterial({ color: '#fde68a' }), 0.27, 0.24, 0, g)
-    } else kit.mesh(kit.geo('carroof', () => new THREE.BoxGeometry(0.5, 0.03, 0.3)), kit.mat(light(c, 0.3)), 0, 0.325, 0, g)
-    for (const x of [-0.16, 0.16]) for (const z of [-0.17, 0.17]) kit.mesh(kit.geo('wheel', () => new THREE.CylinderGeometry(0.07, 0.07, 0.03, 14).rotateX(Math.PI / 2)), kit.mat('#1f2937'), x, 0.09, z, g)
-    train.add(g)
-  })
+  for (let i = 0; i <= WAGONS; i++) {
+    const car = makeCar(i)
+    car.position.x = -i * CAR_SPACING
+    train.add(car)
+  }
   train.position.set(-40, 0, TRACK_Z)
   scene.add(train)
 
