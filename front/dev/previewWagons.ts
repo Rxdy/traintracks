@@ -24,7 +24,7 @@ scene.add(sun)
 
 const rows = Math.ceil(WAGON_STYLES.length / cols)
 const GAP_X = 1.25, GAP_Z = 2.1
-const all = [{ g: makeCar(0), name: 'Locomotive', sub: '' }, ...WAGON_STYLES.map((w) => ({ g: makeWagon(w), name: w.name, sub: w.accessoryName }))]
+const all = [{ g: makeCar(0), name: 'Locomotive', sub: '' }, ...WAGON_STYLES.map((w) => ({ g: makeWagon(w), name: w.name, sub: w.kindName }))]
 const labels: { el: HTMLDivElement; p: THREE.Vector3 }[] = []
 all.forEach((it, k) => {
   const idx = k === 0 ? -1 : k - 1

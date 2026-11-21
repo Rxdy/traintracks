@@ -50,10 +50,7 @@ function build(style: WagonStyle | null): THREE.Group {
     add(lieDown(cyl(0.065, 0.065, 0.02)), gold, 0.27, 0.28, 0)
     add(box(0.06, 0.05, 0.3, 0.02), glossy('#374151'), 0.3, 0.14, 0)
   } else {
-    add(box(0.52, 0.24, 0.34, 0.07), glossy(c), 0, 0.26, 0)
-    add(box(0.53, 0.035, 0.345, 0.012), gold, 0, 0.3, 0) // liseré doré
-    add(box(0.5, 0.05, 0.32, 0.025), glossy(lighter(c, 0.3)), 0, 0.4, 0) // toit
-    accessory(style!.accessory, { add, box, cyl, glossy, gold, glass })
+    wagonBody(style!.kind, c, { add, box, cyl, glossy, gold, glass })
   }
   for (const x of [-0.16, 0.16]) for (const z of [-0.18, 0.18]) {
     add(new THREE.CylinderGeometry(0.085, 0.085, 0.04, 28).rotateX(Math.PI / 2), glossy('#111827'), x, 0.09, z)
@@ -71,80 +68,121 @@ type Kit = {
   glass: THREE.Material
 }
 const ROOF = 0.425 // dessus du toit du wagon
+const SIDE = 0.172 // flanc du wagon (z), pour y poser portes et fenêtres
 
-// L'accessoire qui rend chaque coloris unique : simple, lisible du dessus (Trajet) comme de côté (accueil, collection).
-function accessory(a: WagonStyle['accessory'], { add, box, cyl, glossy, gold, glass }: Kit): void {
-  const sphere = (r: number) => new THREE.SphereGeometry(r, 20, 14)
-  const wood = glossy('#a16207')
-  switch (a) {
-    case 'crates':
-      for (const [x, z] of [[-0.12, -0.06], [0.1, 0.05], [-0.02, 0.07]]) add(box(0.14, 0.1, 0.14, 0.02), wood, x!, 0.47, z!)
+// La caisse du wagon selon son type : de vrais wagons de chemin de fer, le détail fait partie du wagon
+// (portes, vigie, ridelles, trémies…), rien de posé au hasard sur le toit.
+function wagonBody(kind: WagonStyle['kind'], c: string, { add, box, cyl, glossy, gold, glass }: Kit): void {
+  const paint = glossy(c), dark = glossy(darker(c, 0.35)), light = glossy(lighter(c, 0.3))
+  const wood = glossy('#8a5a2b')
+  const sides = (f: (z: number, s: number) => void) => { for (const z of [-SIDE, SIDE]) f(z, Math.sign(z)) }
+  const caisse = (h = 0.24, y = 0.26) => add(box(0.52, h, 0.34, 0.07), paint, 0, y, 0)
+  const liser = (y = 0.3) => add(box(0.53, 0.035, 0.345, 0.012), gold, 0, y, 0)
+  const toit = () => add(box(0.5, 0.05, 0.32, 0.025), light, 0, 0.4, 0)
+  const win = (x: number, y: number, w: number, h: number) => sides((z) => add(box(w, h, 0.012, 0.004), glass, x, y, z))
+  const door = (x: number, w = 0.15) => sides((z) => {
+    add(box(w, 0.19, 0.012, 0.01), dark, x, 0.255, z)
+    add(box(0.012, 0.05, 0.016, 0.004), gold, x + w / 2 - 0.025, 0.25, z) // poignée
+  })
+  switch (kind) {
+    case 'baggage': // fourgon à bagages : porte coulissante, petites fenêtres hautes, galerie de toit avec deux malles
+      caisse(); liser(); toit()
+      door(0)
+      sides((z) => add(box(0.3, 0.012, 0.016, 0.004), gold, 0, 0.355, z)) // rail de la porte
+      win(-0.18, 0.32, 0.06, 0.05); win(0.18, 0.32, 0.06, 0.05)
+      for (const x of [-0.2, 0.2]) for (const z of [-0.12, 0.12]) add(cyl(0.006, 0.006, 0.05), gold, x, ROOF + 0.025, z)
+      for (const z of [-0.12, 0.12]) add(box(0.42, 0.012, 0.012, 0.004), gold, 0, ROOF + 0.05, z)
+      add(box(0.15, 0.07, 0.11, 0.02), glossy('#7c4a21'), -0.08, ROOF + 0.035, 0)
+      add(box(0.12, 0.06, 0.1, 0.02), glossy('#1f2937'), 0.1, ROOF + 0.03, 0)
+      for (const x of [-0.11, -0.05]) add(box(0.012, 0.075, 0.115, 0.004), gold, x, ROOF + 0.036, 0) // sangles
       break
-    case 'windows':
-      for (const z of [-0.18, 0.18]) for (const x of [-0.14, 0, 0.14]) add(box(0.1, 0.09, 0.012, 0.004), glass, x, 0.27, z)
+    case 'coach': // voiture de voyageurs : fenêtres, portes aux bouts, lanterneau sur le toit
+      caisse(); liser(); toit()
+      for (const x of [-0.12, 0, 0.12]) win(x, 0.27, 0.09, 0.09)
+      for (const x of [-0.225, 0.225]) sides((z) => add(box(0.045, 0.19, 0.012, 0.006), dark, x, 0.255, z))
+      add(box(0.34, 0.035, 0.12, 0.015), light, 0, ROOF + 0.015, 0)
+      for (const x of [-0.12, 0, 0.12]) add(box(0.05, 0.02, 0.122, 0.004), glass, x, ROOF + 0.018, 0)
       break
-    case 'coal':
-      for (const x of [-0.12, 0.12]) add(sphere(0.09), glossy('#374151'), x, 0.45, 0)
-      break
-    case 'flag': {
-      add(cyl(0.008, 0.008, 0.26), gold, -0.18, ROOF + 0.13, 0)
-      add(sphere(0.018), gold, -0.18, ROOF + 0.27, 0)
-      add(box(0.15, 0.09, 0.008, 0.004), glossy('#ef4444'), -0.1, ROOF + 0.2, 0)
-      add(box(0.05, 0.09, 0.009, 0.002), glossy('#ffffff'), -0.12, ROOF + 0.2, 0)
+    case 'gondola': { // tombereau : caisse ouverte à ridelles, chargée de charbon
+      caisse(0.2, 0.24); liser(0.3)
+      for (const x of [-0.17, -0.06, 0.06, 0.17]) sides((z) => add(box(0.018, 0.2, 0.014, 0.004), dark, x, 0.24, z))
+      add(box(0.48, 0.03, 0.3, 0.012), glossy('#111827'), 0, 0.345, 0)
+      const coal = glossy('#1f2937')
+      for (const [x, z, r] of [[-0.14, -0.05, 0.09], [0, 0.04, 0.1], [0.14, -0.03, 0.09], [-0.05, -0.08, 0.07], [0.08, 0.09, 0.07]] as const) {
+        const m = new THREE.DodecahedronGeometry(r, 0).scale(1, 0.45, 1)
+        add(m, coal, x, 0.35, z)
+      }
       break
     }
-    case 'balloons':
-      for (const [x, z, h, col] of [[-0.06, -0.05, 0.3, '#ef4444'], [0.05, 0.04, 0.36, '#fde047'], [0.08, -0.07, 0.27, '#ffffff']] as const) {
-        add(cyl(0.003, 0.003, h), glossy('#e5e7eb'), x, ROOF + h / 2, z)
-        add(sphere(0.06), glossy(col), x, ROOF + h + 0.05, z)
+    case 'sleeper': // voiture-lits : rangée de petites fenêtres, aérateurs sur le toit
+      caisse(); liser(); toit()
+      for (const x of [-0.18, -0.06, 0.06, 0.18]) win(x, 0.3, 0.07, 0.06)
+      for (const x of [-0.15, 0, 0.15]) add(cyl(0.02, 0.026, 0.035), glossy('#374151'), x, ROOF + 0.017, 0)
+      break
+    case 'panorama': // voiture panoramique : bas peint, haut et toit vitrés
+      add(box(0.52, 0.14, 0.34, 0.06), paint, 0, 0.21, 0); liser(0.27)
+      add(box(0.5, 0.12, 0.32, 0.05), glass, 0, 0.34, 0)
+      for (const x of [-0.245, -0.08, 0.08, 0.245]) sides((z) => add(box(0.02, 0.12, 0.014, 0.004), paint, x, 0.34, z))
+      add(box(0.5, 0.02, 0.32, 0.01), paint, 0, 0.405, 0)
+      break
+    case 'dining': // voiture-restaurant : grandes baies cerclées de laiton, tuyau de la cuisine
+      caisse(); liser(); toit()
+      for (const x of [-0.11, 0.11]) {
+        sides((z) => add(box(0.18, 0.1, 0.011, 0.006), gold, x, 0.29, z))
+        win(x, 0.29, 0.16, 0.085)
       }
+      add(cyl(0.022, 0.022, 0.08), glossy('#374151'), -0.19, ROOF + 0.04, 0.06)
+      add(cyl(0.035, 0.025, 0.02), gold, -0.19, ROOF + 0.085, 0.06)
       break
-    case 'flowers':
-      add(box(0.42, 0.06, 0.16, 0.02), wood, 0, ROOF + 0.03, 0)
-      for (let k = 0; k < 7; k++) {
-        const x = -0.17 + k * 0.057, z = k % 2 ? 0.035 : -0.035
-        add(sphere(0.03), glossy('#16a34a'), x, ROOF + 0.075, z)
-        add(sphere(0.022), glossy(['#ffffff', '#fde047', '#f472b6'][k % 3]!), x, ROOF + 0.1, z)
-      }
+    case 'mail': // wagon postal : caisse fermée, fente à lettres et écusson doré
+      caisse(); liser(0.22); toit()
+      win(-0.17, 0.32, 0.07, 0.05)
+      sides((z, sg) => {
+        add(box(0.09, 0.03, 0.012, 0.006), gold, 0.08, 0.3, z)
+        add(box(0.07, 0.012, 0.014, 0.003), glossy('#111827'), 0.08, 0.3, z)
+        add(new THREE.CylinderGeometry(0.035, 0.035, 0.012, 24).rotateX(Math.PI / 2), gold, -0.05, 0.3, z + sg * 0.002)
+      })
+      door(0.19, 0.08)
       break
-    case 'oranges':
-      for (const x of [-0.12, 0.12]) {
-        add(box(0.18, 0.08, 0.2, 0.015), glossy('#d6b27a'), x, ROOF + 0.04, 0)
-        for (const [dx, dz] of [[-0.045, -0.05], [0.045, -0.05], [-0.045, 0.05], [0.045, 0.05], [0, 0]]) add(sphere(0.04), glossy('#f97316'), x + dx!, ROOF + 0.095, dz!)
-      }
+    case 'reefer': // wagon frigorifique : portes isolées à ferrures, trappes à glace sur le toit
+      caisse(); liser(0.2); toit()
+      sides((z) => {
+        add(box(0.18, 0.18, 0.012, 0.01), light, 0, 0.27, z)
+        for (const y of [0.21, 0.33]) add(box(0.2, 0.014, 0.016, 0.004), gold, 0, y, z)
+      })
+      for (const x of [-0.19, 0.19]) for (const z of [-0.08, 0.08]) add(box(0.07, 0.02, 0.07, 0.008), glossy('#e5e7eb'), x, ROOF + 0.01, z)
       break
-    case 'parasol':
-      add(cyl(0.008, 0.008, 0.24), glossy('#e5e7eb'), 0, ROOF + 0.12, 0)
-      add(new THREE.ConeGeometry(0.22, 0.09, 12), glossy('#ffffff'), 0, ROOF + 0.27, 0)
-      add(new THREE.ConeGeometry(0.1, 0.045, 12), glossy('#f97316'), 0, ROOF + 0.3, 0)
-      add(box(0.12, 0.03, 0.08, 0.01), glossy('#38bdf8'), 0.12, ROOF + 0.015, 0.06)
+    case 'caboose': // fourgon de queue : vigie vitrée sur le toit, lanterne rouge à l'arrière
+      caisse(); liser(); toit()
+      win(-0.15, 0.3, 0.07, 0.06); win(0.15, 0.3, 0.07, 0.06)
+      add(box(0.16, 0.1, 0.26, 0.03), paint, 0, ROOF + 0.05, 0)
+      add(box(0.12, 0.05, 0.262, 0.01), glass, 0, ROOF + 0.06, 0)
+      add(box(0.18, 0.025, 0.28, 0.01), light, 0, ROOF + 0.11, 0)
+      add(new THREE.SphereGeometry(0.03, 16, 12), new THREE.MeshBasicMaterial({ color: '#ef4444' }), -0.29, 0.34, 0.12)
+      add(cyl(0.035, 0.035, 0.012), gold, -0.29, 0.31, 0.12)
       break
-    case 'bell':
-      // une grosse cloche dorée sous un petit portique en bois
-      for (const z of [-0.1, 0.1]) add(box(0.03, 0.26, 0.03, 0.008), wood, 0, ROOF + 0.13, z)
-      add(lie(box(0.03, 0.24, 0.035, 0.008)), wood, 0, ROOF + 0.26, 0)
-      add(new THREE.CylinderGeometry(0.045, 0.095, 0.14, 24), gold, 0, ROOF + 0.17, 0)
-      add(sphere(0.045), gold, 0, ROOF + 0.24, 0)
-      add(sphere(0.022), glossy('#374151'), 0, ROOF + 0.09, 0)
+    case 'cattle': // wagon à bestiaux : flancs à claire-voie
+      add(box(0.5, 0.22, 0.31, 0.05), glossy('#2b1d10'), 0, 0.26, 0)
+      for (const y of [0.17, 0.23, 0.29, 0.35]) add(box(0.52, 0.035, 0.34, 0.012), paint, 0, y, 0)
+      for (const x of [-0.25, 0, 0.25]) add(box(0.03, 0.24, 0.345, 0.01), dark, x, 0.26, 0)
+      toit()
       break
-    case 'barrels':
-      for (const x of [-0.12, 0.12]) {
-        add(new THREE.CylinderGeometry(0.075, 0.075, 0.15, 20), glossy('#92400e'), x, ROOF + 0.075, 0)
-        for (const y of [0.03, 0.12]) add(new THREE.CylinderGeometry(0.079, 0.079, 0.015, 20), glossy('#374151'), x, ROOF + y, 0)
-      }
+    case 'boxcar': // wagon couvert : nervures, porte coulissante, passerelle sur le toit
+      caisse(); toit()
+      for (const x of [-0.21, -0.15, 0.15, 0.21]) sides((z) => add(box(0.012, 0.22, 0.014, 0.003), light, x, 0.26, z))
+      door(0, 0.17)
+      sides((z) => add(box(0.34, 0.012, 0.016, 0.004), gold, 0, 0.36, z))
+      add(box(0.46, 0.012, 0.07, 0.004), wood, 0, ROOF + 0.006, 0)
       break
-    case 'stove':
-      add(box(0.12, 0.08, 0.12, 0.02), glossy('#1f2937'), 0.08, ROOF + 0.04, 0)
-      add(cyl(0.025, 0.025, 0.17), glossy('#4b5563'), 0.08, ROOF + 0.165, 0)
-      add(cyl(0.045, 0.03, 0.03), gold, 0.08, ROOF + 0.26, 0)
-      add(box(0.1, 0.06, 0.14, 0.02), wood, -0.12, ROOF + 0.03, 0)
+    case 'hopper': { // trémie à céréales : caisse haute, entonnoirs dessous, trappes de chargement dessus
+      add(box(0.52, 0.16, 0.34, 0.05), paint, 0, 0.31, 0); liser(0.3)
+      for (const sg of [-1, 1]) add(new THREE.CylinderGeometry(0.15, 0.05, 0.1, 4, 1).rotateY(Math.PI / 4).scale(0.9, 1, 1.4), paint, sg * 0.12, 0.18, 0)
+      for (const x of [-0.16, 0, 0.16]) add(box(0.09, 0.02, 0.13, 0.008), dark, x, 0.4, 0)
+      for (const x of [-0.24, 0.24]) sides((z) => add(box(0.02, 0.16, 0.014, 0.004), dark, x, 0.31, z))
       break
-    case 'sacks':
-      for (const [x, y, z] of [[-0.12, 0.045, -0.04], [0.04, 0.045, 0.03], [0.17, 0.045, -0.03], [-0.04, 0.12, -0.01]]) add(box(0.15, 0.09, 0.13, 0.04), glossy('#ede0bd'), x!, ROOF + y!, z!)
-      break
+    }
   }
 }
-const lie = (geo: THREE.BufferGeometry) => geo.rotateX(Math.PI / 2)
 
 /** Trois ronds de fumée au-dessus de la cheminée (images fixes). */
 export function makeSmoke(): THREE.Group {
