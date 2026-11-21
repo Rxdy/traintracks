@@ -41,11 +41,5 @@ export function trainTail(wagons: readonly WagonStyle[]): number {
   return off[off.length - 1]! + carLength(wagons[wagons.length - 1] ?? null) / 2 - CAR_SPACING / 2
 }
 
-/** Ce qu'on dit au joueur : « fourgon à bagages ambre », « wagon à bétail (vaches) ». */
-export function wagonLabel(id: string): string {
-  const w = styleOf(id)
-  if (w.family === 'base') return `${w.kindName} ${w.name.toLowerCase()}`
-  // fret : le type suffit, sauf quand plusieurs wagons le partagent (bétail : vaches ou moutons)
-  const shared = WAGON_DEFS.filter((x) => x.kindName === w.kindName).length > 1
-  return shared ? `${w.kindName} (${w.name.toLowerCase()})` : w.kindName
-}
+/** Ce qu'on dit au joueur : un nom court (« Bagages », « Vaches »). */
+export const wagonLabel = (id: string): string => styleOf(id).name

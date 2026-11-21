@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
-import MyTrain from './components/MyTrain.vue'
+import TrainView from './views/TrainView.vue'
 import WagonMachine from './components/WagonMachine.vue'
 import TrainRun from './components/TrainRun.vue'
-import { myTrain, trainWagons, freeCount, setTrain } from './myTrain'
+import { myTrain, trainWagons, freeCount, selectPreset, setTrain } from './myTrain'
 import { carOffsets, CAR_SPACING, styleOf, STARTER, trainTail, wagonLabel } from './trainStyle'
 import { coins } from './wallet'
 import { COLLECTION_TOTAL, DRAW_PRICE, STARTER_TRAIN, WAGON_DEFS } from '../../shared/wagons.js'
@@ -25,10 +25,10 @@ function route(table: Record<string, { status: number; body?: object }>) {
   }))
   return calls
 }
-const state = (owned: Record<string, number>, train: string[]) => ({ owned, train, left: COLLECTION_TOTAL - Object.values(owned).reduce((a, b) => a + b, 0), price: DRAW_PRICE, coins: 120 })
+const state = (owned: Record<string, number>, train: string[], presets: string[][] = [train, [...STARTER_TRAIN], [...STARTER_TRAIN]], active = 0) => ({ owned, train, presets, active, left: COLLECTION_TOTAL - Object.values(owned).reduce((a, b) => a + b, 0), price: DRAW_PRICE, coins: 120 })
 
 beforeEach(() => {
-  myTrain.value = { owned: { ambre: 1, vert: 1, violet: 1 }, train: [...STARTER_TRAIN], left: COLLECTION_TOTAL - 3, price: DRAW_PRICE }
+  myTrain.value = { owned: { ambre: 1, vert: 1, violet: 1 }, train: [...STARTER_TRAIN], presets: [0, 1, 2].map(() => [...STARTER_TRAIN]), active: 0, left: COLLECTION_TOTAL - 3, price: DRAW_PRICE }
   coins.value = 120
 })
 
@@ -47,22 +47,29 @@ describe('la longueur du train', () => {
   })
 
   it('dans le Trajet, le train qui roule est celui du joueur', () => {
-    myTrain.value = { ...myTrain.value, owned: { ...myTrain.value.owned, grumes: 1 }, train: ['grumes', 'vert'] }
+    myTrain.value = { ...myTrain.value, owned: { ...myTrain.value.owned, grumes: 1 }, train: ['grumes', 'vert'], presets: [['grumes', 'vert'], [], []] }
     const r = { points: [{ x: -2, y: 0.5 }, { x: 8, y: 0.5 }], cum: [0, 10], length: 10 } as unknown as Route
     const w = mount(TrainRun, { props: { route: r, size: 4 } })
     expect(w.props('wagons')!.map((x: { id: string }) => x.id)).toEqual(['grumes', 'vert'])
   })
 
-  it('les noms dits au joueur', () => {
-    expect(wagonLabel('ambre')).toBe('fourgon à bagages ambre')
-    expect(wagonLabel('vaches')).toBe('wagon à bétail (vaches)')
+  it('les noms dits au joueur sont courts : un ou deux mots, jamais de parenthèses', () => {
+    expect(wagonLabel('ambre')).toBe('Bagages')
+    expect(wagonLabel('vaches')).toBe('Vaches')
+    for (const w of WAGON_DEFS) {
+      expect(w.name.split(' ').length, w.id).toBeLessThanOrEqual(2)
+      expect(w.name, w.id).not.toMatch(/[()]/)
+    }
   })
 })
 
-describe('Mon train', () => {
-  it('affiche le train, la collection en n/6 et le nombre de wagons encore à gagner', async () => {
+const set = (train: string[], owned: Record<string, number> = myTrain.value.owned) =>
+  (myTrain.value = { ...myTrain.value, owned, train, presets: [train, [...STARTER_TRAIN], [...STARTER_TRAIN]], active: 0 })
+
+describe('Mon train (page entière)', () => {
+  it('affiche le train, la collection en n/6, les 3 trains et le nombre de wagons encore à gagner', async () => {
     route({ 'GET /api/train': { status: 200, body: state({ ambre: 2, vert: 1, violet: 1 }, ['ambre', 'vert']) } })
-    const w = mount(MyTrain)
+    const w = mount(TrainView)
     await flushPromises()
     expect(w.find('[data-test=train-car-0]').exists()).toBe(true)
     expect(w.find('[data-test=train-car-1]').exists()).toBe(true)
@@ -71,6 +78,8 @@ describe('Mon train', () => {
     expect(w.find('[data-test=coll-bleu] [data-test=coll-count]').text()).toBe('0/6')
     expect(w.find('[data-test=coll-bleu]').attributes('disabled')).toBeDefined()
     expect(w.find('[data-test=train-left]').text()).toBe(`Encore ${COLLECTION_TOTAL - 4} wagons à gagner`)
+    expect(w.findAll('[role=tab]')).toHaveLength(3)
+    expect(w.find('[data-test=preset-0] [data-test=preset-active]').exists()).toBe(true)
   })
 
   it('toucher un wagon de la collection l\'ajoute au bout ; ✕ le range ; deux touchers échangent l\'ordre', async () => {
@@ -78,40 +87,95 @@ describe('Mon train', () => {
       'GET /api/train': { status: 200, body: state({ ambre: 2, vert: 1, violet: 1 }, ['ambre', 'vert', 'violet']) },
       'POST /api/train/layout': { status: 200, body: { ok: true, state: state({ ambre: 2, vert: 1, violet: 1 }, ['ambre']) } },
     })
-    const w = mount(MyTrain)
+    const w = mount(TrainView)
     await flushPromises()
     await w.find('[data-test=coll-ambre]').trigger('click')
     await flushPromises()
-    expect(calls.at(-1)).toEqual({ key: 'POST /api/train/layout', body: { cars: ['ambre', 'vert', 'violet', 'ambre'] } })
-    myTrain.value = { ...myTrain.value, train: ['ambre', 'vert', 'violet'] }
+    expect(calls.at(-1)).toEqual({ key: 'POST /api/train/layout', body: { cars: ['ambre', 'vert', 'violet', 'ambre'], slot: 0 } })
+    set(['ambre', 'vert', 'violet'])
     await w.vm.$nextTick()
     await w.find('[data-test=train-remove-1]').trigger('click')
     await flushPromises()
-    expect(calls.at(-1)!.body).toEqual({ cars: ['ambre', 'violet'] })
-    myTrain.value = { ...myTrain.value, train: ['ambre', 'vert', 'violet'] }
+    expect(calls.at(-1)!.body).toEqual({ cars: ['ambre', 'violet'], slot: 0 })
+    set(['ambre', 'vert', 'violet'])
     await w.vm.$nextTick()
     await w.find('[data-test=train-car-0]').trigger('click')
     await w.find('[data-test=train-car-2]').trigger('click')
-    expect(calls.at(-1)!.body).toEqual({ cars: ['vert', 'violet', 'ambre'] })
+    expect(calls.at(-1)!.body).toEqual({ cars: ['vert', 'violet', 'ambre'], slot: 0 })
   })
 
   it('pas plus de wagons d\'un type que ceux qu\'on a ; train plein : un message', async () => {
     route({ 'GET /api/train': { status: 200, body: state({ ambre: 1, vert: 1, violet: 1 }, ['ambre', 'vert', 'violet']) } })
-    const w = mount(MyTrain)
+    const w = mount(TrainView)
     await flushPromises()
     expect(freeCount('ambre')).toBe(0)
     await w.find('[data-test=coll-ambre]').trigger('click')
-    expect(w.find('[data-test=train-msg]').text()).toContain('déjà dans le train')
-    myTrain.value = { ...myTrain.value, owned: { ambre: 6 }, train: Array(6).fill('ambre') }
+    expect(w.find('[data-test=train-msg]').text()).toContain('déjà dans ce train')
+    set(Array(6).fill('ambre'), { ambre: 6, vert: 1 })
     await w.vm.$nextTick()
-    await w.find('[data-test=coll-ambre]').trigger('click')
+    await w.find('[data-test=coll-vert]').trigger('click')
     expect(w.find('[data-test=train-msg]').text()).toContain('plein')
   })
 
+  it('un autre des 3 trains se range sans toucher à celui qui roule, puis on le fait rouler', async () => {
+    const calls = route({
+      'GET /api/train': { status: 200, body: state({ ambre: 1, vert: 1, violet: 1 }, [...STARTER_TRAIN]) },
+      'POST /api/train/layout': { status: 200, body: { ok: true, state: state({ ambre: 1, vert: 1, violet: 1 }, [...STARTER_TRAIN], [[...STARTER_TRAIN], [...STARTER_TRAIN], ['violet', 'vert', 'ambre']]) } },
+      'POST /api/train/active': { status: 200, body: { ok: true, state: state({ ambre: 1, vert: 1, violet: 1 }, ['violet', 'vert', 'ambre'], [[...STARTER_TRAIN], [...STARTER_TRAIN], ['violet', 'vert', 'ambre']], 2) } },
+    })
+    const w = mount(TrainView)
+    await flushPromises()
+    await w.find('[data-test=preset-2]').trigger('click')
+    expect(w.find('[data-test=preset-roll]').exists()).toBe(true)
+    await w.find('[data-test=train-car-0]').trigger('click')
+    await w.find('[data-test=train-car-2]').trigger('click')
+    await flushPromises()
+    expect(calls.at(-1)!.body).toEqual({ cars: ['vert', 'violet', 'ambre'], slot: 2 })
+    expect(myTrain.value.train).toEqual(STARTER_TRAIN) // celui qui roule n'a pas bougé
+    await w.find('[data-test=preset-roll]').trigger('click')
+    await flushPromises()
+    expect(calls.at(-1)).toEqual({ key: 'POST /api/train/active', body: { slot: 2 } })
+    expect(myTrain.value.active).toBe(2)
+    expect(trainWagons.value.map((x) => x.id)).toEqual(['violet', 'vert', 'ambre'])
+  })
+
+  it('glisser-déposer : un wagon de la collection sur une place du train, et un wagon du train vers la collection', async () => {
+    const calls = route({
+      'GET /api/train': { status: 200, body: state({ ambre: 2, vert: 1, violet: 1 }, ['ambre', 'vert']) },
+      'POST /api/train/layout': { status: 200, body: { ok: true, state: state({ ambre: 2, vert: 1, violet: 1 }, ['ambre', 'vert']) } },
+    })
+    const w = mount(TrainView, { attachTo: document.body })
+    await flushPromises()
+    const at = (sel: string) => document.querySelector(sel) as HTMLElement
+    const drop = (target: HTMLElement) => {
+      document.elementFromPoint = () => target
+    }
+    const ev = (type: string, x: number, y: number) => new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, button: 0, bubbles: true })
+    // la collection (violet) vers la place 0
+    at('[data-test=coll-violet]').dispatchEvent(ev('pointerdown', 10, 10))
+    drop(at('[data-drop=slot-0]'))
+    window.dispatchEvent(ev('pointermove', 60, 60))
+    window.dispatchEvent(ev('pointerup', 60, 60))
+    await flushPromises()
+    expect(calls.at(-1)!.body).toEqual({ cars: ['violet', 'ambre', 'vert'], slot: 0 })
+    // un wagon du train vers la collection : il est rangé
+    set(['ambre', 'vert'])
+    await w.vm.$nextTick()
+    at('[data-test=train-car-1]').dispatchEvent(ev('pointerdown', 10, 10))
+    drop(at('[data-drop=collection]'))
+    window.dispatchEvent(ev('pointermove', 80, 300))
+    window.dispatchEvent(ev('pointerup', 80, 300))
+    await flushPromises()
+    expect(calls.at(-1)!.body).toEqual({ cars: ['ambre'], slot: 0 })
+    w.unmount()
+  })
+
   it('un refus du serveur remet l\'ordre d\'avant', async () => {
-    route({ 'POST /api/train/layout': { status: 400, body: { ok: false, error: 'invalid' } } })
+    route({ 'POST /api/train/layout': { status: 400, body: { ok: false, error: 'invalid' } }, 'POST /api/train/active': { status: 400, body: {} } })
     expect(await setTrain(['violet'])).toBe(false)
     expect(myTrain.value.train).toEqual(STARTER_TRAIN)
+    expect(await selectPreset(1)).toBe(false)
+    expect(myTrain.value.active).toBe(0)
   })
 })
 
@@ -133,7 +197,7 @@ describe('la machine « Wagon surprise »', () => {
     expect(mids).toEqual(['ciel', 'ciel', 'ciel'])
     // chaque rouleau montre aussi un wagon au-dessus et au-dessous du gain
     for (const reel of document.querySelectorAll('[data-test=reel]')) expect(reel.querySelectorAll('.cell').length).toBeGreaterThanOrEqual(3)
-    expect(document.querySelector('[data-test=machine-prize]')!.textContent).toContain('voiture panoramique ciel')
+    expect(document.querySelector('[data-test=machine-prize]')!.textContent).toContain('Panoramique')
     expect(document.querySelector('[data-test=machine-left]')!.textContent).toContain(`Encore ${COLLECTION_TOTAL - 4} wagons`)
     expect(coins.value).toBe(70)
     expect(trainWagons.value.map((x) => x.id)).toEqual(['ambre', 'vert', 'violet', 'ciel'])

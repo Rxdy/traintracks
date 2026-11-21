@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import type { Theme } from '../scenery'
 import type { Home3D } from '../scenery3d/home'
 import { trainWagons } from '../myTrain'
@@ -26,6 +26,8 @@ onMounted(async () => {
     if (!gone) emit('fail')
   }
 })
+// le train change (Mon train, machine) : seuls les wagons sont remplacés, le décor reste
+watch(trainWagons, (w) => view?.setWagons(w))
 onUnmounted(() => {
   gone = true
   view?.dispose()

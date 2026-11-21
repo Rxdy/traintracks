@@ -16,6 +16,8 @@ const CYCLE = 30 // s : le train traverse dans un sens, la voie reste vide, puis
 
 export interface Home3D {
   dispose(): void
+  /** Le joueur a changé son train (Mon train, machine) : on remplace les wagons, sans refaire le décor. */
+  setWagons(wagons: readonly WagonStyle[]): void
 }
 
 export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass?: (dir: 1 | -1) => void, wagons: readonly WagonStyle[] = STARTER): Promise<Home3D> {
@@ -178,11 +180,25 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
 
   // le train du joueur (Mon train) : la locomotive rouge et ses wagons, vu de côté sur la voie
   const train = new THREE.Group()
-  const offsets = carOffsets(wagons)
-  ;[makeCar(0), ...wagons.map(makeWagon)].forEach((car, i) => {
-    car.position.x = -offsets[i]!
-    train.add(car)
-  })
+  let tail = 2 // longueur du train derrière la locomotive : un train de fret sort entièrement du champ
+  const fill = (list: readonly WagonStyle[]) => {
+    for (const old of [...train.children]) {
+      train.remove(old)
+      old.traverse((o) => {
+        const m = o as THREE.Mesh
+        if (!m.isMesh) return
+        m.geometry.dispose()
+        ;([] as THREE.Material[]).concat(m.material).forEach((x) => x.dispose())
+      })
+    }
+    const offsets = carOffsets(list)
+    tail = offsets[offsets.length - 1]! + 0.6
+    ;[makeCar(0), ...list.map(makeWagon)].forEach((car, i) => {
+      car.position.x = -offsets[i]!
+      train.add(car)
+    })
+  }
+  fill(wagons)
   train.position.set(-40, 0, TRACK_Z)
   scene.add(train)
   // fumée de la locomotive, comme pendant le Trajet (scenery3d/trainModel.ts)
@@ -216,7 +232,7 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
   let raf = 0
   let prevK = -1
   let last = 0
-  const span = 26 // de -13 à +13 : hors champ aux deux bouts
+  const SPAN = 26 // de -13 à +13 : hors champ aux deux bouts (plus la longueur du train)
   const loop = (now: number) => {
     raf = requestAnimationFrame(loop)
     if (document.hidden || now - last < 32) return // 30 images par seconde suffisent pour un fond
@@ -224,6 +240,7 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
     last = now
     const t = now - t0
     tickAnims(anims, t, dt, still)
+    const span = SPAN + 2 * tail
     if (!still) {
       clouds.children.forEach((c) => {
         c.position.x += dt * (c.userData.speed as number)
@@ -254,6 +271,7 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
   raf = requestAnimationFrame(loop)
 
   return {
+    setWagons: fill,
     dispose() {
       cancelAnimationFrame(raf)
       ro.disconnect()
