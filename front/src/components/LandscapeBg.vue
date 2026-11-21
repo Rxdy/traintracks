@@ -5,7 +5,6 @@ import { SKY } from '../scenery/sky'
 import Home3D from './Home3D.vue'
 import { sound } from '../sound/director'
 import { webglAvailable } from '../decor'
-import { myTrain } from '../myTrain'
 
 // Paysage de l'accueil : ciel, soleil, nuages, collines, arbres et une voie
 // ferrée au premier plan. Tout en SVG (aucune image à charger).
@@ -30,7 +29,7 @@ const STARS = [[30, 60], [90, 140], [150, 40], [210, 110], [260, 70], [350, 90],
 
 <template>
   <div class="landscape" data-test="landscape" :data-theme="theme" :style="vars" aria-hidden="true">
-    <Home3D v-if="use3d" :key="theme + ':' + myTrain.train.join()" :theme="theme" @ready="ready3d = true" @fail="failed3d = true" @pass="sound.lobbyPass($event)" />
+    <Home3D v-if="use3d" :key="theme" :theme="theme" @ready="ready3d = true" @fail="failed3d = true" @pass="sound.lobbyPass($event)" />
     <svg v-show="!use3d" viewBox="0 0 400 800" preserveAspectRatio="xMidYMax slice">
       <defs>
         <radialGradient id="sun" cx="50%" cy="50%" r="50%">

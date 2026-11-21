@@ -7,6 +7,7 @@ import JourneyView from './views/JourneyView.vue'
 import StatsView from './views/StatsView.vue'
 import RankingView from './views/RankingView.vue'
 import AccountView from './views/AccountView.vue'
+import TrainView from './views/TrainView.vue'
 import LegalView from './views/LegalView.vue'
 import LandscapeBg from './components/LandscapeBg.vue'
 import InstallButton from './components/InstallButton.vue'
@@ -25,7 +26,7 @@ import { sound, soundOn, suspend, unlock } from './sound/director'
 
 // Accueil = le Voyage (mode principal). Les autres écrans s'ouvrent depuis
 // les petits cubes de l'accueil.
-type View = 'home' | 'daily' | 'tuto' | 'stats' | 'ranking' | 'account' | 'legal'
+type View = 'home' | 'daily' | 'tuto' | 'stats' | 'ranking' | 'account' | 'train' | 'legal'
 const TITLES: Record<View, string> = {
   home: '',
   daily: 'Puzzle du jour',
@@ -33,6 +34,7 @@ const TITLES: Record<View, string> = {
   stats: 'Statistiques',
   ranking: 'Classement',
   account: 'Compte',
+  train: 'Mon train',
   legal: 'Mentions légales',
 }
 
@@ -60,6 +62,7 @@ const panel = computed(() => view.value !== 'home' && !playing.value)
 function go(v: string): void {
   view.value = v as View
   playing.value = false
+  window.scrollTo?.({ top: 0 }) // chaque écran s'ouvre par le haut (pas au défilement de l'écran d'avant)
 }
 provide('go', go) // les écrans (inscription, compte) renvoient vers les mentions légales
 // La machine « Wagon surprise » : un bouton de l'accueil et la partie Mon train (page Compte) l'ouvrent.
@@ -104,18 +107,19 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
       </div>
     </header>
 
-    <WagonMachine v-if="machineOpen" @close="machineOpen = false" @my-train="machineOpen = false; go('account')" />
+    <WagonMachine v-if="machineOpen" @close="machineOpen = false" @my-train="machineOpen = false; go('train')" />
 
     <p v-if="notice" class="notice" data-test="notice" role="status" @click="notice = ''">{{ notice }}</p>
 
     <main class="board-area" :class="{ top: panel }">
-      <div class="content" :class="{ panel }" data-test="content">
+      <div class="content" :class="{ panel, wide: view === 'train' }" data-test="content">
         <JourneyView v-if="view === 'home'" @playing="playing = $event" @navigate="go" />
         <DailyView v-else-if="view === 'daily'" @playing="playing = $event" />
         <TutorialView v-else-if="view === 'tuto'" />
         <StatsView v-else-if="view === 'stats'" />
         <RankingView v-else-if="view === 'ranking'" />
         <LegalView v-else-if="view === 'legal'" />
+        <TrainView v-else-if="view === 'train'" />
         <AccountView v-else />
       </div>
     </main>
@@ -285,6 +289,10 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
   flex-direction: column;
   align-items: center;
   gap: 1rem;
+}
+/* Mon train : toute la largeur disponible */
+.panel.wide {
+  width: min(100%, 96rem);
 }
 
 .board-area.top {

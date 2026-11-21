@@ -9,14 +9,16 @@ import { styleOf, type WagonStyle } from './trainStyle'
 
 export interface TrainState {
   owned: Record<string, number>
-  train: string[]
+  train: string[] // le train qui roule (presets[active])
+  presets: string[][] // les 3 trains enregistrés
+  active: number
   left: number
   price: number
 }
 
 const starter = (): TrainState => {
   const owned = Object.fromEntries(STARTER_TRAIN.map((id) => [id, 1]))
-  return { owned, train: [...STARTER_TRAIN], left: leftToWin(owned), price: DRAW_PRICE }
+  return { owned, train: [...STARTER_TRAIN], presets: [0, 1, 2].map(() => [...STARTER_TRAIN]), active: 0, left: leftToWin(owned), price: DRAW_PRICE }
 }
 
 export const myTrain = ref<TrainState>(starter())
@@ -26,9 +28,13 @@ export const collectionTotal = COLLECTION_TOTAL
 
 function take(data: Record<string, unknown>): void {
   const owned = (data.owned as Record<string, number>) ?? {}
+  const train = Array.isArray(data.train) ? (data.train as string[]) : []
+  const presets = Array.isArray(data.presets) && data.presets.length === 3 ? (data.presets as string[][]) : [train, train, train]
   myTrain.value = {
     owned,
-    train: Array.isArray(data.train) ? (data.train as string[]) : [],
+    train,
+    presets,
+    active: typeof data.active === 'number' ? data.active : 0,
     left: typeof data.left === 'number' ? data.left : leftToWin(owned),
     price: typeof data.price === 'number' ? data.price : DRAW_PRICE,
   }
@@ -55,11 +61,12 @@ export async function drawWagon(): Promise<DrawOutcome> {
   return { ok: false, error: 'Le tirage n\'a pas marché. Réessaie.' }
 }
 
-/** Range le train dans cet ordre. En cas d'échec, l'ordre d'avant revient. */
-export async function setTrain(cars: string[]): Promise<boolean> {
+/** Range un des 3 trains (par défaut celui qui roule) dans cet ordre. En cas d'échec, l'ordre d'avant revient. */
+export async function setTrain(cars: string[], slot: number = myTrain.value.active): Promise<boolean> {
   const before = myTrain.value
-  myTrain.value = { ...before, train: [...cars] } // tout de suite à l'écran
-  const r = await api('POST', '/api/train/layout', { cars })
+  const presets = before.presets.map((p, k) => (k === slot ? [...cars] : p))
+  myTrain.value = { ...before, presets, train: slot === before.active ? [...cars] : before.train } // tout de suite à l'écran
+  const r = await api('POST', '/api/train/layout', { cars, slot })
   if (r?.status === 200) {
     take(r.data.state as Record<string, unknown>)
     return true
@@ -68,7 +75,20 @@ export async function setTrain(cars: string[]): Promise<boolean> {
   return false
 }
 
-/** Combien d'exemplaires d'un wagon sont libres (possédés mais pas dans le train). */
-export function freeCount(id: string, st: TrainState = myTrain.value): number {
-  return (st.owned[id] ?? 0) - st.train.filter((x) => x === id).length
+/** Fait rouler un des 3 trains enregistrés. */
+export async function selectPreset(slot: number): Promise<boolean> {
+  const before = myTrain.value
+  myTrain.value = { ...before, active: slot, train: [...(before.presets[slot] ?? [])] }
+  const r = await api('POST', '/api/train/active', { slot })
+  if (r?.status === 200) {
+    take(r.data.state as Record<string, unknown>)
+    return true
+  }
+  myTrain.value = before
+  return false
+}
+
+/** Combien d'exemplaires d'un wagon sont libres pour ce train (possédés mais pas déjà dedans). */
+export function freeCount(id: string, cars: readonly string[] = myTrain.value.train, st: TrainState = myTrain.value): number {
+  return (st.owned[id] ?? 0) - cars.filter((x) => x === id).length
 }

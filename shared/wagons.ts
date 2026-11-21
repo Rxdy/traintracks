@@ -8,8 +8,8 @@ export type WagonKind =
 export type WagonFamily = 'base' | 'fret'
 export interface WagonDef {
   id: string
-  name: string // le coloris (base) ou le chargement (fret)
-  kindName: string // le type de wagon, dit au joueur
+  name: string // le nom court dit au joueur (un ou deux mots) : « Bagages », « Vaches »…
+  kindName: string // le type de wagon en entier (lecteurs d'écran)
   color: string
   kind: WagonKind
   family: WagonFamily
@@ -17,18 +17,18 @@ export interface WagonDef {
 }
 
 export const WAGON_DEFS: readonly WagonDef[] = [
-  { id: 'ambre', name: 'Ambre', kindName: 'fourgon à bagages', color: '#f59e0b', kind: 'baggage', family: 'base', length: 1 },
-  { id: 'vert', name: 'Vert', kindName: 'voiture de voyageurs', color: '#16a34a', kind: 'coach', family: 'base', length: 1 },
-  { id: 'violet', name: 'Violet', kindName: 'tombereau à charbon', color: '#8b5cf6', kind: 'gondola', family: 'base', length: 1 },
-  { id: 'bleu', name: 'Bleu', kindName: 'voiture-lits', color: '#2563eb', kind: 'sleeper', family: 'base', length: 1 },
-  { id: 'ciel', name: 'Ciel', kindName: 'voiture panoramique', color: '#38bdf8', kind: 'panorama', family: 'base', length: 1 },
-  { id: 'rose', name: 'Rose', kindName: 'voiture-restaurant', color: '#ec4899', kind: 'dining', family: 'base', length: 1 },
-  { id: 'orange', name: 'Orange', kindName: 'wagon postal', color: '#f97316', kind: 'mail', family: 'base', length: 1 },
-  { id: 'citron', name: 'Citron', kindName: 'wagon frigorifique', color: '#facc15', kind: 'reefer', family: 'base', length: 1 },
-  { id: 'turquoise', name: 'Turquoise', kindName: 'fourgon de queue', color: '#14b8a6', kind: 'caboose', family: 'base', length: 1 },
-  { id: 'chocolat', name: 'Chocolat', kindName: 'wagon à bestiaux', color: '#8b5a2b', kind: 'cattle', family: 'base', length: 1 },
-  { id: 'ardoise', name: 'Ardoise', kindName: 'wagon couvert', color: '#475569', kind: 'boxcar', family: 'base', length: 1 },
-  { id: 'sable', name: 'Sable', kindName: 'trémie à céréales', color: '#d6a85a', kind: 'hopper', family: 'base', length: 1 },
+  { id: 'ambre', name: 'Bagages', kindName: 'fourgon à bagages', color: '#f59e0b', kind: 'baggage', family: 'base', length: 1 },
+  { id: 'vert', name: 'Voyageurs', kindName: 'voiture de voyageurs', color: '#16a34a', kind: 'coach', family: 'base', length: 1 },
+  { id: 'violet', name: 'Charbon', kindName: 'tombereau à charbon', color: '#8b5cf6', kind: 'gondola', family: 'base', length: 1 },
+  { id: 'bleu', name: 'Couchettes', kindName: 'voiture-lits', color: '#2563eb', kind: 'sleeper', family: 'base', length: 1 },
+  { id: 'ciel', name: 'Panoramique', kindName: 'voiture panoramique', color: '#38bdf8', kind: 'panorama', family: 'base', length: 1 },
+  { id: 'rose', name: 'Restaurant', kindName: 'voiture-restaurant', color: '#ec4899', kind: 'dining', family: 'base', length: 1 },
+  { id: 'orange', name: 'Poste', kindName: 'wagon postal', color: '#f97316', kind: 'mail', family: 'base', length: 1 },
+  { id: 'citron', name: 'Frigo', kindName: 'wagon frigorifique', color: '#facc15', kind: 'reefer', family: 'base', length: 1 },
+  { id: 'turquoise', name: 'Fourgon', kindName: 'fourgon de queue', color: '#14b8a6', kind: 'caboose', family: 'base', length: 1 },
+  { id: 'chocolat', name: 'Bestiaux', kindName: 'wagon à bestiaux', color: '#8b5a2b', kind: 'cattle', family: 'base', length: 1 },
+  { id: 'ardoise', name: 'Couvert', kindName: 'wagon couvert', color: '#475569', kind: 'boxcar', family: 'base', length: 1 },
+  { id: 'sable', name: 'Céréales', kindName: 'trémie à céréales', color: '#d6a85a', kind: 'hopper', family: 'base', length: 1 },
   { id: 'plateau', name: 'Plateau', kindName: 'wagon plat', color: '#6b7280', kind: 'flat', family: 'fret', length: 1.6 },
   { id: 'grumes', name: 'Grumes', kindName: 'wagon de bois', color: '#7c2d12', kind: 'logs', family: 'fret', length: 1.8 },
   { id: 'autos', name: 'Autos', kindName: 'porte-autos', color: '#1d4ed8', kind: 'autos', family: 'fret', length: 2 },

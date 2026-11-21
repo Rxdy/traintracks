@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto'
 import { confirmEmailChange, exportData, importData, requestEmailChange, changePseudo, setLeaderboard } from './accountData.js'
 import { completeTutorial } from './tutorial.js'
 import { avatarState, buyAvatar, selectAvatar } from './avatars.js'
-import { drawWagon, setTrain, trainState } from './wagons.js'
+import { drawWagon, selectPreset, setTrain, trainState } from './wagons.js'
 import { journeyStats, leaderboard, type Board } from './stats.js'
 
 const COOKIE = 'tt_session'
@@ -227,7 +227,15 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   app.post('/api/train/layout', async (req, reply) => {
     const owner = (await ownerOf(req, reply, true))!
-    const r = await setTrain(opts.db, owner, ((req.body ?? {}) as Body).cars, opts.now())
+    const b = (req.body ?? {}) as Body
+    const r = await setTrain(opts.db, owner, b.cars, opts.now(), b.slot)
+    if (r.ok) return r
+    return reply.code(400).send({ ok: false, error: r.code })
+  })
+
+  app.post('/api/train/active', async (req, reply) => {
+    const owner = (await ownerOf(req, reply, true))!
+    const r = await selectPreset(opts.db, owner, ((req.body ?? {}) as Body).slot, opts.now())
     if (r.ok) return r
     return reply.code(400).send({ ok: false, error: r.code })
   })

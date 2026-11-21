@@ -140,6 +140,41 @@ describe('l\'ordre du train', () => {
   })
 })
 
+describe('les 3 trains enregistrés', () => {
+  it('au départ, les 3 sont le train de départ ; on en range un autre sans toucher à celui qui roule, puis on le fait rouler', async () => {
+    const { compte, post, get } = await setup()
+    const { cookie } = await compte('Alice', 'alice@x.fr')
+    const st0 = (await get('/api/train', cookie)).json()
+    expect(st0.presets).toEqual([STARTER_TRAIN, STARTER_TRAIN, STARTER_TRAIN])
+    expect(st0.active).toBe(0)
+    const r = (await post('/api/train/layout', { cars: ['violet'], slot: 2 }, cookie)).json()
+    expect(r.state.presets[2]).toEqual(['violet'])
+    expect(r.state.train).toEqual(STARTER_TRAIN) // le n° 1 roule toujours
+    const a = (await post('/api/train/active', { slot: 2 }, cookie)).json()
+    expect(a.state).toMatchObject({ active: 2, train: ['violet'] })
+    // ranger sans emplacement : celui qui roule (ici le n° 3)
+    const b = (await post('/api/train/layout', { cars: ['vert', 'violet'] }, cookie)).json()
+    expect(b.state.presets).toEqual([STARTER_TRAIN, STARTER_TRAIN, ['vert', 'violet']])
+    expect(b.state.train).toEqual(['vert', 'violet'])
+    expect((await post('/api/train/active', { slot: 3 }, cookie)).statusCode).toBe(400)
+    expect((await post('/api/train/layout', { cars: [], slot: -1 }, cookie)).statusCode).toBe(400)
+  })
+
+  it('un wagon gagné va au bout du train qui roule, et dans son emplacement', async () => {
+    const { db, ctx, donner } = await setup()
+    const owner = 'a:presets'
+    await donner(owner, DRAW_PRICE)
+    await trainState(db, owner)
+    await setTrain(db, owner, ['vert'], ctx.now(), 1)
+    await db.query('UPDATE train_layout SET active = 1, cars = presets -> 1 WHERE owner = $1', [owner])
+    const r = await drawWagon(db, owner, ctx.now(), () => 0)
+    if (!r.ok) throw new Error(r.code)
+    expect(r.state.train).toEqual(['vert', 'ambre'])
+    expect(r.state.presets[1]).toEqual(['vert', 'ambre'])
+    expect(r.state.presets[0]).toEqual(STARTER_TRAIN)
+  })
+})
+
 describe('un invité qui se connecte', () => {
   it('garde ses wagons gagnés (additionnés, 6 au plus) ; le compte garde son ordre de train', async () => {
     const { db, ctx, donner, compte } = await setup()
