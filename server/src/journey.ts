@@ -3,6 +3,7 @@
 //   - on ne peut jouer que le niveau en cours (progression linéaire) ;
 //   - un tracé est vérifié avec les règles du jeu (dossier shared/), pas sur la parole du navigateur ;
 //   - le temps est mesuré ici, de la demande du niveau à la réponse juste.
+import { mergeWagons } from './wagons.js'
 import type { Db } from './db.js'
 import type { Puzzle } from '../../shared/puzzle.js'
 import { isSolved, lockedEdges } from '../../shared/track.js'
@@ -170,6 +171,7 @@ export async function mergeAnonymous(db: Db, anonId: string, userId: string): Pr
       [from, to],
     )
     await t.query('INSERT INTO rewards (owner, kind, ref, amount, created_at) SELECT $2, kind, ref, amount, created_at FROM rewards WHERE owner = $1 ON CONFLICT DO NOTHING', [from, to])
+    await mergeWagons(t, from, to)
     for (const table of ['wallets', 'aid_stock', 'aid_gifts', 'rewards']) await t.query(`DELETE FROM ${table} WHERE owner = $1`, [from])
   })
 }

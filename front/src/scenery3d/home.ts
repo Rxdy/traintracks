@@ -2,8 +2,8 @@
 // et ses nuages, et au premier plan une voie où un petit train passe de temps en temps, dans un sens puis dans l'autre.
 // Mêmes objets, mêmes textures et même lumière que le décor des niveaux (world.ts) : le menu et le jeu se ressemblent.
 // Économe : 30 images par seconde au plus, rien quand l'onglet est caché, image fixe si l'on préfère moins d'animations.
-import { CHIMNEY, makeCar, makeSteam } from './trainModel'
-import { CAR_SPACING, WAGONS } from '../trainStyle'
+import { CHIMNEY, makeCar, makeSteam, makeWagon } from './trainModel'
+import { carOffsets, STARTER, type WagonStyle } from '../trainStyle'
 import * as THREE from 'three'
 import { PAL, PARAMS, rng, type Scenery, type Theme, type TileKind } from '../scenery'
 import { SKY } from '../scenery/sky'
@@ -18,7 +18,7 @@ export interface Home3D {
   dispose(): void
 }
 
-export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass?: (dir: 1 | -1) => void): Promise<Home3D> {
+export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass?: (dir: 1 | -1) => void, wagons: readonly WagonStyle[] = STARTER): Promise<Home3D> {
   const pal = PAL[theme] ?? PAL.plaine
   const sky = SKY[theme] ?? SKY.plaine
   const params = PARAMS[theme]
@@ -176,13 +176,13 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
     scene.add(rail)
   }
 
-  // le train : locomotive rouge et trois voitures, vu de côté sur la voie
+  // le train du joueur (Mon train) : la locomotive rouge et ses wagons, vu de côté sur la voie
   const train = new THREE.Group()
-  for (let i = 0; i <= WAGONS; i++) {
-    const car = makeCar(i)
-    car.position.x = -i * CAR_SPACING
+  const offsets = carOffsets(wagons)
+  ;[makeCar(0), ...wagons.map(makeWagon)].forEach((car, i) => {
+    car.position.x = -offsets[i]!
     train.add(car)
-  }
+  })
   train.position.set(-40, 0, TRACK_Z)
   scene.add(train)
   // fumée de la locomotive, comme pendant le Trajet (scenery3d/trainModel.ts)

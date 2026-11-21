@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, inject, nextTick, onUnmounted, ref, watch } from 'vue'
 import AuthPanel from '../components/AuthPanel.vue'
+import MyTrain from '../components/MyTrain.vue'
 import PasswordMeter from '../components/PasswordMeter.vue'
 import Avatar from '../components/Avatar.vue'
 import { AVATARS, avatarOf } from '../avatars'
 import { avatars, buyAvatar, changePseudo, pseudoPrompt, loadAvatars, selectAvatar, user, logout, deleteAccount, notice, resetToken, changeEmail, changePassword, forgotPassword, estimateBits, MIN_BITS, setLeaderboard, fetchExport, importFile } from '../auth'
 
 const go = inject<(view: string) => void>('go', () => undefined)
+const openMachine = inject<() => void>('openMachine', () => undefined)
 
 // Suppression du compte : le mot de passe est redemandé, puis tout est effacé côté serveur.
 const confirming = ref(false)
@@ -231,7 +233,10 @@ function cancel(): void {
 
 <template>
   <section data-test="account">
-    <AuthPanel v-if="!user || resetToken" />
+    <template v-if="!user || resetToken">
+      <AuthPanel />
+      <MyTrain v-if="!resetToken" @machine="openMachine()" />
+    </template>
     <div v-else class="me">
       <!-- profil -->
       <div class="card profile">
@@ -299,6 +304,8 @@ function cancel(): void {
           </footer>
         </section>
       </div>
+
+      <MyTrain @machine="openMachine()" />
 
       <section class="card" data-test="email-block">
         <h3>Adresse e-mail</h3>

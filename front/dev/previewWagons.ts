@@ -1,10 +1,13 @@
 // Les 12 wagons de la collection rendus avec le modèle 3D du jeu (outil de développement, jamais publié).
-// ?cols=6 : nombre de colonnes de la planche.
+// ?cols=4 : nombre de colonnes ; ?family=base|fret : une seule famille ; ?only=sable,ambre : seulement ces wagons.
 import * as THREE from 'three'
 import { WAGON_STYLES } from '../src/trainStyle'
 import { makeCar, makeWagon } from '../src/scenery3d/trainModel'
 
-const cols = Number(new URLSearchParams(location.search).get('cols') ?? 4)
+const q = new URLSearchParams(location.search)
+const cols = Number(q.get('cols') ?? 4)
+const only = q.get('only')?.split(',')
+const STYLES = WAGON_STYLES.filter((w) => (!q.get('family') || w.family === q.get('family')) && (!only || only.includes(w.id)))
 document.body.style.cssText = 'margin:0;overflow:hidden;background:linear-gradient(#a5d8ff,#e7f5ff);font-family:system-ui,sans-serif'
 const canvas = document.createElement('canvas')
 canvas.style.cssText = 'display:block;width:100vw;height:100vh'
@@ -22,9 +25,9 @@ sun.shadow.mapSize.set(2048, 2048)
 Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6 })
 scene.add(sun)
 
-const rows = Math.ceil(WAGON_STYLES.length / cols)
-const GAP_X = 1.25, GAP_Z = 2.1
-const all = [{ g: makeCar(0), name: 'Locomotive', sub: '' }, ...WAGON_STYLES.map((w) => ({ g: makeWagon(w), name: w.name, sub: w.kindName }))]
+const rows = Math.ceil(STYLES.length / cols)
+const GAP_X = Math.max(...STYLES.map((w) => w.length)) * 0.62 + 0.65, GAP_Z = 2.1
+const all = [{ g: makeCar(0), name: 'Locomotive', sub: '' }, ...STYLES.map((w) => ({ g: makeWagon(w), name: w.name, sub: w.kindName, len: w.length }))]
 const labels: { el: HTMLDivElement; p: THREE.Vector3 }[] = []
 all.forEach((it, k) => {
   const idx = k === 0 ? -1 : k - 1
@@ -34,7 +37,7 @@ all.forEach((it, k) => {
   it.g.position.set(x, 0, z)
   it.g.rotation.y = -0.5
   scene.add(it.g)
-  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.03, 40), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9 }))
+  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.03, 40).scale(Math.max(1, (it as { len?: number }).len ?? 1), 1, 1), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9 }))
   plate.position.set(x, -0.015, z)
   plate.receiveShadow = true
   scene.add(plate)
@@ -45,8 +48,8 @@ all.forEach((it, k) => {
   labels.push({ el, p: new THREE.Vector3(x, 0, z + 0.42) })
 })
 // vue orthographique un peu plongeante : tous les wagons à la même taille, rangées bien séparées
-const half = ((rows * GAP_Z) / 2) * 0.86 + 0.2
 const aspect = innerWidth / innerHeight
+const half = Math.max(((rows * GAP_Z) / 2) * 0.86 + 0.2, (Math.min(cols, STYLES.length) * GAP_X) / 2 / aspect + 0.1)
 const cam = new THREE.OrthographicCamera(-half * aspect, half * aspect, half, -half, 0.1, 100)
 cam.position.set(0, 4, 6)
 cam.lookAt(0, 0.15, 0.3)
