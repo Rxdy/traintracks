@@ -27,6 +27,7 @@ import Scenery3D from './Scenery3D.vue'
 import { webglAvailable } from '../decor'
 import SceneryLife from './SceneryLife.vue'
 import { sound, soundOn } from '../sound/director'
+import { setWheelGuard } from '../noZoom'
 import TrackCell from './TrackCell.vue'
 import ClueNumber from './ClueNumber.vue'
 import SpeedControl, { type Speed } from './SpeedControl.vue'
@@ -142,6 +143,9 @@ import { speed } from '../speedPref' // le choix est gardé d'un niveau à l'aut
 const SPEEDS: Record<Speed, number> = { slow: 1.2, normal: 1.9, fast: 4.5 }
 // Sons : la fin du trajet laisse la place au décor ; la barrière du passage à niveau a ses propres sons.
 watch(trainDone, (v) => v && sound.trainEnd())
+// Trajet : plus d'écouteur de molette, sinon Firefox fige l'animation quand on défile au pavé tactile (voir noZoom.ts)
+watch(solved, (v) => setWheelGuard(!v))
+onUnmounted(() => setWheelGuard(true))
 function onTrainProgress(s: number): void {
   trainS.value = s
 }
