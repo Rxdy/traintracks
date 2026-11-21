@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RotateHint from './components/RotateHint.vue'
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import TutorialView from './views/TutorialView.vue'
 import DailyView from './views/DailyView.vue'
@@ -61,6 +62,7 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
 <template>
   <div class="app" :class="{ immersive: playing, landscape: scenery }">
     <LandscapeBg v-if="scenery" :theme="homeTheme" />
+    <RotateHint />
 
     <header v-if="!playing" class="header">
       <div class="left">
