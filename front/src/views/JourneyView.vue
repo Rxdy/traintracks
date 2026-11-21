@@ -62,6 +62,7 @@ const resume = ref<Pick<StartedLevel, 'reveals' | 'crosses'>>({ reveals: [], cro
 const grid = ref<InstanceType<typeof TrackGrid> | null>(null)
 const aidBar = ref<InstanceType<typeof AidBar> | null>(null)
 const picking = ref(false)
+const forcedAid = ref(false) // niveau de déblocage d'un pouvoir : la grille attend que le joueur essaie le pouvoir offert
 const trainRunning = ref(false) // le train roule (la fenêtre de fin attend qu'il soit arrivé)
 const storeDown = computed(() => levelFinished.value && !trainRunning.value) // la fenêtre de fin s'ouvre sur le récapitulatif
 const fmt = (ms: number): string => {
@@ -122,10 +123,22 @@ async function play(): Promise<void> {
 }
 
 // Le serveur vérifie le tracé : seule sa réponse « juste » donne la victoire et débloque la suite.
-async function validate(_ms: number, edges: string[]): Promise<boolean> {
-  if (!current.value) return false
-  const r = await submitLevel(current.value.id, edges)
-  if (!r.ok) return false
+// Refus : un message qui dit la vraie raison (rien n'est perdu, le tracé reste sur la grille).
+// La partie n'est plus ouverte côté serveur (session renouvelée, autre onglet) : on la rouvre, puis on renvoie le même tracé une fois.
+async function validate(_ms: number, edges: string[]): Promise<true | string> {
+  if (!current.value) return 'Niveau introuvable : recharge la page.'
+  const id = current.value.id
+  let r = await submitLevel(id, edges)
+  if (!r.ok && r.reason === 'not_started') {
+    const again = await startLevel()
+    if (again && 'level' in again && again.level.id === id) r = await submitLevel(id, edges)
+  }
+  if (!r.ok) {
+    if (r.reason === 'network') return 'Serveur injoignable : vérifie ta connexion, puis réessaie.'
+    if (r.reason === 'wrong') return "Le serveur n'a pas reconnu ce tracé comme une solution."
+    if (r.reason === 'server') return 'Le serveur a eu un souci. Réessaie dans un instant.'
+    return "Ce niveau n'est plus celui en cours (joué sur un autre appareil ou un autre onglet ?). Recharge la page."
+  }
   status.value = r.next
   setCoins(r.coins) // les pièces gagnées, d'après le serveur
   earned.value = r.earned
@@ -212,6 +225,7 @@ function quit(): void {
             :official-ms="officialMs"
             :theme="themeForLevel(current.id)"
             :picking="picking"
+            :locked="forcedAid"
             :color-hints="colorHints"
             @begin="beginLevel()"
             @solved="won = true"
@@ -232,6 +246,7 @@ function quit(): void {
               @reveal="(g, c) => grid?.reveal(g, c)"
               @colors="colorHints = true"
               @picking="picking = $event"
+              @forced="forcedAid = $event"
             />
           </div>
         </div>

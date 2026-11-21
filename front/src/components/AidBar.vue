@@ -12,6 +12,7 @@ const emit = defineEmits<{
   (e: 'reveal', givens: Given[], crosses: { row: number; col: number }[]): void
   (e: 'picking', value: boolean): void
   (e: 'colors'): void // les indicateurs de couleur sont activés sur ce niveau
+  (e: 'forced', value: boolean): void // vrai tant que le joueur doit essayer le pouvoir offert avant de jouer
 }>()
 
 const LABEL: Record<AidId, string> = { colors: 'Couleurs', cell: 'Une case', cannon: 'Canon', line: 'Une ligne' }
@@ -31,6 +32,11 @@ const slots = computed(() => aids.value)
 // Le niveau où un pouvoir se débloque : on le présente (ce qu'il fait, et l'essai offert), une seule fois par niveau.
 const dismissed = ref(false)
 const fresh = computed(() => (props.level ? slots.value.find((a) => a.unlocked && a.unlockLevel === props.level) : undefined))
+// Niveau de déblocage : tant que l'essai offert n'a pas servi, le joueur ne peut que l'essayer (la grille refuse les tracés).
+// C'est le tutoriel du pouvoir : il apprend à s'en servir en le faisant.
+const forced = computed(() => !!fresh.value && fresh.value.demoPending && !fresh.value.usedThisLevel)
+watch(forced, (v) => emit('forced', v), { immediate: true })
+onBeforeUnmount(() => emit('forced', false))
 const mode = ref<{ aid: AidInfo; step: 'buy' | 'pick' | 'line' } | null>(null)
 const message = ref('')
 // Le message s'efface tout seul (4 s) ou au toucher : il ne doit jamais rester sur l'écran de jeu.
@@ -56,6 +62,10 @@ function choose(a: AidInfo): void {
   }
   if (mode.value?.aid.id === a.id) return cancel()
   cancel()
+  if (forced.value && a.id !== fresh.value!.id) {
+    message.value = `Essaie d'abord ton nouveau pouvoir : ${LABEL[fresh.value!.id]}.`
+    return
+  }
   if (a.usedThisLevel) {
     message.value = 'Déjà utilisée sur ce niveau.'
     return
@@ -137,7 +147,7 @@ defineExpose({ onPick })
         :key="a.id"
         type="button"
         class="aid"
-        :class="{ locked: !a.unlocked, demo: a.unlocked && a.demoPending && !a.usedThisLevel, empty: a.unlocked && count(a) === 0, used: a.usedThisLevel, active: mode?.aid.id === a.id, fresh: a.unlocked && a.unlockLevel === props.level && !dismissed }"
+        :class="{ locked: !a.unlocked, demo: a.unlocked && a.demoPending && !a.usedThisLevel, empty: a.unlocked && count(a) === 0, used: a.usedThisLevel, active: mode?.aid.id === a.id, fresh: a.unlocked && a.unlockLevel === props.level && !dismissed, pulse: forced && a.id === fresh?.id }"
         :data-test="'aid-' + a.id"
         :disabled="busy"
         :title="a.unlocked ? LABEL[a.id] + ' : ' + HELP[a.id] : 'Emplacement vide : se débloque au niveau ' + a.unlockLevel"
@@ -155,13 +165,14 @@ defineExpose({ onPick })
       </button>
     </div>
 
-    <div v-if="fresh && !dismissed" class="fresh" data-test="aid-new" role="status">
+    <div v-if="fresh && (forced || !dismissed)" class="fresh" data-test="aid-new" role="status">
       <span class="icon"><AidIcon :name="fresh.id" /></span>
       <div class="txt">
         <strong>Nouveau pouvoir : {{ LABEL[fresh.id] }}</strong>
-        <span>{{ HELP[fresh.id] }} Tu en as {{ count(fresh) }} pour commencer (le bouton avec son compteur) ; une fois épuisées, tu peux en racheter avec tes pièces.</span>
+        <span v-if="forced" data-test="aid-try">{{ HELP[fresh.id] }} Essaie-le maintenant, celui-ci est offert : touche le bouton qui clignote. La grille se débloque ensuite.</span>
+        <span v-else>{{ HELP[fresh.id] }} Il t'en reste {{ count(fresh) }} ; une fois épuisés, tu peux en racheter avec tes pièces.</span>
       </div>
-      <button type="button" class="btn btn--ghost btn--small" data-test="aid-new-ok" @click="dismissed = true">OK</button>
+      <button v-if="!forced" type="button" class="btn btn--ghost btn--small" data-test="aid-new-ok" @click="dismissed = true">OK</button>
     </div>
   </div>
 </template>
@@ -275,6 +286,21 @@ defineExpose({ onPick })
 .aid.locked .icon {
   width: 1.3rem;
   height: 1.3rem;
+}
+.aid.pulse {
+  animation: aid-pulse 1.1s ease-in-out infinite;
+}
+@keyframes aid-pulse {
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 0.35rem rgba(37, 99, 235, 0.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aid.pulse {
+    animation: none;
+    box-shadow: 0 0 0 0.3rem rgba(37, 99, 235, 0.45);
+  }
 }
 .aid.used {
   opacity: 0.45;

@@ -47,18 +47,32 @@ describe('pièces affichées', () => {
 })
 
 describe('présentation d\'un pouvoir qui vient de se débloquer', () => {
-  it('au niveau du déblocage, un encadré explique le pouvoir ; on peut le fermer ; ailleurs il n\'apparaît pas', async () => {
+  it('au niveau du déblocage, tant que l\'essai offert n\'a pas servi : encadré sans bouton OK, bouton qui clignote, grille bloquée', async () => {
     aids.value = [aid('colors', { unlockLevel: 20, demoPending: true }), aid('cell', { unlockLevel: 50, unlocked: false })]
     const w = bar({ level: 20 })
     const box = w.find('[data-test=aid-new]')
     expect(box.exists()).toBe(true)
     expect(box.text()).toContain('Nouveau pouvoir : Couleurs')
-    expect(box.text()).toContain('4 pour commencer')
-    expect(w.find('[data-test=aid-colors]').classes()).toContain('fresh')
+    expect(w.find('[data-test=aid-try]').exists()).toBe(true) // « essaie-le maintenant »
+    expect(w.find('[data-test=aid-new-ok]').exists()).toBe(false) // on ne peut pas l'écarter avant d'avoir essayé
+    expect(w.find('[data-test=aid-colors]').classes()).toEqual(expect.arrayContaining(['fresh', 'pulse']))
+    expect(w.emitted('forced')?.at(-1)).toEqual([true]) // la grille refuse les tracés
+  })
+  it('après l\'essai : la grille se débloque, l\'encadré se ferme avec OK ; ailleurs il n\'apparaît pas', async () => {
+    aids.value = [aid('colors', { unlockLevel: 20, demoPending: false, usedThisLevel: true }), aid('cell', { unlockLevel: 50, unlocked: false })]
+    const w = bar({ level: 20 })
+    expect(w.emitted('forced')?.at(-1)).toEqual([false])
+    expect(w.find('[data-test=aid-colors]').classes()).not.toContain('pulse')
     await w.find('[data-test=aid-new-ok]').trigger('click')
     expect(w.find('[data-test=aid-new]').exists()).toBe(false)
     expect(bar({ level: 21 }).find('[data-test=aid-new]').exists()).toBe(false)
     expect(bar().find('[data-test=aid-new]').exists()).toBe(false)
+  })
+  it('pendant l\'essai obligatoire, un autre pouvoir renvoie vers le nouveau', async () => {
+    aids.value = [aid('colors', { stock: 3 }), aid('cell', { unlockLevel: 50, demoPending: true })]
+    const w = bar({ level: 50 })
+    await w.find('[data-test=aid-colors]').trigger('click')
+    expect(w.find('[data-test=aid-message]').text()).toContain('Essaie d\'abord ton nouveau pouvoir : Une case')
   })
 })
 

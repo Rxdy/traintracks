@@ -225,8 +225,9 @@ export function groundSvg(sc: Scenery, route: Route | null, pal: Pal): string {
       s += `<path d="M${pts.join(' L')}" fill="none" stroke="${pal.rail.rail}" stroke-width="6" stroke-linejoin="round"/>`
     }
   }
-  // rails des prolongements, à plat (même géométrie que les rails de la grille, qui eux restent dessinés par la grille)
-  for (const e of sc.ext) {
+  // rails des prolongements, à plat (même géométrie que les rails de la grille, qui eux restent dessinés par la grille).
+  // Avec la voie entière (ci-dessus), ils y sont déjà : les repeindre doublait les traverses (décalées, donc deux fois plus serrées).
+  for (const e of route ? [] : sc.ext) {
     const [p, q] = e
     const horiz = Math.abs(p.y - q.y) < 1e-9
     const lo = horiz ? Math.min(p.x, q.x) : Math.min(p.y, q.y)
