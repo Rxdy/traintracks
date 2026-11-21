@@ -142,7 +142,7 @@ let trainTimer = 0
 const trainDone = ref(false)
 // Vitesse du train (cases/s) : trois crans en haut à droite (lent, normal, rapide). Normal par défaut ; le choix reste d'un trajet à l'autre.
 import { speed } from '../speedPref' // le choix est gardé d'un niveau à l'autre
-const SPEEDS: Record<Speed, number> = { slow: 1.2, normal: 1.9, fast: 4.5 }
+const SPEEDS: Record<Speed, number> = { slow: 1.9, normal: 4.5, fast: 9 } // cases par seconde en ligne droite
 // Sons : la fin du trajet laisse la place au décor ; la barrière du passage à niveau a ses propres sons.
 watch(trainDone, (v) => v && sound.trainEnd())
 // Trajet : plus d'écouteur de molette, sinon Firefox fige l'animation quand on défile au pavé tactile (voir noZoom.ts)
