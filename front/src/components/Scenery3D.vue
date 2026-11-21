@@ -42,13 +42,19 @@ onMounted(async () => {
     }
     r.fit(onSize)
     // le train, en 3D (même modèle que les icônes) : posé sur la voie à chaque image d'après la position de la locomotive
-    const { makeCar } = await import('../scenery3d/trainModel')
+    const { makeCar, makeSteam, CHIMNEY } = await import('../scenery3d/trainModel')
     if (gone) return releaseWorld(sc)
     const train = new THREE.Group()
     const cars = Array.from({ length: WAGONS + 1 }, (_, i) => makeCar(i))
     cars.forEach((c) => train.add(c))
     train.visible = false
     const unTrain = world.add(train)
+    // fumée de la locomotive (rien si le joueur a demandé moins d'animations)
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    const steam = makeSteam()
+    const unSteam = world.add(steam.group)
+    const chimney = new THREE.Vector3()
+    let lastS = -1
     const placeTrain = () => {
       const tr = props.train
       train.visible = !!tr && tr.s >= 0
@@ -59,14 +65,22 @@ onMounted(async () => {
         car.rotation.y = (-p.angle * Math.PI) / 180
       })
     }
-    const remove = world.addView(() => {
+    const remove = world.addView((_t, dt) => {
       r.check(onSize)
       placeTrain()
+      const s = props.train?.s ?? -1
+      const rolling = train.visible && s !== lastS && !still
+      lastS = s
+      // dans le repère du monde (avant la vue cavalière, que le monde applique lui-même à la fumée)
+      cars[0]!.updateMatrix()
+      steam.update(dt, chimney.copy(CHIMNEY).applyMatrix4(cars[0]!.matrix), rolling)
       r.draw(world.scene, top)
     })
     stop = () => {
       remove()
       unTrain()
+      unSteam()
+      steam.dispose()
       train.traverse((o) => {
         const m = o as InstanceType<typeof THREE.Mesh>
         if (!m.isMesh) return

@@ -46,6 +46,8 @@ const props = defineProps<{
   validate?: (ms: number, edges: string[]) => Promise<boolean>
   // Vrai : le récapitulatif de victoire n'est pas dessiné ici, l'écran de jeu l'affiche ailleurs (store de la cabine).
   externalRecap?: boolean
+  // Barre du haut de la page : où poser le minuteur et le bouton du son (sélecteurs CSS). Absente : ils restent à côté des outils.
+  hud?: { timer: string; sound: string }
 }>()
 const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void; (e: 'train', running: boolean): void }>()
 
@@ -144,14 +146,6 @@ const trainClip = computed(() => {
   const sc = scenery.value
   if (!sc) return undefined
   const r = { x: -sc.margin.x, y: -sc.margin.y, w: sc.cols, h: sc.frame.visibleRows }
-  // Le train sort d'un tunnel et entre dans un autre : il est coupé au plan de leur entrée, pas au bord du décor.
-  for (const [tn, dir] of [[sc.tunnels.entry, puz.value.entry.dir], [sc.tunnels.exit, puz.value.exit.dir]] as const) {
-    if (!tn) continue
-    if (dir === 'left') { r.x += tn.inset; r.w -= tn.inset }
-    else if (dir === 'right') r.w -= tn.inset
-    else if (dir === 'up') { r.y += tn.inset; r.h -= tn.inset }
-    else r.h -= tn.inset
-  }
   return r
 })
 
@@ -243,7 +237,7 @@ function boardRect(): DOMRect | undefined {
 }
 const isLandscape = (): boolean => window.innerWidth >= window.innerHeight
 let sceneLandscape = isLandscape() // forme d'écran pour laquelle le décor a été généré
-function sceneryMargins(): { x: number; y: number; top?: number; below?: number; dy?: number; view?: { left: number; right: number; up: number; down: number } } {
+function sceneryMargins(): { x: number; y: number; top?: number; below?: number; dy?: number } {
   const n = puz.value.size
   const y = sceneryMargin(n)
   const rect = boardRect()
@@ -266,15 +260,7 @@ function sceneryMargins(): { x: number; y: number; top?: number; below?: number;
   // réglages flottent par-dessus) et descend jusqu'en bas (la cabine, en fenêtre, se pose par-dessus).
   const top = Math.max(0, decorTop / unit + 0.05)
   const below = Math.max(0, (window.innerHeight - decorBottom) / unit + 0.05)
-  // Ce qui est visible à l'écran autour de la grille rétrécie (en cases du décor) : les tunnels se posent dans l'écran.
-  const half = (n / 2) * unit
-  const view = {
-    left: (cx - half) / unit,
-    right: (window.innerWidth - (cx + half)) / unit,
-    up: (oy - half) / unit,
-    down: (window.innerHeight - (oy + half)) / unit,
-  }
-  return { x, y, top, below, dy, view }
+  return { x, y, top, below, dy }
 }
 function buildDecor(path: [number, number][]): void {
   decorReady.value = false
@@ -612,15 +598,20 @@ onMounted(() => {
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
         </button>
       </template>
-      <!-- fin de partie : les outils de tracé partent ; la vitesse du train est en haut à droite, « Revoir le trajet » dans la fenêtre de fin -->
-      <button type="button" class="btn btn--ghost tool sound" data-test="sound" :aria-pressed="soundOn" :aria-label="soundOn ? 'Couper le son' : 'Activer le son'" :title="soundOn ? 'Couper le son' : 'Activer le son'" @click="sound.setOn(!soundOn)">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 9v6h4l5 4V5L8 9z" />
-          <path v-if="soundOn" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" />
-          <path v-else d="m17 9 4 6M21 9l-4 6" />
-        </svg>
-      </button>
-      <span v-if="!solved" class="timer" data-test="timer">⏱ {{ fmt(elapsed) }}</span>
+      <!-- Minuteur et son : dans la barre du haut de l'écran quand la page en prévoit une (`hud`), séparés des outils de tracé ;
+           sinon ici, à la suite des outils. Fin de partie : la vitesse et le son passent en haut à droite (voir plus bas). -->
+      <Teleport :to="hud?.timer" :disabled="!hud" defer>
+        <span v-if="!solved" class="timer" data-test="timer">⏱ {{ fmt(elapsed) }}</span>
+      </Teleport>
+      <Teleport :to="hud?.sound" :disabled="!hud" defer>
+        <button v-if="!solved || !hud" type="button" class="btn btn--ghost tool sound" data-test="sound" :aria-pressed="soundOn" :aria-label="soundOn ? 'Couper le son' : 'Activer le son'" :title="soundOn ? 'Couper le son' : 'Activer le son'" @click="sound.setOn(!soundOn)">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9v6h4l5 4V5L8 9z" />
+            <path v-if="soundOn" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" />
+            <path v-else d="m17 9 4 6M21 9l-4 6" />
+          </svg>
+        </button>
+      </Teleport>
     </div>
 
     <SpeedControl v-if="solved" v-model="speed" />
@@ -687,8 +678,6 @@ onMounted(() => {
       <TrainRun v-if="route" :ghost="train3d" :route="route" :size="puzzle.size" :clip="trainClip" :speed="SPEEDS[speed]" @progress="onTrainProgress" @done="trainDone = true" />
     </div>
 
-    <!-- Trajet : les bords de l'écran s'assombrissent, comme les parois d'un tunnel -->
-    <div v-if="scenery" class="tunnel-shade" aria-hidden="true"></div>
 
     <!-- La victoire s'affiche par-dessus le décor (position absolue) : elle ne pousse rien. -->
     <div class="win-zone win-zone--compact" :class="{ on: solved }">
@@ -793,6 +782,8 @@ onMounted(() => {
 }
 .timer {
   align-self: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
   padding: 0.25rem 0.7rem;
   border: 2px solid #fff;
   border-radius: 999px;
@@ -965,7 +956,7 @@ onMounted(() => {
   /* Taille du Plateau : la grille (compteurs compris) prend presque tout l'écran, ni cabine ni paysage autour. Portrait : limitée par la
      largeur, et par la hauteur moins la barre du haut, les outils et les bonus. Paysage : limitée par la hauteur, les bonus sont à droite. */
   --shift: calc(-100% / (var(--size) + 1) / 2);
-  --w: min(calc((100vw - 1rem) * (var(--size) + 1) / (var(--size) + 2)), calc(100dvh - 17rem), 780px);
+  --w: min(calc((100vw - 1rem) * (var(--size) + 1) / (var(--size) + 2)), calc(100dvh - 18.5rem), 780px);
   width: var(--w);
   aspect-ratio: 1;
   /* Les compteurs sont à gauche et en haut : on décale VERS LA GAUCHE d'une demi-colonne pour
@@ -1011,25 +1002,6 @@ onMounted(() => {
   }
   .win-zone {
     min-height: 0;
-  }
-}
-/* Trajet : des bords sombres, comme si on regardait depuis un tunnel (le train sort de l'ombre au départ et y rentre à l'arrivée). */
-.tunnel-shade {
-  position: fixed;
-  inset: 0;
-  z-index: 5;
-  pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 58%, rgba(8, 12, 20, 0.5) 100%);
-  animation: shade-in 1.6s ease both;
-}
-@keyframes shade-in {
-  from {
-    opacity: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .tunnel-shade {
-    animation: none;
   }
 }
 </style>

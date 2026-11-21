@@ -1,5 +1,5 @@
 // Apparition du décor : le paysage est déjà calculé (pendant l'écran de chargement) ; le sol est là tout de suite, et chaque élément
-// (arbre, maison, montagne, animal, voiture, tunnel…) surgit à un moment tiré au hasard, sans ordre précis. Puis le train s'élance.
+// (arbre, maison, montagne, animal, voiture…) surgit à un moment tiré au hasard, sans ordre précis. Puis le train s'élance.
 // Le tirage dépend de la graine du décor et de la case : le même décor apparaît toujours de la même façon (3D, dessin à plat, vie).
 export const REVEAL = { start: 300, spread: 1500 } // ms : premier élément, puis tous les autres dans cette fenêtre
 

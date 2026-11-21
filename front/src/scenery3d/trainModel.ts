@@ -69,3 +69,60 @@ export function makeSmoke(): THREE.Group {
   })
   return g
 }
+
+/** Fumée de la locomotive pendant le trajet : des bouffées sortent de la cheminée, montent, grossissent, traînent en arrière et
+ *  s'effacent. Un petit lot de boules réutilisées (rien n'est créé pendant la marche). `update` à chaque image, avec la cheminée
+ *  en coordonnées du monde ; `on` faux : plus de nouvelles bouffées, les dernières finissent de se dissiper. */
+export function makeSteam(): { group: THREE.Group; update(dt: number, from: THREE.Vector3, on: boolean): void; dispose(): void } {
+  const group = new THREE.Group()
+  const geo = new THREE.SphereGeometry(1, 14, 10)
+  const LIFE = 1.5 // s
+  const EVERY = 0.16 // s entre deux bouffées
+  const puffs = Array.from({ length: Math.ceil(LIFE / EVERY) + 1 }, () => {
+    const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, transparent: true, opacity: 0, depthWrite: false })
+    const m = new THREE.Mesh(geo, mat)
+    m.visible = false
+    group.add(m)
+    return { m, mat, age: LIFE, drift: new THREE.Vector3() }
+  })
+  const last = new THREE.Vector3()
+  let wait = 0
+  let next = 0
+  let seed = 1
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  return {
+    group,
+    update(dt, from, on) {
+      // le train avance : la fumée part vers l'arrière (sens inverse de la marche), un peu au hasard
+      const back = from.clone().sub(last)
+      const moving = back.lengthSq() > 1e-8 && back.lengthSq() < 1
+      last.copy(from)
+      wait -= dt
+      if (on && wait <= 0) {
+        wait = EVERY
+        const p = puffs[next++ % puffs.length]!
+        p.age = 0
+        p.m.position.copy(from)
+        p.drift.set((rnd() - 0.5) * 0.12, 0.42 + rnd() * 0.12, (rnd() - 0.5) * 0.12)
+        if (moving && dt > 0) p.drift.addScaledVector(back.normalize(), -0.25)
+        p.m.visible = true
+      }
+      for (const p of puffs) {
+        if (p.age >= LIFE) continue
+        p.age += dt
+        const u = Math.min(1, p.age / LIFE)
+        p.m.position.addScaledVector(p.drift, dt)
+        p.m.scale.setScalar(0.06 + 0.19 * Math.sqrt(u))
+        p.mat.opacity = 0.92 * (1 - u * u) * Math.min(1, p.age / 0.12)
+        if (p.age >= LIFE) p.m.visible = false
+      }
+    },
+    dispose() {
+      geo.dispose()
+      puffs.forEach((p) => p.mat.dispose())
+    },
+  }
+}
+
+/** Haut de la cheminée de la locomotive, dans son repère (voir makeCar). */
+export const CHIMNEY = new THREE.Vector3(0.17, 0.56, 0)

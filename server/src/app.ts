@@ -112,7 +112,8 @@ export function buildApp(opts: AppOptions): FastifyInstance {
       await mergeAnonymous(opts.db, anon, r.user.id)
       reply.clearCookie(ANON, { path: '/' })
     }
-    return reply.redirect(`${opts.appUrl}/`)
+    // Compte tout juste créé par Google : il a reçu un pseudo tiré au hasard, le site lui propose aussitôt d'en choisir un.
+    return reply.redirect(`${opts.appUrl}/${r.created ? '?bienvenue=1' : ''}`)
   })
 
   // Mot de passe oublié : la réponse est la même que l'adresse ait un compte ou non.

@@ -47,6 +47,15 @@ export async function loadProviders(): Promise<void> {
   googleEnabled.value = r?.status === 200 && r.data.google === true
 }
 
+// Premier passage par Google : le compte vient d'être créé avec un pseudo tiré au hasard (?bienvenue=1) ; l'écran Compte
+// s'ouvre avec le champ du pseudo, pour que le joueur choisisse le sien.
+export const pseudoPrompt = ref(false)
+export function welcomeFromUrl(search = window.location.search): void {
+  if (new URLSearchParams(search).get('bienvenue') !== '1') return
+  pseudoPrompt.value = true
+  history.replaceState(null, '', window.location.pathname)
+}
+
 // Retour de Google en échec : le serveur revient sur le site avec ?auth_error=… (jamais de détail technique).
 export function authErrorFromUrl(search = window.location.search): void {
   const code = new URLSearchParams(search).get('auth_error')

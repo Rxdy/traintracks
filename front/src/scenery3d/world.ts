@@ -8,7 +8,6 @@
 // en volumes, avec des textures générées par le code (écorce, tuiles, pierre, bois, façades). Aucune image à charger.
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { PAL, rng, type Scenery, type Tile } from '../scenery'
 import { riverD, sample } from '../scenery/motion'
 import type { Pal } from '../scenery/themes'
@@ -725,40 +724,6 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     for (const x of [-0.375, -0.125, 0.125, 0.375]) kit.mesh(kit.geo('bridge-tie', () => new THREE.BoxGeometry(0.07, 0.01, 0.4)), kit.mat(pal.rail.tie, texs.wood), x, 0.005, 0, g)
     for (const z of [-0.12, 0.12]) kit.mesh(kit.geo('bridge-rail', () => new THREE.BoxGeometry(1, 0.012, 0.06)), kit.mat(pal.rail.rail, null, { metalness: 0.6, roughness: 0.35, flatShading: false }), 0, 0.016, z, g)
     bridgeRails.add(g)
-  }
-  // tunnels au bout de la voie : une montagne percée (deux murs et un toit), sombre à l'intérieur. Local : +x vers l'extérieur de la grille.
-  const tunnelDark = new THREE.MeshBasicMaterial({ color: '#07090d', side: THREE.BackSide })
-  const floorMat = new THREE.MeshBasicMaterial({ color: '#0b0e13' })
-  disposables.push(tunnelDark, floorMat)
-  for (const tn of [sc.tunnels?.entry, sc.tunnels?.exit]) {
-    if (!tn) continue
-    const tg = new THREE.Group()
-    tg.position.set(tn.x, 0, tn.y)
-    tg.rotation.y = Math.atan2(-tn.out.y, tn.out.x)
-    const Lx = tn.inset + 6
-    // la montagne percée se fond dans le paysage : plus étroite et moins haute qu'avant, toit arrondi, roche teintée de la couleur du sol
-    const rockCol = new THREE.Color(pal.rock[1]).lerp(new THREE.Color(pal.b), 0.12)
-    const rock = kit.mat('#' + rockCol.getHexString(), texs.stone)
-    const slab = (w: number, h: number, d: number, x: number, y: number, z: number, round = 0) => {
-      const geo = round ? new RoundedBoxGeometry(w, h, d, 4, round) : new THREE.BoxGeometry(w, h, d)
-      disposables.push(geo)
-      kit.mesh(geo, rock, x, y, z, tg)
-      const inner = new THREE.Mesh(geo, tunnelDark)
-      inner.position.set(x, y, z)
-      tg.add(inner)
-    }
-    slab(Lx, 0.66, 0.48, Lx / 2, 0.33, -0.52) // mur gauche
-    slab(Lx, 0.66, 0.48, Lx / 2, 0.33, 0.52) // mur droit
-    slab(Lx, 0.26, 1.5, Lx / 2, 0.73, 0, 0.12) // toit arrondi (juste au-dessus de l'ouverture)
-    const back = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.62, 0.62), tunnelDark)
-    back.position.set(Lx, 0.31, 0)
-    tg.add(back)
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(Lx, 0.62), floorMat)
-    floor.rotation.x = -Math.PI / 2
-    floor.position.set(Lx / 2, 0.004, 0)
-    tg.add(floor)
-    world.add(tg)
-
   }
 
   // objets debout, qui poussent l'un après l'autre (même rythme que le décor SVG)

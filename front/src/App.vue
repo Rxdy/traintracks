@@ -10,7 +10,7 @@ import LegalView from './views/LegalView.vue'
 import LandscapeBg from './components/LandscapeBg.vue'
 import InstallButton from './components/InstallButton.vue'
 import CoinBadge from './components/CoinBadge.vue'
-import { notice, resetToken } from './auth'
+import { notice, pseudoPrompt, resetToken } from './auth'
 import { homeTheme } from './journey'
 import { sound, soundOn, suspend, unlock } from './sound/director'
 
@@ -55,6 +55,7 @@ function go(v: string): void {
 provide('go', go) // les écrans (inscription, compte) renvoient vers les mentions légales
 // Lien « mot de passe oublié » ouvert depuis l'e-mail : on arrive sur l'écran Compte.
 watch(resetToken, (t) => t && go('account'), { immediate: true })
+watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
 </script>
 
 <template>
