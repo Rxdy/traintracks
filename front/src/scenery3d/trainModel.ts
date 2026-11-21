@@ -3,15 +3,22 @@
 // Couleurs et écart entre wagons : src/trainStyle.ts. Le train avance vers +x ; pieds sur y = 0.
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
-import { LOCO_COLOR, wagonColor } from '../trainStyle'
+import { LOCO_COLOR, starterStyle, type WagonStyle } from '../trainStyle'
 
 const lighter = (c: string, a: number): string => '#' + new THREE.Color(c).lerp(new THREE.Color('#ffffff'), a).getHexString()
 const darker = (c: string, a: number): string => '#' + new THREE.Color(c).lerp(new THREE.Color('#000000'), a).getHexString()
 
-/** La voiture n° i : 0 = locomotive, 1.. = wagons (caisses, fenêtres, charbon). */
+/** La voiture n° i du train de départ : 0 = locomotive, 1.. = wagons (caisses, fenêtres, charbon). */
 export function makeCar(i: number): THREE.Group {
+  return i === 0 ? build(null) : build(starterStyle(i))
+}
+/** Un wagon de la collection : coloris et accessoire. */
+export const makeWagon = (style: WagonStyle): THREE.Group => build(style)
+
+function build(style: WagonStyle | null): THREE.Group {
   const g = new THREE.Group()
-  const c = i === 0 ? LOCO_COLOR : wagonColor(i)
+  const i = style ? 1 : 0
+  const c = style ? style.color : LOCO_COLOR
   const glossy = (col: string) => new THREE.MeshPhysicalMaterial({ color: col, roughness: 0.38, clearcoat: 0.8, clearcoatRoughness: 0.15 })
   const gold = new THREE.MeshPhysicalMaterial({ color: '#fbbf24', roughness: 0.25, metalness: 0.6, clearcoat: 0.6 })
   const glass = new THREE.MeshPhysicalMaterial({ color: '#bfe3fa', roughness: 0.1, clearcoat: 1 })
@@ -46,11 +53,7 @@ export function makeCar(i: number): THREE.Group {
     add(box(0.52, 0.24, 0.34, 0.07), glossy(c), 0, 0.26, 0)
     add(box(0.53, 0.035, 0.345, 0.012), gold, 0, 0.3, 0) // liseré doré
     add(box(0.5, 0.05, 0.32, 0.025), glossy(lighter(c, 0.3)), 0, 0.4, 0) // toit
-    // chargement ou fenêtres selon le wagon (même suite que le train vu du dessus : TrainCar.vue)
-    const kind = (i - 1) % 3
-    if (kind === 0) for (const [x, z] of [[-0.12, -0.06], [0.1, 0.05], [-0.02, 0.07]]) add(box(0.14, 0.1, 0.14, 0.02), glossy('#a16207'), x!, 0.47, z!)
-    else if (kind === 1) for (const z of [-0.18, 0.18]) for (const x of [-0.14, 0, 0.14]) add(box(0.1, 0.09, 0.012, 0.004), glass, x, 0.27, z)
-    else for (const x of [-0.12, 0.12]) add(new THREE.SphereGeometry(0.09, 20, 14), glossy('#374151'), x, 0.45, 0)
+    accessory(style!.accessory, { add, box, cyl, glossy, gold, glass })
   }
   for (const x of [-0.16, 0.16]) for (const z of [-0.18, 0.18]) {
     add(new THREE.CylinderGeometry(0.085, 0.085, 0.04, 28).rotateX(Math.PI / 2), glossy('#111827'), x, 0.09, z)
@@ -58,6 +61,90 @@ export function makeCar(i: number): THREE.Group {
   }
   return g
 }
+
+type Kit = {
+  add: (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number) => void
+  box: (w: number, h: number, d: number, r?: number) => THREE.BufferGeometry
+  cyl: (rt: number, rb: number, h: number) => THREE.BufferGeometry
+  glossy: (col: string) => THREE.Material
+  gold: THREE.Material
+  glass: THREE.Material
+}
+const ROOF = 0.425 // dessus du toit du wagon
+
+// L'accessoire qui rend chaque coloris unique : simple, lisible du dessus (Trajet) comme de côté (accueil, collection).
+function accessory(a: WagonStyle['accessory'], { add, box, cyl, glossy, gold, glass }: Kit): void {
+  const sphere = (r: number) => new THREE.SphereGeometry(r, 20, 14)
+  const wood = glossy('#a16207')
+  switch (a) {
+    case 'crates':
+      for (const [x, z] of [[-0.12, -0.06], [0.1, 0.05], [-0.02, 0.07]]) add(box(0.14, 0.1, 0.14, 0.02), wood, x!, 0.47, z!)
+      break
+    case 'windows':
+      for (const z of [-0.18, 0.18]) for (const x of [-0.14, 0, 0.14]) add(box(0.1, 0.09, 0.012, 0.004), glass, x, 0.27, z)
+      break
+    case 'coal':
+      for (const x of [-0.12, 0.12]) add(sphere(0.09), glossy('#374151'), x, 0.45, 0)
+      break
+    case 'flag': {
+      add(cyl(0.008, 0.008, 0.26), gold, -0.18, ROOF + 0.13, 0)
+      add(sphere(0.018), gold, -0.18, ROOF + 0.27, 0)
+      add(box(0.15, 0.09, 0.008, 0.004), glossy('#ef4444'), -0.1, ROOF + 0.2, 0)
+      add(box(0.05, 0.09, 0.009, 0.002), glossy('#ffffff'), -0.12, ROOF + 0.2, 0)
+      break
+    }
+    case 'balloons':
+      for (const [x, z, h, col] of [[-0.06, -0.05, 0.3, '#ef4444'], [0.05, 0.04, 0.36, '#fde047'], [0.08, -0.07, 0.27, '#ffffff']] as const) {
+        add(cyl(0.003, 0.003, h), glossy('#e5e7eb'), x, ROOF + h / 2, z)
+        add(sphere(0.06), glossy(col), x, ROOF + h + 0.05, z)
+      }
+      break
+    case 'flowers':
+      add(box(0.42, 0.06, 0.16, 0.02), wood, 0, ROOF + 0.03, 0)
+      for (let k = 0; k < 7; k++) {
+        const x = -0.17 + k * 0.057, z = k % 2 ? 0.035 : -0.035
+        add(sphere(0.03), glossy('#16a34a'), x, ROOF + 0.075, z)
+        add(sphere(0.022), glossy(['#ffffff', '#fde047', '#f472b6'][k % 3]!), x, ROOF + 0.1, z)
+      }
+      break
+    case 'oranges':
+      for (const x of [-0.12, 0.12]) {
+        add(box(0.18, 0.08, 0.2, 0.015), glossy('#d6b27a'), x, ROOF + 0.04, 0)
+        for (const [dx, dz] of [[-0.045, -0.05], [0.045, -0.05], [-0.045, 0.05], [0.045, 0.05], [0, 0]]) add(sphere(0.04), glossy('#f97316'), x + dx!, ROOF + 0.095, dz!)
+      }
+      break
+    case 'parasol':
+      add(cyl(0.008, 0.008, 0.24), glossy('#e5e7eb'), 0, ROOF + 0.12, 0)
+      add(new THREE.ConeGeometry(0.22, 0.09, 12), glossy('#ffffff'), 0, ROOF + 0.27, 0)
+      add(new THREE.ConeGeometry(0.1, 0.045, 12), glossy('#f97316'), 0, ROOF + 0.3, 0)
+      add(box(0.12, 0.03, 0.08, 0.01), glossy('#38bdf8'), 0.12, ROOF + 0.015, 0.06)
+      break
+    case 'bell':
+      // une grosse cloche dorée sous un petit portique en bois
+      for (const z of [-0.1, 0.1]) add(box(0.03, 0.26, 0.03, 0.008), wood, 0, ROOF + 0.13, z)
+      add(lie(box(0.03, 0.24, 0.035, 0.008)), wood, 0, ROOF + 0.26, 0)
+      add(new THREE.CylinderGeometry(0.045, 0.095, 0.14, 24), gold, 0, ROOF + 0.17, 0)
+      add(sphere(0.045), gold, 0, ROOF + 0.24, 0)
+      add(sphere(0.022), glossy('#374151'), 0, ROOF + 0.09, 0)
+      break
+    case 'barrels':
+      for (const x of [-0.12, 0.12]) {
+        add(new THREE.CylinderGeometry(0.075, 0.075, 0.15, 20), glossy('#92400e'), x, ROOF + 0.075, 0)
+        for (const y of [0.03, 0.12]) add(new THREE.CylinderGeometry(0.079, 0.079, 0.015, 20), glossy('#374151'), x, ROOF + y, 0)
+      }
+      break
+    case 'stove':
+      add(box(0.12, 0.08, 0.12, 0.02), glossy('#1f2937'), 0.08, ROOF + 0.04, 0)
+      add(cyl(0.025, 0.025, 0.17), glossy('#4b5563'), 0.08, ROOF + 0.165, 0)
+      add(cyl(0.045, 0.03, 0.03), gold, 0.08, ROOF + 0.26, 0)
+      add(box(0.1, 0.06, 0.14, 0.02), wood, -0.12, ROOF + 0.03, 0)
+      break
+    case 'sacks':
+      for (const [x, y, z] of [[-0.12, 0.045, -0.04], [0.04, 0.045, 0.03], [0.17, 0.045, -0.03], [-0.04, 0.12, -0.01]]) add(box(0.15, 0.09, 0.13, 0.04), glossy('#ede0bd'), x!, ROOF + y!, z!)
+      break
+  }
+}
+const lie = (geo: THREE.BufferGeometry) => geo.rotateX(Math.PI / 2)
 
 /** Trois ronds de fumée au-dessus de la cheminée (images fixes). */
 export function makeSmoke(): THREE.Group {
