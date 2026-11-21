@@ -22,7 +22,7 @@ export function blockZoom(): void {
 
 // Ctrl + molette (et le pincement du pavé tactile) : bloqué par un écouteur de molette qui peut annuler l'événement. Sous Firefox,
 // un tel écouteur oblige le navigateur à passer CHAQUE événement du pavé tactile par la page (200 à 250 par seconde quand on
-// défile à deux doigts) : la page n'avait plus le temps de dessiner, et le Trajet se figeait (diagnostic ?perf, perfProbe.ts).
+// défile à deux doigts) : la page n'avait plus le temps de dessiner, et le Trajet se figeait (mesuré par un diagnostic temporaire).
 // Pendant le Trajet on le retire donc (TrackGrid) : Firefox traite le défilement à part, sans la page. Le zoom au clavier reste bloqué.
 // La page de jeu ne défile de toute façon pas (html.lock-screen : overflow hidden, overscroll-behavior none).
 const onWheel = (e: WheelEvent): void => {

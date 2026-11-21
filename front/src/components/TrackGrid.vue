@@ -54,8 +54,10 @@ const props = defineProps<{
   // Vrai : la grille refuse tout tracé (le joueur doit d'abord essayer le pouvoir qu'il vient de recevoir) ; les aides qui
   // attendent une case (picking) marchent toujours.
   locked?: boolean
+  // Pouvoir « Une ligne » en attente : les compteurs se touchent pour choisir la ligne ou la colonne (événement pickLine).
+  pickingLine?: boolean
 }>()
-const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void; (e: 'train', running: boolean): void }>()
+const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void; (e: 'train', running: boolean): void; (e: 'pickLine', axis: 'row' | 'col', index: number): void }>()
 
 // Puzzle « effectif » : le puzzle + les rails révélés par les aides, qui se comportent comme des rails imposés
 // (verrouillés, dans le bon sens).
@@ -650,6 +652,20 @@ onMounted(() => {
       </svg>
     </button>
 
+    <!-- Bande « partie » (entre les outils et la grille en paysage, au-dessus de la grille en portrait) : la nouveauté du niveau
+         en haut, la vérification et l'erreur du serveur en bas. Elle ne recouvre jamais la grille. -->
+    <div class="side" :class="{ gone: solved }" data-test="side">
+      <slot name="intro" />
+      <div v-if="verifying || verifyError" class="side-msg" :class="{ err: !!verifyError }" role="status">
+        <p v-if="verifying" class="wait" data-test="verifying">Vérification par le serveur…</p>
+        <template v-else>
+          <p class="wait err" data-test="verify-error">{{ verifyError }}</p>
+          <span class="kept">Ton tracé est gardé.</span>
+          <button type="button" class="btn btn--small retry" data-test="retry" @click="checkWin">Réessayer</button>
+        </template>
+      </div>
+    </div>
+
     <div
       ref="boardEl"
       class="board"
@@ -684,6 +700,8 @@ onMounted(() => {
           :style="{ gridRow: r + 2, gridColumn: 1 }"
           :value="puzzle.rowClues[r]"
           :status="statuses.rows[r]"
+          :pickable="pickingLine && !solved"
+          @pick="emit('pickLine', 'row', r)"
           orientation="row"
         />
       </template>
@@ -694,6 +712,8 @@ onMounted(() => {
         :style="{ gridRow: 1, gridColumn: c + 2 }"
         :value="puzzle.colClues[c]"
         :status="statuses.cols[c]"
+        :pickable="pickingLine && !solved"
+        @pick="emit('pickLine', 'col', c)"
         orientation="col"
       />
 
@@ -714,11 +734,6 @@ onMounted(() => {
         </div>
         <slot name="win" :ready="true" />
       </div>
-      <p v-if="verifying" class="wait" data-test="verifying">Vérification par le serveur…</p>
-      <template v-else-if="verifyError">
-        <p class="wait err" data-test="verify-error">{{ verifyError }}</p>
-        <button type="button" class="btn btn--small" data-test="retry" @click="checkWin">Réessayer</button>
-      </template>
     </div>
   </div>
 </template>
@@ -1010,6 +1025,53 @@ onMounted(() => {
   background: transparent;
 }
 
+/* Bande « partie » : portrait, au-dessus de la grille ; paysage, une colonne entre les outils et la grille (voir plus bas). */
+.side {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  width: min(92vw, 30rem);
+}
+.side:empty {
+  display: none;
+}
+.side.gone {
+  visibility: hidden;
+}
+.side-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.75rem;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+.side-msg.err {
+  background: #fef2f2;
+  border: 2px solid #fca5a5;
+  color: #7f1d1d;
+}
+.side-msg .wait {
+  margin: 0;
+  font-weight: 700;
+}
+.side-msg .kept {
+  font-size: 0.82rem;
+}
+.side-msg .retry {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
 /* Paysage (option A) : les outils forment une colonne à gauche de la grille, en miroir des pouvoirs à droite ; annuler et
    rétablir en haut, effacer en bas, à l'écart. */
 @media (min-aspect-ratio: 1/1) {
@@ -1031,6 +1093,15 @@ onMounted(() => {
   .toolbar .clear {
     margin-top: auto;
   }
+  /* bande « partie » : aussi haute que la grille, la nouveauté en haut, les messages du serveur en bas */
+  .side {
+    width: var(--band, 12rem);
+    align-self: stretch;
+    justify-content: space-between;
+  }
+  .side:not(:empty) {
+    display: flex;
+  }
   .tool {
     width: 2.9rem;
     height: 2.9rem;
@@ -1046,7 +1117,7 @@ onMounted(() => {
 /* Téléphone couché (peu de hauteur) : la grille prend toute la hauteur, les outils passent en colonne sur le bord gauche. */
 @media (min-aspect-ratio: 1/1) and (max-height: 560px) {
   .board {
-    --w: calc(100dvh - 1.5rem);
+    --w: calc(100dvh - 4.1rem); /* sous la barre du haut, qui flotte (JourneyView) */
   }
   .toolbar {
     position: fixed;

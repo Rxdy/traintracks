@@ -13,6 +13,7 @@ const emit = defineEmits<{
   (e: 'picking', value: boolean): void
   (e: 'colors'): void // les indicateurs de couleur sont activés sur ce niveau
   (e: 'forced', value: boolean): void // vrai tant que le joueur doit essayer le pouvoir offert avant de jouer
+  (e: 'pickingLine', value: boolean): void // « Une ligne » attend que le joueur touche un compteur de la grille
 }>()
 
 const LABEL: Record<AidId, string> = { colors: 'Couleurs', cell: 'Une case', cannon: 'Canon', line: 'Une ligne' }
@@ -51,6 +52,7 @@ const busy = ref(false)
 function cancel(): void {
   mode.value = null
   emit('picking', false)
+  emit('pickingLine', false)
 }
 
 function choose(a: AidInfo): void {
@@ -60,6 +62,7 @@ function choose(a: AidInfo): void {
     message.value = `Ce pouvoir se débloque au niveau ${a.unlockLevel}.`
     return
   }
+  lastAid.value = a.id
   if (mode.value?.aid.id === a.id) return cancel()
   cancel()
   if (forced.value && a.id !== fresh.value!.id) {
@@ -78,7 +81,10 @@ function choose(a: AidInfo): void {
   else if (a.id === 'cell') {
     mode.value = { aid: a, step: 'pick' }
     emit('picking', true)
-  } else mode.value = { aid: a, step: a.id }
+  } else {
+    mode.value = { aid: a, step: 'line' }
+    emit('pickingLine', true) // on touche directement un compteur de la grille
+  }
 }
 
 async function run(a: AidInfo, target: AidTarget): Promise<void> {
@@ -107,6 +113,18 @@ async function run(a: AidInfo, target: AidTarget): Promise<void> {
 function onPick(row: number, col: number): void {
   if (mode.value?.step === 'pick') void run(mode.value.aid, { row, col })
 }
+// Appelé par la grille quand le joueur touche un compteur pendant « Une ligne ».
+function onPickLine(axis: 'row' | 'col', index: number): void {
+  if (mode.value?.step === 'line') void run(mode.value.aid, { axis, index })
+}
+// Les bulles (détail, message, achat, consigne) s'ouvrent en face du pouvoir concerné : son rang dans la colonne.
+const lastAid = ref<AidId | null>(null)
+watch(mode, (m) => m && (lastAid.value = m.aid.id))
+const rankOf = (id: AidId | null | undefined): number => Math.max(0, slots.value.findIndex((a) => a.id === id))
+const bubbleRank = computed(() => rankOf(mode.value?.aid.id ?? lastAid.value))
+const freshRank = computed(() => rankOf(fresh.value?.id))
+// En paysage, une bulle d'un pouvoir du bas de la colonne s'ancre par le bas (--j : rang compté depuis le bas).
+const placeAt = (rank: number) => ({ style: { '--i': rank, '--j': slots.value.length - 1 - rank }, low: rank >= slots.value.length / 2 })
 
 async function confirmBuy(): Promise<void> {
   if (!mode.value) return
@@ -117,26 +135,21 @@ async function confirmBuy(): Promise<void> {
   mode.value = null
 }
 
-defineExpose({ onPick })
+defineExpose({ onPick, onPickLine })
 </script>
 
 <template>
   <div v-if="slots.length" class="aids" data-test="aids">
-    <p v-if="message" class="msg" data-test="aid-message" role="status" title="Toucher pour fermer" @click="message = ''">{{ message }}</p>
+    <p v-if="message" class="msg" :class="{ low: placeAt(bubbleRank).low }" :style="placeAt(bubbleRank).style" data-test="aid-message" role="status" title="Toucher pour fermer" @click="message = ''">{{ message }}</p>
 
-    <div v-if="mode" class="panel" data-test="aid-panel">
+    <div v-if="mode" class="panel" :class="{ low: placeAt(bubbleRank).low }" :style="placeAt(bubbleRank).style" data-test="aid-panel">
       <strong>{{ LABEL[mode.aid.id] }}</strong>
       <template v-if="mode.step === 'buy'">
         <span>{{ mode.aid.price }} <CoinIcon /> pour en racheter une.</span>
         <button type="button" class="btn btn--small" data-test="aid-confirm" :disabled="busy" @click="confirmBuy">Confirmer</button>
       </template>
       <span v-else-if="mode.step === 'pick'" data-test="aid-hint">Touche la case à révéler.</span>
-      <template v-else>
-        <span>Ligne :</span>
-        <button v-for="i in props.size" :key="'r' + i" type="button" class="btn btn--small n" :data-test="'aid-row-' + (i - 1)" @click="run(mode.aid, { axis: 'row', index: i - 1 })">{{ i }}</button>
-        <span>Colonne :</span>
-        <button v-for="i in props.size" :key="'c' + i" type="button" class="btn btn--small n" :data-test="'aid-col-' + (i - 1)" @click="run(mode.aid, { axis: 'col', index: i - 1 })">{{ i }}</button>
-      </template>
+      <span v-else data-test="aid-hint">Touche un chiffre bleu de la grille : toute sa ligne ou sa colonne se révèle.</span>
       <button type="button" class="btn btn--ghost btn--small" data-test="aid-cancel" @click="cancel">Annuler</button>
     </div>
 
@@ -165,7 +178,7 @@ defineExpose({ onPick })
       </button>
     </div>
 
-    <div v-if="fresh && (forced || !dismissed)" class="fresh" data-test="aid-new" role="status">
+    <div v-if="fresh && (forced || !dismissed) && !mode" class="fresh" :class="{ low: placeAt(freshRank).low }" :style="placeAt(freshRank).style" data-test="aid-new" role="status">
       <span class="icon"><AidIcon :name="fresh.id" /></span>
       <div class="txt">
         <strong>Nouveau pouvoir : {{ LABEL[fresh.id] }}</strong>

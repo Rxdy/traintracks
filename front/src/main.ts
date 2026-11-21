@@ -4,11 +4,9 @@ import { registerSW } from './pwa'
 import { authErrorFromUrl, confirmEmailChangeFromUrl, confirmFromUrl, loadProviders, refreshSession, resetFromUrl, welcomeFromUrl } from './auth'
 import './style.css'
 import { blockZoom } from './noZoom'
-import { startPerfProbe } from './perfProbe'
 
 createApp(App).mount('#app')
 blockZoom()
-startPerfProbe() // ?perf : diagnostic d'affichage (gel au pavé tactile)
 // Téléphone et tablette : le jeu se joue couché. L'appli installée démarre couchée (manifeste) ; là où le navigateur le permet
 // (Android, appli installée ou plein écran), on verrouille aussi l'écran en paysage. Ailleurs, une page ne peut pas l'imposer.
 if (window.matchMedia?.('(pointer: coarse)').matches) {

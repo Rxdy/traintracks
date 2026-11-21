@@ -12,6 +12,12 @@ import LandscapeBg from './components/LandscapeBg.vue'
 import InstallButton from './components/InstallButton.vue'
 import CoinBadge from './components/CoinBadge.vue'
 import { notice, pseudoPrompt, resetToken } from './auth'
+// L'avis général part tout seul après 6 s (ou au toucher) : il ne reste jamais sur l'écran.
+let noticeTimer = 0
+watch(notice, (m) => {
+  clearTimeout(noticeTimer)
+  if (m) noticeTimer = window.setTimeout(() => (notice.value = ''), 6000)
+})
 import { homeTheme } from './journey'
 import { sound, soundOn, suspend, unlock } from './sound/director'
 
@@ -108,11 +114,17 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
 </template>
 
 <style scoped>
+/* Avis général : une bulle sous la barre du haut, PAR-DESSUS (elle ne pousse rien), qui part seule (voir le minuteur plus haut). */
 .notice {
-  position: relative;
-  z-index: 5;
-  margin: 0.5rem auto 0;
-  max-width: 24rem;
+  position: fixed;
+  top: max(3.6rem, calc(env(safe-area-inset-top) + 3.2rem));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  margin: 0;
+  width: max-content;
+  max-width: min(24rem, calc(100vw - 2rem));
+  cursor: pointer;
   padding: 0.5rem 1rem;
   border-radius: 12px;
   background: #fff;
