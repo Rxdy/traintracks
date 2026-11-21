@@ -2,7 +2,7 @@
 // et ses nuages, et au premier plan une voie où un petit train passe de temps en temps, dans un sens puis dans l'autre.
 // Mêmes objets, mêmes textures et même lumière que le décor des niveaux (world.ts) : le menu et le jeu se ressemblent.
 // Économe : 30 images par seconde au plus, rien quand l'onglet est caché, image fixe si l'on préfère moins d'animations.
-import { makeCar } from './trainModel'
+import { CHIMNEY, makeCar, makeSteam } from './trainModel'
 import { CAR_SPACING, WAGONS } from '../trainStyle'
 import * as THREE from 'three'
 import { PAL, PARAMS, rng, type Scenery, type Theme, type TileKind } from '../scenery'
@@ -185,6 +185,12 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
   }
   train.position.set(-40, 0, TRACK_Z)
   scene.add(train)
+  // fumée de la locomotive, comme pendant le Trajet (scenery3d/trainModel.ts)
+  const steam = makeSteam()
+  scene.add(steam.group)
+  disposables.push(steam)
+  const chimney = new THREE.Vector3()
+  let lastX = train.position.x
 
   // caméra : au ras du sol, devant la voie ; plus ouverte en portrait (téléphone) pour garder du paysage sur les côtés
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 120)
@@ -238,6 +244,11 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
         train.position.x = span / 2 - go(0.6) * span
       }
     } else train.position.x = -40
+    // la fumée sort tant que le train roule dans le champ
+    const rolling = !still && train.position.x !== lastX && Math.abs(train.position.x) < span / 2 + 1
+    lastX = train.position.x
+    train.updateMatrixWorld()
+    steam.update(dt, train.children[0]!.localToWorld(chimney.copy(CHIMNEY)), rolling)
     fin.draw(scene, camera)
   }
   raf = requestAnimationFrame(loop)

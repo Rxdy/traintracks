@@ -12,6 +12,7 @@ import {
   isSolved,
   tracePath,
   lockedEdges,
+  edgesInGrid,
   incidentEdges,
   edgeKey,
   cellKey,
@@ -204,7 +205,7 @@ async function checkWin(): Promise<void> {
     verifyError.value = ''
     let ok: boolean | string = false
     try {
-      ok = await props.validate(ms, [...connections.value])
+      ok = await props.validate(ms, edgesInGrid(connections.value, puz.value.size)) // jamais de liaison hors grille (voir edgesInGrid)
     } catch {
       ok = false
     }
@@ -594,7 +595,7 @@ function reveal(givens: Given[], crossCells: { row: number; col: number }[]): vo
 }
 // Ce que le serveur doit connaître pour le canon : liaisons tracées et croix posées.
 function snapshotForAid(): { edges: string[]; crosses: string[]; marks: number } {
-  const edges = [...connections.value].filter((e) => /^[hv]:/.test(e))
+  const edges = edgesInGrid(connections.value, puz.value.size)
   const fixed = lockedEdges(puz.value)
   // marks : ce que le joueur a posé lui-même (ni rails imposés, ni rails révélés).
   return { edges, crosses: [...crosses.value], marks: edges.filter((e) => !fixed.has(e)).length + crosses.value.size }
