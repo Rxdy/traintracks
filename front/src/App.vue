@@ -114,16 +114,17 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
 </template>
 
 <style scoped>
-/* Avis général : une bulle sous la barre du haut, PAR-DESSUS (elle ne pousse rien), qui part seule (voir le minuteur plus haut). */
+/* Avis général : une bulle DANS la barre du haut, par-dessus le titre (jamais sur les chiffres de la grille), entre
+   le bouton Quitter et les pièces ; elle part seule (voir le minuteur plus haut). */
 .notice {
   position: fixed;
-  top: max(3.6rem, calc(env(safe-area-inset-top) + 3.2rem));
+  top: max(0.55rem, calc(env(safe-area-inset-top) + 0.4rem));
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
   margin: 0;
   width: max-content;
-  max-width: min(24rem, calc(100vw - 2rem));
+  max-width: min(24rem, max(12rem, calc(100vw - 15rem)));
   cursor: pointer;
   padding: 0.5rem 1rem;
   border-radius: 12px;
