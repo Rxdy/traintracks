@@ -5,6 +5,7 @@ import { freeCount, loadTrain, myTrain, selectPreset, setTrain } from '../myTrai
 import { styleOf, wagonLabel } from '../trainStyle'
 import CoinIcon from '../components/CoinIcon.vue'
 import WagonThumb from '../components/WagonThumb.vue'
+import DepotView from '../components/DepotView.vue'
 
 // « Mon train », sur toute la page : 3 trains enregistrés (celui « en route » roule dans le Trajet), le train choisi en grand,
 // la collection dessous, la machine à côté.
@@ -139,6 +140,9 @@ const dragId = computed(() => drag.value?.src.id ?? null)
 
 <template>
   <section class="train-page" data-test="train-page" :class="{ dragging: !!drag }">
+    <!-- le dépôt : les 3 trains sur leurs voies ; toucher un garage choisit le train à personnaliser -->
+    <DepotView :presets="myTrain.presets" :active="myTrain.active" :editing="editing" @pick="chooseTab" />
+
     <!-- les 3 trains enregistrés -->
     <div class="tabs" role="tablist" aria-label="Mes trains">
       <button
@@ -152,10 +156,10 @@ const dragId = computed(() => drag.value?.src.id ?? null)
         :data-test="'preset-' + k"
         @click="chooseTab(k)"
       >
-        Train {{ k + 1 }}
+        Garage {{ k + 1 }}
         <span v-if="myTrain.active === k" class="road" data-test="preset-active">en route</span>
       </button>
-      <button v-if="editing !== myTrain.active" type="button" class="btn btn--small roll" data-test="preset-roll" @click="rollThis">Faire rouler ce train</button>
+      <button v-if="editing !== myTrain.active" type="button" class="btn btn--small roll" data-test="preset-roll" @click="rollThis">Faire rouler le train {{ editing + 1 }}</button>
     </div>
 
     <!-- le train, en grand, sur sa voie -->
@@ -188,7 +192,7 @@ const dragId = computed(() => drag.value?.src.id ?? null)
     </div>
     <p class="hint">
       <template v-if="picked !== null">Touche une autre place pour l'y mettre.</template>
-      <template v-else>Glisse un wagon de ta collection sur une place, ou un wagon du train vers une autre place. Glisse-le vers la collection (ou ✕) pour le ranger.</template>
+      <template v-else>Glisse un wagon de ta collection sur une place, ou un wagon du train vers une autre place. Glisse-le vers la collection pour le ranger.</template>
       <b>{{ cars.length }}/{{ TRAIN_SLOTS }}</b>
     </p>
     <p v-if="msg" class="err" data-test="train-msg">{{ msg }}</p>

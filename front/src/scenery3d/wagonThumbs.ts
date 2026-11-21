@@ -35,7 +35,7 @@ export function wagonThumb(id: string): string {
   const { renderer, scene } = setup()
   const style = id === 'loco' ? null : styleOf(id)
   const car = style ? makeWagon(style) : makeCar(0)
-  car.rotation.y = -0.55
+  car.rotation.y = Math.PI + 0.55 // tourné vers la gauche : dans Mon train, la locomotive est à gauche et tire le train
   scene.add(car)
   // cadrage : un wagon long recule la caméra pour tenir entier
   const len = style ? style.length : 1
