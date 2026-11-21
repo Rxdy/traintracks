@@ -185,8 +185,15 @@ function quit(): void {
     <template v-else-if="current">
       <div class="bar">
         <QuitButton class="back" data-test="quit" @click="quit" />
-        <span class="title" :class="{ gone: won }" data-test="level-title">Niveau {{ current.id }}</span>
-        <CoinBadge class="coins-hud" :class="{ gone: won }" />
+        <!-- en haut : le niveau et le temps au milieu, le son et les pièces à droite (les outils de tracé restent au-dessus de la grille) -->
+        <div class="hud-mid" :class="{ gone: won }">
+          <span class="title" data-test="level-title">Niveau {{ current.id }}</span>
+          <span id="hud-timer" class="hud-slot"></span>
+        </div>
+        <div class="hud-right">
+          <span id="hud-sound" class="hud-slot"></span>
+          <CoinBadge class="coins-hud" :class="{ gone: won }" />
+        </div>
       </div>
 
       <div class="play-area">
@@ -199,6 +206,7 @@ function quit(): void {
           <TrackGrid
             ref="grid"
             :key="current.id"
+            :hud="{ timer: '#hud-timer', sound: '#hud-sound' }"
             :puzzle="current.puzzle"
             :validate="validate"
             :official-ms="officialMs"
@@ -303,11 +311,18 @@ section {
 .bonus-dock :deep(.row) {
   flex-wrap: nowrap;
   gap: 0.6rem;
+  width: 100%;
 }
+/* Portrait : une barre aussi large que la grille, quatre grands boutons. */
 .bonus-dock :deep(.aid) {
-  flex: none;
-  width: 3.8rem;
-  height: 3.8rem; /* carrés aux angles arrondis */
+  flex: 1 1 0;
+  width: auto;
+  max-width: 7rem;
+  height: clamp(3.8rem, 9dvh, 5.5rem);
+}
+.bonus-dock :deep(.aid .icon) {
+  width: clamp(1.9rem, 4.5dvh, 2.6rem);
+  height: clamp(1.9rem, 4.5dvh, 2.6rem);
 }
 /* Paysage (l'écran est plus large que haut) : les bonus forment une colonne à droite de la grille. */
 @media (min-aspect-ratio: 1/1) {
@@ -315,15 +330,26 @@ section {
     flex-direction: row;
     gap: 1.5rem;
   }
+  /* Paysage : une colonne de grands carrés, à la mesure de l'écran (environ 100 px sur un ordinateur). */
   .bonus-dock {
-    width: 4.2rem;
+    --aid: clamp(4.2rem, 11vmin, 7rem);
+    width: var(--aid);
   }
   .bonus-dock :deep(.row) {
     flex-direction: column;
     align-items: center;
+    gap: calc(var(--aid) * 0.18);
   }
   .bonus-dock :deep(.aid) {
     flex: none;
+    width: var(--aid);
+    height: var(--aid);
+    max-width: none;
+    border-radius: calc(var(--aid) * 0.2);
+  }
+  .bonus-dock :deep(.aid .icon) {
+    width: calc(var(--aid) * 0.46);
+    height: calc(var(--aid) * 0.46);
   }
   .bonus-dock.gone {
     transform: translateX(1.5rem);
@@ -508,11 +534,26 @@ section {
   justify-self: start;
 }
 /* Pendant le Trajet, le niveau et les pièces s'effacent : il ne reste que Quitter (à gauche) et la vitesse (à droite). */
-.title,
+.hud-mid,
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.3rem, 1.2vw, 0.5rem);
+}
+.hud-mid {
+  justify-self: center;
+}
+.hud-right {
+  justify-self: end;
+}
+.hud-slot {
+  display: contents;
+}
+.hud-mid,
 .coins-hud {
   transition: opacity 0.5s ease;
 }
-.title.gone,
+.hud-mid.gone,
 .coins-hud.gone {
   opacity: 0;
   pointer-events: none;
@@ -526,6 +567,7 @@ section {
   box-shadow: var(--shadow);
   font-weight: 800;
   text-align: center;
+  white-space: nowrap;
 }
 .cta {
   background: #16a34a;
@@ -566,7 +608,7 @@ section {
   .bar > * {
     pointer-events: auto;
   }
-  .bar .title {
+  .bar .hud-mid {
     justify-self: start;
     margin-left: 0.6rem;
   }

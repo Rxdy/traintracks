@@ -18,7 +18,7 @@ const pal = computed(() => PAL[props.scenery.theme])
 const sim = createLandSim(props.scenery)
 const empty: LandFrame = { cars: [], barrier: 0, lights: false, animals: [], birds: [], flakes: [], leaves: [], embers: [], events: [] }
 const frame = shallowRef<LandFrame>(empty)
-// Apparition : tout ce qui vit sur le décor (animaux, oiseaux, voitures, cabane, tunnels…) apparaît case par case, chaque case à un
+// Apparition : tout ce qui vit sur le décor (animaux, oiseaux, voitures, cabane…) apparaît case par case, chaque case à un
 // moment tiré au hasard (scenery/reveal.ts, le même tirage que les arbres et les maisons), à partir du moment où le décor est prêt (`start`).
 const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 const REVEAL_END = REVEAL.start + REVEAL.spread + 100
@@ -51,7 +51,6 @@ const roadFrame = computed(() => {
 const armA = computed(() => -85 + 85 * frame.value.barrier)
 const armB = computed(() => 265 - 85 * frame.value.barrier)
 const uc = computed(() => sim.uc ?? 0)
-const tunnelList = computed(() => [props.scenery.tunnels?.entry, props.scenery.tunnels?.exit].filter((x): x is NonNullable<typeof x> => !!x))
 // Les petites scènes (feu de camp, skieur, cabine de téléphérique…) sont agrandies pour se voir à côté des arbres.
 const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, skier: 1.5, sled: 1.5, goat: 1.3, tractor: 1.3, sheep: 1.3, cow: 1.3 }
 </script>
@@ -101,15 +100,6 @@ const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, 
             <circle cx="0" cy="0.1" r="0.04" :fill="frame.lights ? '#ef4444' : '#7f1d1d'" />
           </g>
         </template>
-      </g>
-
-      <!-- tunnels : une montagne percée au bout de chaque voie, d'où le train sort et où il entre -->
-      <g v-for="(tn, i) in tunnelList" :key="'tn' + i" :transform="`translate(${tn.x} ${tn.y}) rotate(${(Math.atan2(tn.out.y, tn.out.x) * 180) / Math.PI})`" data-test="tunnel">
-        <rect x="-0.05" y="-0.78" :width="tn.inset + 6" height="1.56" rx="0.5" :fill="pal.rock[1]" />
-        <rect x="-0.05" y="-0.78" :width="tn.inset + 6" height="1.56" rx="0.5" fill="none" stroke="#00000040" stroke-width="0.04" />
-        <path :d="`M0.3 -0.64 H${tn.inset + 6} M0.5 -0.45 H${tn.inset + 6} M0.5 0.45 H${tn.inset + 6} M0.3 0.64 H${tn.inset + 6}`" :stroke="pal.rock[0]" stroke-width="0.1" stroke-linecap="round" opacity="0.5" />
-        <rect x="-0.07" y="-0.42" width="0.3" height="0.84" rx="0.1" :fill="pal.rock[0]" stroke="#00000055" stroke-width="0.03" />
-        <rect x="-0.07" y="-0.3" width="0.22" height="0.6" rx="0.07" fill="#0b0f14" />
       </g>
 
       <!-- décors fixes : câble du téléphérique, cabane, tas de bois, champignons, chalet, pylônes -->

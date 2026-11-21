@@ -30,14 +30,6 @@ export interface Prop {
   y: number
   v: number // variante
 }
-// Tunnel au bout de la voie d'entrée ou de sortie : le train sort d'une montagne au départ et rentre dans une montagne à l'arrivée.
-// Le train est coupé au plan du tunnel (voir `clip` dans TrackGrid) : il apparaît ou disparaît dans le noir de l'entrée.
-export interface Tunnel {
-  x: number // centre de l'entrée du tunnel, sur la voie, en unités de case
-  y: number
-  out: { x: number; y: number } // vers l'extérieur de la grille (le sens où s'étend la montagne)
-  inset: number // distance de l'entrée au bord du décor, en cases
-}
 // Gare de départ ou d'arrivée, sur le prolongement de la voie, dans le décor : le train y démarre ou s'y arrête à quai.
 // (Plus utilisée dans le trajet : elle servira au mécanisme des gares numérotées des niveaux à venir.)
 export interface Station {
@@ -46,13 +38,6 @@ export interface Station {
   angle: number // sens de marche du train, en degrés
   side: 1 | -1 // côté du quai où se tient le bâtiment (par rapport au sens de marche)
   loco: number // distance, depuis le bord de la grille, où s'arrête la locomotive
-}
-// Cases visibles à l'écran, depuis chaque bord de la grille (une fois rétrécie) : les tunnels se posent dans l'écran, pas au bord du décor.
-export interface View {
-  left: number
-  right: number
-  up: number
-  down: number
 }
 export interface Pt {
   x: number
@@ -80,7 +65,6 @@ export interface Scenery {
   river: Pt[] | null // ligne de la rivière, en unités de case (hors grille aux deux bouts)
   pond: [number, number][] // étang de repli quand aucune rivière ne passe
   bridges: Map<string, 'h' | 'v'> // cases de voie posées sur la rivière → axe de la voie (le pont la porte)
-  tunnels: { entry: Tunnel | null; exit: Tunnel | null } // tunnel d'où le train sort au départ, et où il entre à l'arrivée (null : pas la place)
   props: Prop[] // décors fixes (cabane, chalet…)
   cable: [Pt, Pt] | null // câble du téléphérique (montagne) : entre deux pylônes
   paths: Pt[][] // sentiers de terre (maisons et moulin vers la route ou un autre sentier), en unités de case ; tuiles « path »
@@ -133,7 +117,7 @@ export function sceneryMargin(size: number): number {
 // La voie se prolonge en ligne droite jusqu'au bord. Tout se calcule alors sur la grande grille, chemin décalé.
 // `top` et `below` (cases, téléphone et tablette) : du paysage en plus au-dessus (jusqu'en haut de l'écran) et en dessous (jusqu'à
 // la cabine), sans changer l'échelle de la grille : aucune bande vide autour du décor.
-export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, seed = seedOf(puzzle), margin: number | { x: number; y: number; b?: number; top?: number; below?: number; view?: View } = 0): Scenery {
+export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, seed = seedOf(puzzle), margin: number | { x: number; y: number; b?: number; top?: number; below?: number } = 0): Scenery {
   const mx0 = typeof margin === 'number' ? margin : margin.x
   const my0 = typeof margin === 'number' ? margin : margin.y
   const top = typeof margin === 'number' ? 0 : Math.max(0, Math.ceil(margin.top ?? 0))
@@ -488,8 +472,7 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
 
   const paths = P.paths ? makePaths(seed, tiles, rows, cols) : []
   const { props, cable } = makeProps(th, seed, tiles, water, rows, cols)
-  const tunnels = ext.length ? makeTunnels(puzzle, shifted, mg, frame.visibleRows, tiles, water, typeof margin === 'object' ? margin.view : undefined) : { entry: null, exit: null }
-  return { seed, road, margin: mg, frame, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges, paths, props, cable, tunnels }
+  return { seed, road, margin: mg, frame, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges, paths, props, cable }
 }
 
 // --- Sentiers : chaque maison et chaque moulin est relié à la route (ou à un sentier déjà tracé, ou à une autre maison) par un chemin de terre qui
@@ -637,50 +620,3 @@ export function makeStations(puzzle: Puzzle, shifted: Cell[], mg: { x: number; y
   return { entry: build(shifted[0], puzzle.entry.dir, false), exit: build(shifted[shifted.length - 1], puzzle.exit.dir, true) }
 }
 
-// --- Tunnels : au bout de chaque voie, une montagne percée. L'entrée est à une demi-case du bord de l'écran (plus en retrait si la
-// route, l'eau ou une maison gênent). Sans place (moins de 1,3 case entre la grille et le bord), pas de tunnel.
-function makeTunnels(puzzle: Puzzle, shifted: Cell[], mg: { x: number; y: number; b: number }, visibleRows: number, tiles: Tile[][], water: Set<string>, view?: View): { entry: Tunnel | null; exit: Tunnel | null } {
-  const OUTV: Record<string, Cell> = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] }
-  const N = puzzle.size
-  const reach = (dir: string) => {
-    const decor = dir === 'left' || dir === 'right' ? mg.x : dir === 'up' ? mg.y : visibleRows - mg.y - N
-    return view ? Math.min(decor, view[dir as keyof View]) : decor // l'écran est souvent plus court que le décor
-  }
-  const build = (cell: Cell, dir: string): Tunnel | null => {
-    const L = reach(dir)
-    const decorL = dir === 'left' || dir === 'right' ? mg.x : dir === 'up' ? mg.y : visibleRows - mg.y - N
-    if (L < 1.3) return null // il faut au moins un peu de décor entre la grille et le bord de l'écran
-    const o = OUTV[dir]
-    const u = { x: o[1], y: o[0] }
-    const A = { x: cell[1] + 0.5 + u.x * 0.5, y: cell[0] + 0.5 + u.y * 0.5 }
-    const normal = { x: -u.y, y: u.x }
-    // Collé au bord de l'écran (entrée à une demi-case du bord) : on ne voit que l'entrée et un petit rebord de montagne, pas un gros
-    // bloc posé sur le paysage. Si quelque chose gêne (route, eau, maison), de plus en plus en retrait, sans jamais toucher la grille.
-    const insets = [0.5, 0.9, 1.5, 2.5, 3.5].filter((i) => L - i >= 0.8)
-    for (const inset of insets) {
-      const d = L - inset
-      // la montagne couvre de l'entrée du tunnel au bord du décor, 1,5 case de large. Le cœur (sur la voie) doit être dégagé ; les flancs
-      // peuvent recouvrir un bout de rivière, de sentier ou de champ, mais jamais une maison, un moulin, une route ou une autre voie.
-      const core: { r: number; c: number }[] = []
-      const side: { r: number; c: number }[] = []
-      let bad = false
-      for (let a = d; a <= L + 0.5 && !bad; a += 0.5) for (const b of [-0.7, -0.35, 0, 0.35, 0.7]) {
-        const r = Math.floor(A.y + u.y * a + normal.y * b), c = Math.floor(A.x + u.x * a + normal.x * b)
-        const t = tiles[r]?.[c]
-        if (!t) continue
-        const inCore = Math.abs(b) <= 0.35
-        if (['road', 'house', 'windmill'].includes(t.kind) || (t.kind === 'rail' && !inCore)) { bad = true; break }
-        if (inCore && (water.has(`${r},${c}`) || t.kind === 'field' || t.kind === 'path')) { bad = true; break }
-        ;(inCore ? core : side).push({ r, c })
-      }
-      if (bad) continue
-      // le cœur est dégagé ; sur les flancs, seuls les objets debout (arbres, rochers…) s'effacent : l'eau, les sentiers et les champs restent
-      for (const { r, c } of core) if (tiles[r][c].kind !== 'rail') tiles[r][c] = { kind: 'clear', v: 0 }
-      for (const { r, c } of side) if (!water.has(`${r},${c}`) && !['rail', 'path', 'field', 'clear', 'grass'].includes(tiles[r][c].kind)) tiles[r][c] = { kind: 'clear', v: 0 }
-      return { x: A.x + u.x * d, y: A.y + u.y * d, out: u, inset: inset + (decorL - L) } // `inset` : distance au bord du décor
-    }
-    return null
-  }
-  if (!shifted.length) return { entry: null, exit: null }
-  return { entry: build(shifted[0], puzzle.entry.dir), exit: build(shifted[shifted.length - 1], puzzle.exit.dir) }
-}

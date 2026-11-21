@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, inject, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onUnmounted, ref, watch } from 'vue'
 import AuthPanel from '../components/AuthPanel.vue'
 import PasswordMeter from '../components/PasswordMeter.vue'
 import Avatar from '../components/Avatar.vue'
 import { AVATARS, avatarOf } from '../avatars'
-import { avatars, buyAvatar, changePseudo, loadAvatars, selectAvatar, user, logout, deleteAccount, notice, resetToken, changeEmail, changePassword, forgotPassword, estimateBits, MIN_BITS, setLeaderboard, fetchExport, importFile } from '../auth'
+import { avatars, buyAvatar, changePseudo, pseudoPrompt, loadAvatars, selectAvatar, user, logout, deleteAccount, notice, resetToken, changeEmail, changePassword, forgotPassword, estimateBits, MIN_BITS, setLeaderboard, fetchExport, importFile } from '../auth'
 
 const go = inject<(view: string) => void>('go', () => undefined)
 
@@ -107,6 +107,23 @@ async function savePseudo(): Promise<void> {
   if (r.ok) editingPseudo.value = false
   else pseudoMsg.value = r.error
 }
+// Premier passage par Google : le pseudo a été tiré au hasard, on propose tout de suite d'en choisir un (champ ouvert, texte sélectionné).
+const welcome = ref(false)
+watch(
+  () => pseudoPrompt.value && !!user.value,
+  async (v) => {
+    if (!v) return
+    pseudoPrompt.value = false
+    welcome.value = true
+    editPseudo()
+    await nextTick()
+    const el = document.getElementById('pseudo-input') as HTMLInputElement | null
+    el?.focus()
+    el?.select()
+  },
+  { immediate: true },
+)
+watch(editingPseudo, (v) => v || (welcome.value = false))
 const picker = ref(false) // la feuille des avatars : fermée par défaut (la page Compte reste courte, surtout sur téléphone)
 const buying = ref<string | null>(null) // avatar payant en cours de confirmation
 const onEsc = (e: KeyboardEvent): void => {
@@ -228,6 +245,7 @@ function cancel(): void {
             <button type="button" class="btn btn--ghost btn--small" data-test="pseudo-cancel" @click="editingPseudo = false">Annuler</button>
             <button type="submit" class="btn btn--small" :disabled="busy" data-test="pseudo-save">Enregistrer</button>
           </div>
+          <p v-if="welcome && !pseudoMsg" class="hint" data-test="pseudo-welcome">Bienvenue ! Google ne donne pas de pseudo : on t'en a tiré un au hasard. Choisis le tien.</p>
           <p v-if="pseudoMsg" class="err" data-test="pseudo-msg">{{ pseudoMsg }}</p>
         </form>
         <h2 v-else class="pseudo-line">

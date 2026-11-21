@@ -48,7 +48,6 @@ export function buildMassif(
   anims: Anim[],
   delayOf: (r: number, c: number) => number,
   add: (g: THREE.Group) => void,
-  carve?: (x: number, z: number) => boolean, // creux à ménager (galerie d'un tunnel) : le relief y descend sous le sol
 ): void {
   const { mat } = kit
   const key = new Set(cells.map(([r, c]) => `${r},${c}`))
@@ -106,7 +105,7 @@ export function buildMassif(
   const hs: number[] = []
   for (let i = 0; i < pos.count; i++) {
     const x = x0 + (x1 - x0) / 2 + pos.getX(i), z = z0 + (z1 - z0) / 2 + pos.getZ(i)
-    const h = carve?.(x, z) ? 0 : field(x, z)
+    const h = field(x, z)
     hs.push(h)
     peak = Math.max(peak, h)
   }

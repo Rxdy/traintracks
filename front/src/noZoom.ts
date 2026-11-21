@@ -11,7 +11,10 @@ export function blockZoom(): void {
     },
     { capture: true },
   )
-  window.addEventListener('wheel', (e) => e.ctrlKey && e.preventDefault(), { passive: false, capture: true })
+  // Le défilement à deux doigts (pavé tactile, molette) sur l'écran de jeu ne fait rien : sur Mac, il lançait l'effet d'élastique ou le
+  // geste « page précédente » du navigateur, et le Trajet se figeait. Ailleurs (Compte, Classement…), la page défile normalement.
+  const inGame = (t: EventTarget | null) => t instanceof Element && !!t.closest('.track, .loading')
+  window.addEventListener('wheel', (e) => (e.ctrlKey || inGame(e.target)) && e.preventDefault(), { passive: false, capture: true })
   document.addEventListener('touchmove', (e) => e.touches.length > 1 && e.preventDefault(), { passive: false })
   for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false })
 }

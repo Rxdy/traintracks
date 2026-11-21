@@ -34,29 +34,3 @@ describe('sentiers', () => {
   })
 })
 
-describe('tunnels', () => {
-  it('au bout de chaque voie, un tunnel quand le décor laisse la place ; jamais sur une route, une maison ou un moulin, et le cœur (sur la voie) sans eau, champ ni sentier', () => {
-    let both = 0
-    for (const lv of levels) {
-      const sc = buildScenery(lv.puzzle, lv.solution, 'plaine', seedOf(lv.puzzle), { x: 9, y: 9 })
-      const { entry, exit } = sc.tunnels
-      if (entry && exit) both++
-      for (const tn of [entry, exit]) {
-        if (!tn) continue
-        expect(tn.inset, `niveau ${lv.id}`).toBeGreaterThanOrEqual(0.5)
-        // la montagne, de l'entrée au bord du décor : jamais sur une route, une maison ou un moulin ; ses flancs peuvent
-        // recouvrir un bout de rivière, de sentier ou de champ, mais pas son cœur, où passe la voie
-        for (let a = 0; a <= tn.inset; a += 0.5) for (const b of [-0.7, -0.35, 0, 0.35, 0.7]) {
-          const r = Math.floor(tn.y + tn.out.y * a - tn.out.x * b), c = Math.floor(tn.x + tn.out.x * a + tn.out.y * b)
-          const t = sc.tiles[r]?.[c]
-          if (!t) continue
-          expect(['road', 'house', 'windmill'], `niveau ${lv.id} : tunnel sur ${t.kind}`).not.toContain(t.kind)
-          if (Math.abs(b) > 0.35) continue
-          expect(['field', 'path'], `niveau ${lv.id} : cœur du tunnel sur ${t.kind}`).not.toContain(t.kind)
-          expect(sc.water.has(`${r},${c}`), `niveau ${lv.id} : cœur du tunnel dans l'eau`).toBe(false)
-        }
-      }
-    }
-    expect(both).toBeGreaterThan(levels.length * 0.8) // presque toujours deux tunnels (départ et arrivée)
-  }, 60000)
-})
