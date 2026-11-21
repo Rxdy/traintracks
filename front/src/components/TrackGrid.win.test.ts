@@ -374,10 +374,10 @@ describe('TrackGrid : accélérer le train', () => {
     w.unmount()
   })
 
-  it('le train est tranquille par défaut (moins de 2,5 cases par seconde)', async () => {
+  it('par défaut, le train roule au cran du milieu (4,5 cases par seconde)', async () => {
     const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
     await tracer(w)
-    expect(w.findComponent(TrainRun).props('speed')).toBeLessThan(2.5)
+    expect(w.findComponent(TrainRun).props('speed')).toBe(4.5)
     w.unmount()
   })
 
