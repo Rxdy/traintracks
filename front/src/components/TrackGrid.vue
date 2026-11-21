@@ -43,11 +43,15 @@ const props = defineProps<{
   // Environnement du décor révélé à la victoire (saison / paysage) ; tiré du puzzle si absent.
   theme?: Theme
   // Si fournie, la victoire n'est acquise que quand elle répond vrai (le serveur a vérifié le tracé).
-  validate?: (ms: number, edges: string[]) => Promise<boolean>
+  // Réponse : vrai, ou le message d'erreur à afficher (faux : message générique).
+  validate?: (ms: number, edges: string[]) => Promise<boolean | string>
   // Vrai : le récapitulatif de victoire n'est pas dessiné ici, l'écran de jeu l'affiche ailleurs (store de la cabine).
   externalRecap?: boolean
   // Barre du haut de la page : où poser le minuteur et le bouton du son (sélecteurs CSS). Absente : ils restent à côté des outils.
   hud?: { timer: string; sound: string }
+  // Vrai : la grille refuse tout tracé (le joueur doit d'abord essayer le pouvoir qu'il vient de recevoir) ; les aides qui
+  // attendent une case (picking) marchent toujours.
+  locked?: boolean
 }>()
 const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void; (e: 'train', running: boolean): void }>()
 
@@ -198,15 +202,15 @@ async function checkWin(): Promise<void> {
   if (props.validate) {
     verifying.value = true
     verifyError.value = ''
-    let ok = false
+    let ok: boolean | string = false
     try {
       ok = await props.validate(ms, [...connections.value])
     } catch {
       ok = false
     }
     verifying.value = false
-    if (!ok) {
-      verifyError.value = "Le serveur n'a pas validé ce tracé. Vérifie ta connexion, puis réessaie."
+    if (ok !== true) {
+      verifyError.value = typeof ok === 'string' ? ok : "Le serveur n'a pas validé ce tracé. Réessaie."
       sound.sfx('error')
       return
     }
@@ -437,6 +441,7 @@ function onDown(ev: PointerEvent, r: number, c: number): void {
   // que poser une croix (via contextmenu), sans passer pour un clic normal.
   if (ev.button > 0) return
   if (solved.value || verifying.value) return
+  if (props.locked) return sound.sfx('error')
   startClock()
   active = true
   moved = false
@@ -480,6 +485,7 @@ function onUp(): void {
 }
 
 function onContext(r: number, c: number): void {
+  if (props.locked) return
   if (Date.now() - longFiredAt < 1500) return // déjà traité par l'appui long
   onCross(r, c)
 }
