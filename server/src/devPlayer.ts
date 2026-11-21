@@ -1,5 +1,6 @@
 // Comptes d'ESSAI pour tester le jeu à un niveau donné sans rejouer tout le début. Réservé au développement :
 // la ligne de commande refuse de tourner sans DEV_TOOLS=1 (voir `make dev-player`).
+import { OWNER_TABLES } from './deleted.js'
 import { randomUUID } from 'node:crypto'
 import type { Db } from './db.js'
 import { aidState } from './aids.js'
@@ -36,7 +37,7 @@ export async function createDevPlayer(db: Db, opts: { level: number; coins?: num
   }
   const owner = `u:${id}`
   await db.tx(async (t) => {
-    for (const table of ['progress', 'level_runs', 'wallets', 'rewards', 'aid_stock', 'aid_gifts', 'daily_runs', 'daily_results']) {
+    for (const table of OWNER_TABLES) {
       await t.query(`DELETE FROM ${table} WHERE owner = $1`, [owner])
     }
     await t.query('INSERT INTO progress (owner, level, solved_at, time_ms) SELECT $1, g, $2, 20000 FROM generate_series(1, $3::int) g', [owner, now, level - 1])

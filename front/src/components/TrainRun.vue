@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { pointAt, speedFactor, type Route } from '../trainRoute'
-import { CAR_SPACING, WAGONS } from '../trainStyle'
+import { carLength, carOffsets, trainTail, type WagonStyle } from '../trainStyle'
+import { trainWagons } from '../myTrain'
 import TrainCar from './TrainCar.vue'
 
 // Locomotive + wagons qui roulent le long du trajet, entrée → sortie.
@@ -9,13 +10,13 @@ import TrainCar from './TrainCar.vue'
 const props = withDefaults(
   // clip : zone (en cases) où le train est visible. Hors de cette zone (le décor), il disparaît : il ne roule jamais sur
   // l'interface (récapitulatif, pouvoirs, bouton Suivant).
-  defineProps<{ route: Route; size: number; ghost?: boolean; speed?: number; wagons?: number; stopStart?: number; stopEnd?: number; clip?: { x: number; y: number; w: number; h: number } }>(),
-  { speed: 1.9, wagons: WAGONS },
+  defineProps<{ route: Route; size: number; ghost?: boolean; speed?: number; wagons?: WagonStyle[]; stopStart?: number; stopEnd?: number; clip?: { x: number; y: number; w: number; h: number } }>(),
+  { speed: 1.9, wagons: () => [...trainWagons.value] }, // par défaut : le train du joueur (Mon train)
 )
 const emit = defineEmits<{ (e: 'done'): void; (e: 'progress', s: number): void }>()
 
-const SPACING = CAR_SPACING
-const total = computed(() => props.wagons * SPACING)
+const offsets = computed(() => carOffsets(props.wagons))
+const total = computed(() => trainTail(props.wagons))
 
 // Distance parcourue par la locomotive. On part avec tout le train déjà posé
 // sur la voie (queue en 0), pour que les wagons ne soient jamais empilés.
@@ -28,11 +29,16 @@ let v = props.stopStart != null ? 0 : props.speed // vitesse actuelle : rejoint 
 let hold = props.stopStart != null ? 1.2 : 0 // attente à quai avant de partir (s)
 const BRAKE = 3 // cases de freinage avant la gare d'arrivée
 
+// chaque voiture posée sur ses deux essieux (un wagon long coupe le virage, comme un vrai)
 const cars = computed(() =>
-  Array.from({ length: props.wagons + 1 }, (_, i) => ({
-    i,
-    ...pointAt(props.route, s.value - i * SPACING),
-  })),
+  [null, ...props.wagons].map((w, i) => {
+    const c = s.value - offsets.value[i]!
+    const h = carLength(w) * 0.36
+    const a = pointAt(props.route, c + h)
+    const b = pointAt(props.route, c - h)
+    const far = Math.hypot(a.x - b.x, a.y - b.y) > 0.05
+    return { i, w, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, angle: far ? (Math.atan2(a.y - b.y, a.x - b.x) * 180) / Math.PI : pointAt(props.route, c).angle }
+  }),
 )
 
 onMounted(() => {
@@ -89,7 +95,7 @@ onUnmounted(() => clearInterval(timer))
       :key="car.i"
       :transform="`translate(${car.x} ${car.y}) rotate(${car.angle})`"
     >
-      <TrainCar :i="car.i" />
+      <TrainCar :i="car.i" :wagon="car.w" />
     </g>
     <g v-if="cars[0]" class="smoke" :style="{ transform: `translate(${cars[0].x}px, ${cars[0].y}px)` }">
       <circle v-for="i in 3" :key="'s' + i" cx="0" cy="-0.1" r="0.03" fill="#f8fafc" opacity="0">

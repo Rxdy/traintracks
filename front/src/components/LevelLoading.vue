@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 import { PAL, type Theme } from '../scenery'
 import { SKY } from '../scenery/sky'
-import { CAR_SPACING, WAGONS } from '../trainStyle'
+import { carOffsets } from '../trainStyle'
+import { trainWagons } from '../myTrain'
 import TrainCar from './TrainCar.vue'
 // Écran de chargement entre « Jouer » et la grille : toujours affiché, le niveau (serveur) et le décor (fichiers) arrivent ensemble.
 // Fond : un paysage dessiné aux couleurs du biome du niveau (ni l'icône de l'appli, ni le fond du bouton Jouer). La barre est une voie :
@@ -10,6 +11,17 @@ import TrainCar from './TrainCar.vue'
 const props = withDefaults(defineProps<{ level: number; progress: number; theme?: Theme }>(), { theme: 'plaine' })
 const sky = computed(() => SKY[props.theme] ?? SKY.plaine)
 const pal = computed(() => PAL[props.theme] ?? PAL.plaine)
+// le train du joueur (Mon train), dessiné de la queue à la locomotive (la locomotive par-dessus)
+// longueur dessinée : de la queue du dernier wagon au nez de la locomotive (2,4 pour le train de départ)
+const trainSpan = computed(() => {
+  const off = carOffsets(trainWagons.value)
+  const last = trainWagons.value[trainWagons.value.length - 1]
+  return off[off.length - 1]! + (last ? last.length * 0.31 : 0.31) + 0.26 + 0.04
+})
+const loadingCars = computed(() => {
+  const off = carOffsets(trainWagons.value)
+  return [null, ...trainWagons.value].map((w, i) => ({ i, w, off: off[i]! })).reverse()
+})
 </script>
 
 <template>
@@ -46,9 +58,9 @@ const pal = computed(() => PAL[props.theme] ?? PAL.plaine)
       <p class="label">Chargement…</p>
       <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(progress * 100)" :style="{ '--p': progress }">
         <span class="fill"></span>
-        <!-- le train du Trajet (même couleurs, même nombre de wagons), vu du dessus ; la locomotive est à droite -->
-        <svg class="train" viewBox="-2.14 -0.14 2.4 0.28" aria-hidden="true">
-          <TrainCar v-for="i in WAGONS + 1" :key="i" :i="WAGONS + 1 - i" :transform="`translate(${-(WAGONS + 1 - i) * CAR_SPACING} 0)`" />
+        <!-- le train du joueur (Mon train), vu du dessus ; la locomotive est à droite -->
+        <svg class="train" :viewBox="`${-trainSpan + 0.26} -0.14 ${trainSpan} 0.28`" :style="{ '--train-k': Math.min(2.2, trainSpan / 2.4) }" aria-hidden="true">
+          <TrainCar v-for="c in loadingCars" :key="c.i" :i="c.i" :wagon="c.w" :transform="`translate(${-c.off} 0)`" />
         </svg>
       </div>
     </div>
@@ -152,8 +164,8 @@ const pal = computed(() => PAL[props.theme] ?? PAL.plaine)
   position: absolute;
   top: 50%;
   translate: 0 -50%;
-  left: calc((100% - var(--train)) * var(--p));
-  width: var(--train);
+  left: calc((100% - var(--train) * var(--train-k, 1)) * var(--p));
+  width: calc(var(--train) * var(--train-k, 1));
   height: auto;
   transition: left 0.35s ease-out;
 }

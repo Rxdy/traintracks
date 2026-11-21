@@ -108,7 +108,7 @@ export function createDirector(engine: Engine, now: () => number = () => perform
     },
     activity() { stopLoop('think') },
     // petit son d'action pendant la partie
-    sfx(name: 'clear' | 'error') {
+    sfx(name: 'clear' | 'error' | 'pose' | 'coin' | 'reveal') {
       if (!soundOn.value) return
       engine.play(name)
     },

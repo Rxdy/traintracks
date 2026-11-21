@@ -11,7 +11,9 @@ import LegalView from './views/LegalView.vue'
 import LandscapeBg from './components/LandscapeBg.vue'
 import InstallButton from './components/InstallButton.vue'
 import CoinBadge from './components/CoinBadge.vue'
-import { notice, pseudoPrompt, resetToken } from './auth'
+import WagonMachine from './components/WagonMachine.vue'
+import { loadTrain } from './myTrain'
+import { notice, pseudoPrompt, resetToken, user } from './auth'
 // L'avis général part tout seul après 6 s (ou au toucher) : il ne reste jamais sur l'écran.
 let noticeTimer = 0
 watch(notice, (m) => {
@@ -60,6 +62,12 @@ function go(v: string): void {
   playing.value = false
 }
 provide('go', go) // les écrans (inscription, compte) renvoient vers les mentions légales
+// La machine « Wagon surprise » : un bouton de l'accueil et la partie Mon train (page Compte) l'ouvrent.
+const machineOpen = ref(false)
+const openMachine = () => (machineOpen.value = true)
+provide('openMachine', openMachine)
+// Le train du joueur (pour le Trajet, l'accueil, le chargement) : relu au démarrage et quand le compte change
+watch(() => user.value?.email, () => void loadTrain(), { immediate: true })
 // Lien « mot de passe oublié » ouvert depuis l'e-mail : on arrive sur l'écran Compte.
 watch(resetToken, (t) => t && go('account'), { immediate: true })
 watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
@@ -80,6 +88,9 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
         {{ TITLES[view] || 'Train Tracks' }}
       </h1>
       <div class="right">
+        <button v-if="view === 'home'" type="button" class="surprise" data-test="nav-machine" aria-label="Wagon surprise" title="Wagon surprise" @click="openMachine">
+          <span class="mini-reels" aria-hidden="true"><i /><i /><i /></span>Wagon surprise
+        </button>
         <CoinBadge />
         <!-- musique des menus et train de l'accueil : même réglage que le bouton son du jeu -->
         <button type="button" class="btn btn--ghost btn--small snd" data-test="menu-sound" :aria-pressed="soundOn" :aria-label="soundOn ? 'Couper le son' : 'Activer le son'" :title="soundOn ? 'Couper le son' : 'Activer le son'" @click="sound.setOn(!soundOn)">
@@ -92,6 +103,8 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
         <InstallButton v-if="view === 'home'" />
       </div>
     </header>
+
+    <WagonMachine v-if="machineOpen" @close="machineOpen = false" @my-train="machineOpen = false; go('account')" />
 
     <p v-if="notice" class="notice" data-test="notice" role="status" @click="notice = ''">{{ notice }}</p>
 
@@ -114,6 +127,49 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
 </template>
 
 <style scoped>
+/* bouton de la machine Wagon surprise, à côté des pièces sur l'accueil */
+.surprise {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem 0.3rem 0.35rem;
+  border-radius: 999px;
+  border: 2px solid #e2b33c;
+  background: linear-gradient(#dc2626, #991b1b);
+  color: #fde68a;
+  font: inherit;
+  font-weight: 800;
+  font-size: 0.85rem;
+  box-shadow: 0 2px 6px rgba(127, 29, 29, 0.4), 0 0 0 3px rgba(245, 158, 11, 0.3);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mini-reels {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 6px;
+  background: #5b1212;
+}
+.mini-reels i {
+  width: 7px;
+  height: 10px;
+  border-radius: 2px;
+  background: #14b8a6;
+}
+/* écran étroit (téléphone) : l'icône seule, pour ne pas couvrir le titre */
+@media (max-width: 60rem) {
+  .surprise {
+    font-size: 0;
+    gap: 0;
+    padding: 0.3rem;
+  }
+  .mini-reels i {
+    width: 9px;
+    height: 14px;
+  }
+}
+
 /* Avis général : une bulle DANS la barre du haut, par-dessus le titre (jamais sur les chiffres de la grille), entre
    le bouton Quitter et les pièces ; elle part seule (voir le minuteur plus haut). */
 .notice {

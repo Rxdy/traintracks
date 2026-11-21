@@ -2,7 +2,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { Scenery } from '../scenery'
 import { pointAt, type Route } from '../trainRoute'
-import { CAR_SPACING, WAGONS } from '../trainStyle'
+import { carLength, carOffsets } from '../trainStyle'
+import { trainWagons } from '../myTrain'
 
 // Décor 3D d'un niveau gagné : même place et même taille que le décor SVG (SceneryLayer), sous les rails de la grille.
 // Vue du dessus calée sur les cases. Three.js n'est chargé qu'ici, à la première victoire (fichier à part).
@@ -42,10 +43,14 @@ onMounted(async () => {
     }
     r.fit(onSize)
     // le train, en 3D (même modèle que les icônes) : posé sur la voie à chaque image d'après la position de la locomotive
-    const { makeCar, makeSteam, CHIMNEY } = await import('../scenery3d/trainModel')
+    const { makeCar, makeSteam, makeWagon, CHIMNEY } = await import('../scenery3d/trainModel')
     if (gone) return releaseWorld(sc)
     const train = new THREE.Group()
-    const cars = Array.from({ length: WAGONS + 1 }, (_, i) => makeCar(i))
+    // le train du joueur (Mon train), figé pour ce trajet
+    const wagons = [...trainWagons.value]
+    const offsets = carOffsets(wagons)
+    const halves = [null, ...wagons].map((w) => carLength(w) * 0.36) // où sont les essieux (ou bogies) avant et arrière
+    const cars = [makeCar(0), ...wagons.map(makeWagon)]
     cars.forEach((c) => train.add(c))
     train.visible = false
     const unTrain = world.add(train)
@@ -59,10 +64,15 @@ onMounted(async () => {
       const tr = props.train
       train.visible = !!tr && tr.s >= 0
       if (!tr || tr.s < 0) return
+      // chaque voiture posée sur ses deux essieux : un wagon long coupe le virage comme un vrai, sans sortir de la voie
       cars.forEach((car, i) => {
-        const p = pointAt(tr.route, tr.s - i * CAR_SPACING)
-        car.position.set(p.x + sc.margin.x, 0, p.y + sc.margin.y)
-        car.rotation.y = (-p.angle * Math.PI) / 180
+        const c = tr.s - offsets[i]!
+        const a = pointAt(tr.route, c + halves[i]!)
+        const b = pointAt(tr.route, c - halves[i]!)
+        car.position.set((a.x + b.x) / 2 + sc.margin.x, 0, (a.y + b.y) / 2 + sc.margin.y)
+        // aux deux bouts de la voie, les essieux se rejoignent : on garde alors le sens de la voie
+        const far = Math.hypot(a.x - b.x, a.y - b.y) > 0.05
+        car.rotation.y = far ? -Math.atan2(a.y - b.y, a.x - b.x) : (-pointAt(tr.route, c).angle * Math.PI) / 180
       })
     }
     const remove = world.addView((_t, dt) => {
