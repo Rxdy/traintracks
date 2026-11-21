@@ -261,17 +261,35 @@ function freightBody(kind: WagonStyle['kind'], c: string, len: number, { add, bo
       for (const y of [TOP, upper + 0.0125]) for (const x of [-len / 4, len / 4]) car(x, y, colors[n++ % colors.length]!)
       break
     }
-    case 'boat': { // un bateau à moteur posé sur ses berceaux
+    case 'boat': { // un bateau à moteur sur ses berceaux : coque effilée, pont en bois, cabine vitrée
       deck(c)
-      for (const x of [-0.3, 0.3]) add(box(0.05, 0.06, 0.26, 0.01), glossy('#1f2937'), x, TOP + 0.03, 0)
-      const hullY = TOP + 0.11
-      add(box(0.74, 0.11, 0.26, 0.05), glossy('#f8fafc'), -0.04, hullY, 0)
-      add(box(0.75, 0.03, 0.265, 0.012), glossy('#1d4ed8'), -0.04, hullY - 0.02, 0)
-      add(new THREE.ConeGeometry(0.13, 0.22, 4).rotateY(Math.PI / 4).scale(1, 1, 0.75).rotateZ(-Math.PI / 2), glossy('#f8fafc'), 0.43, hullY, 0) // la proue
-      add(box(0.24, 0.09, 0.2, 0.03), glossy('#f8fafc'), -0.08, hullY + 0.09, 0)
-      add(box(0.12, 0.06, 0.205, 0.01), glass, 0.0, hullY + 0.1, 0)
-      add(box(0.03, 0.07, 0.22, 0.008), glass, 0.06, hullY + 0.09, 0)
-      add(box(0.06, 0.09, 0.06, 0.015), glossy('#1f2937'), -0.43, hullY - 0.03, 0) // le moteur
+      for (const x of [-0.26, 0.22]) {
+        add(box(0.05, 0.05, 0.3, 0.01), glossy('#1f2937'), x, TOP + 0.025, 0)
+        for (const z of [-0.1, 0.1]) add(box(0.04, 0.06, 0.03, 0.008), glossy('#1f2937'), x, TOP + 0.06, z)
+      }
+      // la coque, vue du dessus : arrière carré, avant en pointe ; montée en hauteur, bords arrondis
+      const plan = (k: number) => {
+        const sh = new THREE.Shape()
+        sh.moveTo(-0.42 * k, -0.12 * k)
+        sh.lineTo(0.12 * k, -0.125 * k)
+        sh.quadraticCurveTo(0.36 * k, -0.11 * k, 0.48 * k, 0)
+        sh.quadraticCurveTo(0.36 * k, 0.11 * k, 0.12 * k, 0.125 * k)
+        sh.lineTo(-0.42 * k, 0.12 * k)
+        sh.closePath()
+        return sh
+      }
+      const lift = (geo: THREE.BufferGeometry, y: number) => geo.rotateX(Math.PI / 2).translate(0, y, 0)
+      const hullB = TOP + 0.07
+      add(lift(new THREE.ExtrudeGeometry(plan(0.86), { depth: 0.05, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.03, bevelSegments: 4 }), hullB + 0.05), glossy('#1d4ed8'), 0, 0, 0)
+      add(lift(new THREE.ExtrudeGeometry(plan(1), { depth: 0.07, bevelEnabled: true, bevelSize: 0.015, bevelThickness: 0.015, bevelSegments: 3 }), hullB + 0.13), glossy('#f8fafc'), 0, 0, 0)
+      add(lift(new THREE.ExtrudeGeometry(plan(0.9), { depth: 0.012, bevelEnabled: false }), hullB + 0.157), glossy('#b7834a'), 0, 0, 0) // le pont
+      add(box(0.26, 0.1, 0.17, 0.035), glossy('#f8fafc'), -0.12, hullB + 0.21, 0) // la cabine
+      add(box(0.2, 0.045, 0.175, 0.012), glass, -0.12, hullB + 0.215, 0)
+      add(box(0.02, 0.07, 0.19, 0.008).rotateZ(-0.5), glass, 0.04, hullB + 0.2, 0) // le pare-brise
+      add(cyl(0.008, 0.008, 0.16), glossy('#e5e7eb'), -0.16, hullB + 0.33, 0) // l'antenne
+      add(box(0.07, 0.1, 0.07, 0.015), glossy('#374151'), -0.43, hullB + 0.09, 0) // le moteur hors-bord
+      add(box(0.02, 0.08, 0.02, 0.004), glossy('#374151'), -0.45, hullB + 0.01, 0)
+      for (const z of [-0.1, 0.1]) add(lieX(cyl(0.006, 0.006, 0.5)), gold, 0.04, hullB + 0.19, z) // la main courante
       break
     }
     case 'tank': { // wagon-citerne : une cuve couchée, ses cerclages, son dôme et son échelle
@@ -316,11 +334,33 @@ function freightBody(kind: WagonStyle['kind'], c: string, len: number, { add, bo
       for (let k = 0; k < n; k++) sheep(-half + 0.11 + (k * (len - 0.22)) / (n - 1), k % 2 ? 0.06 : -0.06, k % 2 ? -1 : 1)
       break
     }
-    case 'elephant': { // wagon de cirque : un plateau à barrières dorées et un éléphant
-      deck(c)
-      for (const z of [-0.16, 0.16]) add(box(len, 0.02, 0.018, 0.006), gold, 0, TOP + 0.1, z)
-      stakes(0.1, 6)
-      elephant(0)
+    case 'elephant': { // wagon de cirque fermé : deux éléphants passent la tête par les fenêtres pour prendre l'air
+      const red = paint, cream = glossy('#fde68a')
+      add(box(len, 0.27, 0.34, 0.05), red, 0, 0.33, 0)
+      add(box(len + 0.01, 0.03, 0.345, 0.01), gold, 0, 0.215, 0) // liseré bas
+      add(box(len + 0.01, 0.03, 0.345, 0.01), gold, 0, 0.45, 0) // liseré haut
+      add(box(len - 0.02, 0.05, 0.36, 0.025), glossy(lighter(c, 0.25)), 0, 0.48, 0) // le toit
+      add(box(len - 0.12, 0.035, 0.22, 0.017), glossy(lighter(c, 0.4)), 0, 0.515, 0) // le lanterneau
+      for (let k = 0; k < 6; k++) add(new THREE.SphereGeometry(0.018, 10, 8), cream, -half + 0.1 + (k * (len - 0.2)) / 5, 0.545, 0) // ampoules du toit
+      const head = (x: number, side: 1 | -1) => {
+        const z = side * SIDE
+        add(box(0.2, 0.15, 0.012, 0.03), glossy('#1f2937'), x, 0.34, z) // la fenêtre (le noir de l'intérieur)
+        add(box(0.22, 0.17, 0.008, 0.03), gold, x, 0.34, z - side * 0.002)
+        const skin = glossy('#9ca3af'), dk = glossy('#6b7280'), white = glossy('#f8fafc')
+        const hz = z + side * 0.06
+        add(new THREE.SphereGeometry(0.085, 18, 14), skin, x, 0.37, hz) // la tête
+        for (const dx of [-0.09, 0.09]) add(new THREE.SphereGeometry(0.07, 14, 10).scale(1, 1.1, 0.3), dk, x + dx, 0.37, hz - side * 0.02) // les oreilles
+        add(new THREE.CylinderGeometry(0.022, 0.035, 0.16, 12).rotateX(side * 0.5), skin, x, 0.28, hz + side * 0.06) // la trompe, qui pend
+        for (const dx of [-0.035, 0.035]) add(new THREE.ConeGeometry(0.01, 0.05, 8).rotateX(side * (Math.PI / 2 + 0.3)), white, x + dx, 0.33, hz + side * 0.07) // les défenses
+        for (const dx of [-0.035, 0.035]) add(new THREE.SphereGeometry(0.012, 8, 6), glossy('#111827'), x + dx, 0.41, hz + side * 0.075) // les yeux
+      }
+      head(len / 4, 1)
+      head(-len / 4, -1)
+      // deux fenêtres fermées de l'autre côté, avec des étoiles de cirque
+      for (const [x, sd] of [[-len / 4, 1], [len / 4, -1]] as const) {
+        add(box(0.2, 0.15, 0.012, 0.03), cream, x, 0.34, sd * SIDE)
+        add(new THREE.CylinderGeometry(0.04, 0.04, 0.014, 5).rotateX(Math.PI / 2), gold, x, 0.34, sd * (SIDE + 0.006))
+      }
       break
     }
     case 'pipes': { // tuyaux : un fagot de gros tuyaux entre des ranchers
@@ -351,18 +391,6 @@ function freightBody(kind: WagonStyle['kind'], c: string, len: number, { add, bo
     for (const [dx, dy] of [[-0.05, 0.03], [0.03, 0.04], [0, -0.01]]) add(new THREE.SphereGeometry(0.04, 12, 10), wool, x + dx! * dir, y + dy!, z)
     add(new THREE.SphereGeometry(0.032, 12, 10).scale(1.3, 1, 0.9), face, x + 0.095 * dir, y + 0.02, z)
     for (const dz of [-0.03, 0.03]) add(box(0.02, 0.012, 0.03, 0.004), face, x + 0.085 * dir, y + 0.04, z + dz)
-  }
-  function elephant(x: number): void {
-    const skin = glossy('#9ca3af'), dk = glossy('#6b7280'), white = glossy('#f8fafc')
-    const y = TOP
-    for (const dx of [-0.13, 0.13]) for (const z of [-0.07, 0.07]) add(cyl(0.04, 0.045, 0.14), skin, x + dx, y + 0.07, z)
-    add(new THREE.SphereGeometry(0.15, 20, 16).scale(1.55, 0.95, 0.9), skin, x, y + 0.22, 0)
-    add(new THREE.SphereGeometry(0.1, 20, 16), skin, x + 0.25, y + 0.28, 0)
-    for (const z of [-0.09, 0.09]) add(new THREE.SphereGeometry(0.08, 16, 12).scale(0.35, 1, 1), dk, x + 0.21, y + 0.29, z)
-    add(new THREE.CylinderGeometry(0.025, 0.04, 0.2, 14).rotateZ(-0.35), skin, x + 0.34, y + 0.18, 0) // la trompe
-    for (const z of [-0.04, 0.04]) add(new THREE.ConeGeometry(0.012, 0.07, 10).rotateZ(-Math.PI / 2 - 0.4), white, x + 0.33, y + 0.23, z)
-    add(box(0.18, 0.02, 0.24, 0.008), glossy('#dc2626'), x - 0.02, y + 0.36, 0) // le tapis de cirque
-    add(box(0.185, 0.008, 0.245, 0.003), gold, x - 0.02, y + 0.352, 0)
   }
   function cow(x: number, z: number, dir: number): void {
     const white = glossy('#f8fafc'), black = glossy('#1f2937'), pink = glossy('#f9a8d4')
