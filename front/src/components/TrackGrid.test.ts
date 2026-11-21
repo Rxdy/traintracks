@@ -135,6 +135,8 @@ describe('TrackGrid — annuler / rétablir', () => {
     await drag(wrapper, [4, 4], [4, 5])
     await drag(wrapper, [6, 6], [6, 7])
     await toolbarButton(wrapper, 'Effacer tout').trigger('click')
+    expect(wrapper.findAllComponents(RailPiece)).toHaveLength(6) // premier toucher : rien n'est effacé, le bouton demande confirmation
+    await wrapper.find('[data-test=clear]').trigger('click')
     expect(wrapper.findAllComponents(RailPiece)).toHaveLength(2) // reste entrée + sortie
   })
 })

@@ -15,6 +15,9 @@ export function blockZoom(): void {
   // geste « page précédente » du navigateur, et le Trajet se figeait. Ailleurs (Compte, Classement…), la page défile normalement.
   const inGame = (t: EventTarget | null) => t instanceof Element && !!t.closest('.track, .loading')
   window.addEventListener('wheel', (e) => (e.ctrlKey || inGame(e.target)) && e.preventDefault(), { passive: false, capture: true })
+  // Deux doigts posés sur le pavé tactile = clic droit : sur l'écran de jeu, pas de menu du navigateur (il figeait le Trajet sous
+  // Firefox). La croix d'une case passe toujours : la grille écoute le clic droit elle-même.
+  window.addEventListener('contextmenu', (e) => inGame(e.target) && e.preventDefault(), { capture: true })
   document.addEventListener('touchmove', (e) => e.touches.length > 1 && e.preventDefault(), { passive: false })
   for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false })
 }

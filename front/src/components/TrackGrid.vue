@@ -393,6 +393,21 @@ function redo(): void {
     updateFlags()
   }
 }
+// Effacer tout se confirme : le premier toucher arme le bouton (rouge, « Toucher encore »), le second efface. Sans second
+// toucher dans les 3 s, rien ne se passe.
+const clearArmed = ref(false)
+let clearTimer = 0
+function askClear(): void {
+  if (solved.value) return
+  if (clearArmed.value) {
+    clearTimeout(clearTimer)
+    clearArmed.value = false
+    clearAll()
+    return
+  }
+  clearArmed.value = true
+  clearTimer = window.setTimeout(() => (clearArmed.value = false), 3000)
+}
 function clearAll(): void {
   if (solved.value) return
   touch()
@@ -600,7 +615,7 @@ onMounted(() => {
         <button type="button" class="btn btn--ghost tool" data-test="redo" @click="redo" :disabled="!canRedo" aria-label="Rétablir" title="Rétablir (Ctrl+Maj+Z)">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3" /></svg>
         </button>
-        <button type="button" class="btn btn--ghost tool clear" @click="clearAll" aria-label="Effacer tout" title="Effacer tout">
+        <button type="button" class="btn btn--ghost tool clear" :class="{ armed: clearArmed }" data-test="clear" @click="askClear" :aria-label="clearArmed ? 'Toucher encore pour tout effacer' : 'Effacer tout'" :title="clearArmed ? 'Toucher encore pour tout effacer' : 'Effacer tout'">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
         </button>
       </template>
@@ -780,6 +795,11 @@ onMounted(() => {
 }
 .toolbar .clear:hover:not(:disabled) {
   color: #dc2626;
+}
+.toolbar .clear.armed {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
 }
 
 .tool.on {
@@ -985,6 +1005,32 @@ onMounted(() => {
   background: transparent;
 }
 
+/* Paysage (option A) : les outils forment une colonne à gauche de la grille, en miroir des pouvoirs à droite ; annuler et
+   rétablir en haut, effacer en bas, à l'écart. */
+@media (min-aspect-ratio: 1/1) {
+  .track {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+  .toolbar {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-self: stretch;
+    padding: 0.6rem 0.45rem;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.75);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  }
+  .toolbar .clear {
+    margin-top: auto;
+  }
+  .tool {
+    width: 2.9rem;
+    height: 2.9rem;
+  }
+}
 @media (min-aspect-ratio: 1/1) {
   .board {
     --shift: 0px; /* les bonus sont à droite : la grille et ses compteurs restent groupés */
@@ -1000,8 +1046,8 @@ onMounted(() => {
   .toolbar {
     position: fixed;
     left: 0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
+    top: 4.25rem; /* sous Quitter */
+    bottom: 0.75rem;
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: center;
