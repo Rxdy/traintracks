@@ -398,13 +398,17 @@ section {
     width: max(9rem, calc(var(--band) - 1.2rem));
     max-width: none;
   }
-  .bonus-dock :deep(.low) {
+  /* `div.fresh` (plus spécifique que `.low`) fixait aussi `top` : la bulle du nouveau pouvoir d'un rang bas avait donc `top` ET
+     `bottom`, sa hauteur s'étirait entre les deux et son texte débordait dessous. */
+  .bonus-dock :deep(.low),
+  .bonus-dock :deep(div.fresh.low) {
     top: auto;
     bottom: calc(var(--j, 0) * var(--aid) * 1.18);
   }
   .bonus-dock :deep(div.fresh) {
     flex-wrap: wrap;
   }
+
   /* la nouveauté du niveau, dans la bande « partie » : en colonne, sur toute sa largeur */
   .intro {
     max-width: none;
