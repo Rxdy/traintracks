@@ -1,10 +1,12 @@
 // Les wagons à collectionner : une liste FIXE, partagée par le serveur (tirage, possession, ordre du train) et le navigateur
 // (dessin : front/src/scenery3d/trainModel.ts). Chaque wagon a son type ET son coloris : on ne repeint pas un wagon.
-// - base : 12 wagons courts, un vrai type de wagon par coloris (les trois premiers forment le train de départ) ;
+// - base : des wagons courts, un vrai type de wagon par coloris (les trois premiers forment le train de départ) ;
 // - fret : des wagons longs (1,5 à 2 fois un wagon court) qui comptent pour UNE place : un train de fret est plus long, c'est voulu.
 export type WagonKind =
   | 'baggage' | 'coach' | 'gondola' | 'sleeper' | 'panorama' | 'dining' | 'mail' | 'reefer' | 'caboose' | 'cattle' | 'boxcar' | 'hopper'
+  | 'milk' | 'wine' | 'salon' | 'crane' | 'horses' | 'fire'
   | 'flat' | 'logs' | 'autos' | 'boat' | 'tank' | 'containers' | 'livestock' | 'sheep' | 'elephant' | 'pipes'
+  | 'hay' | 'tractors' | 'giraffe' | 'blade' | 'digger' | 'ballast' | 'stone' | 'plane' | 'lions'
 export type WagonFamily = 'base' | 'fret'
 export interface WagonDef {
   id: string
@@ -29,6 +31,12 @@ export const WAGON_DEFS: readonly WagonDef[] = [
   { id: 'chocolat', name: 'Bestiaux', kindName: 'wagon à bestiaux', color: '#8b5a2b', kind: 'cattle', family: 'base', length: 1 },
   { id: 'ardoise', name: 'Couvert', kindName: 'wagon couvert', color: '#475569', kind: 'boxcar', family: 'base', length: 1 },
   { id: 'sable', name: 'Céréales', kindName: 'trémie à céréales', color: '#d6a85a', kind: 'hopper', family: 'base', length: 1 },
+  { id: 'lait', name: 'Lait', kindName: 'wagon à lait', color: '#e2e8f0', kind: 'milk', family: 'base', length: 1 },
+  { id: 'vin', name: 'Vin', kindName: 'wagon à foudres', color: '#7f1d1d', kind: 'wine', family: 'base', length: 1 },
+  { id: 'salon', name: 'Salon', kindName: 'voiture-salon', color: '#1e3a8a', kind: 'salon', family: 'base', length: 1 },
+  { id: 'grue', name: 'Grue', kindName: 'wagon-grue', color: '#65a30d', kind: 'crane', family: 'base', length: 1 },
+  { id: 'chevaux', name: 'Chevaux', kindName: 'wagon à chevaux', color: '#78350f', kind: 'horses', family: 'base', length: 1 },
+  { id: 'pompiers', name: 'Pompiers', kindName: 'wagon des pompiers', color: '#b91c1c', kind: 'fire', family: 'base', length: 1 },
   { id: 'plateau', name: 'Plateau', kindName: 'wagon plat', color: '#6b7280', kind: 'flat', family: 'fret', length: 1.6 },
   { id: 'grumes', name: 'Grumes', kindName: 'wagon de bois', color: '#7c2d12', kind: 'logs', family: 'fret', length: 1.8 },
   { id: 'autos', name: 'Autos', kindName: 'porte-autos', color: '#1d4ed8', kind: 'autos', family: 'fret', length: 2 },
@@ -38,6 +46,15 @@ export const WAGON_DEFS: readonly WagonDef[] = [
   { id: 'vaches', name: 'Vaches', kindName: 'wagon à bétail', color: '#a16207', kind: 'livestock', family: 'fret', length: 1.8 },
   { id: 'moutons', name: 'Moutons', kindName: 'wagon à bétail', color: '#65a30d', kind: 'sheep', family: 'fret', length: 1.6 },
   { id: 'elephant', name: 'Éléphant', kindName: 'wagon de cirque', color: '#be123c', kind: 'elephant', family: 'fret', length: 1.8 },
+  { id: 'foin', name: 'Foin', kindName: 'wagon de foin', color: '#92400e', kind: 'hay', family: 'fret', length: 1.8 },
+  { id: 'tracteurs', name: 'Tracteurs', kindName: 'porte-tracteurs', color: '#475569', kind: 'tractors', family: 'fret', length: 2 },
+  { id: 'girafe', name: 'Girafe', kindName: 'wagon de cirque', color: '#7c3aed', kind: 'giraffe', family: 'fret', length: 1.6 },
+  { id: 'eolienne', name: 'Éolienne', kindName: 'wagon à pale', color: '#334155', kind: 'blade', family: 'fret', length: 2 },
+  { id: 'chantier', name: 'Chantier', kindName: 'wagon de chantier', color: '#ca8a04', kind: 'digger', family: 'fret', length: 2 },
+  { id: 'ballast', name: 'Ballast', kindName: 'wagon à ballast', color: '#57534e', kind: 'ballast', family: 'fret', length: 1.6 },
+  { id: 'pierres', name: 'Pierres', kindName: 'wagon de pierres', color: '#6b7280', kind: 'stone', family: 'fret', length: 1.6 },
+  { id: 'avion', name: 'Avion', kindName: 'wagon à avion', color: '#0369a1', kind: 'plane', family: 'fret', length: 2 },
+  { id: 'lions', name: 'Lions', kindName: 'cage de cirque', color: '#c2410c', kind: 'lions', family: 'fret', length: 1.6 },
   { id: 'tuyaux', name: 'Tuyaux', kindName: 'wagon à tuyaux', color: '#334155', kind: 'pipes', family: 'fret', length: 1.8 },
 ]
 
