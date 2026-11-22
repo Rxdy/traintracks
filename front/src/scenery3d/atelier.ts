@@ -7,7 +7,7 @@ import { reducedMotion } from '../settings'
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { makeCar, makeWagon } from './trainModel'
-import { carOffsets, styleOf, TRAIN_LONGEST } from '../trainStyle'
+import { carLength, carOffsets, styleOf, TRAIN_LONGEST } from '../trainStyle'
 
 export type Probe = { kind: 'car'; index: number; at: number } | { kind: 'none' }
 
@@ -91,6 +91,8 @@ export function createAtelier(canvas: HTMLCanvasElement): Atelier {
 
   // la place de chaque voiture : le train tel qu'il serait, wagon tenu compris là où il irait
   let heldTarget = 0
+  let loaded = false // premier train reçu : la vue part de la locomotive
+  let tail = 0 // bout du train (queue du dernier wagon, place ouverte comprise) : jusqu'où la vue peut défiler
   let base: number[] = [] // centres des wagons qui restent, sans la place du wagon tenu : sert à choisir la place visée
   function layout(): void {
     const order = cars.map((c) => c.id)
@@ -99,6 +101,7 @@ export function createAtelier(canvas: HTMLCanvasElement): Atelier {
     base = carOffsets(order.map(styleOf)).slice(1)
     const withGap = held && held.at !== null ? [...order.slice(0, held.at), held.id, ...order.slice(held.at)] : order
     const off = carOffsets(withGap.map(styleOf))
+    tail = off[off.length - 1]! + carLength(withGap.length ? styleOf(withGap[withGap.length - 1]!) : null) / 2
     if (held && held.at !== null) heldTarget = off[held.at + 1]! // le wagon tenu va dans la place qui s'ouvre, sur la voie
     let j = 1
     staying.forEach((c, k) => {
@@ -121,25 +124,73 @@ export function createAtelier(canvas: HTMLCanvasElement): Atelier {
       }
     }
     for (const c of pool) drop(c.group)
+    const longer = loaded && next.length > cars.length
+    loaded = true
     cars = next
     layout()
+    if (longer && !held) camTarget = maxX() // un wagon ajouté au bout : on montre la queue du train
     for (const c of cars) if (c.x === 0) c.x = c.target
   }
 
-  // la caméra : de biais, toute la voie dans la largeur
+  // la caméra : de biais. Écran large : toute la voie dans la largeur. Écran étroit (téléphone) : zoomée, pour bien voir
+  // les wagons ; si le train dépasse, on fait défiler la vue (glisser sur la voie, molette ; en tenant un wagon près d'un bord).
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 60)
+  const ZOOM_PX = 150 // pixels par unité de voie sur un écran étroit (la locomotive fait 0,62)
+  let hw = 1 // demi-largeur vue (unités)
+  let camX = (LEFT + RIGHT) / 2, camTarget = camX
+  const minX = () => Math.min((LEFT + RIGHT) / 2, LEFT - 0.2 + hw)
+  const maxX = () => Math.max(minX(), Math.min(RIGHT + 0.2 - hw, tail + 0.9 - hw))
+  const clampX = (x: number) => Math.min(maxX(), Math.max(minX(), x))
+  const place = () => {
+    camera.position.set(camX, 6, 4.2)
+    camera.lookAt(camX, 0.15, 0)
+    camera.updateMatrixWorld()
+  }
   const fit = () => {
     const w = canvas.clientWidth, h = canvas.clientHeight
     if (!w || !h) return
     renderer.setSize(w, h, false)
-    const halfW = (RIGHT - LEFT) / 2 + 0.2
-    const halfH = Math.max((halfW * h) / w, 0.9)
-    const hw = (halfH * w) / h
+    const full = (RIGHT - LEFT) / 2 + 0.2
+    let halfH: number
+    if (w < 640) {
+      hw = Math.min(full, w / ZOOM_PX / 2)
+      halfH = Math.max((hw * h) / w, 0.55)
+      hw = (halfH * w) / h
+    } else {
+      halfH = Math.max((full * h) / w, 0.9)
+      hw = (halfH * w) / h
+    }
     Object.assign(camera, { left: -hw, right: hw, top: halfH, bottom: -halfH })
-    camera.position.set((LEFT + RIGHT) / 2, 6, 4.2)
-    camera.lookAt((LEFT + RIGHT) / 2, 0.15, 0)
     camera.updateProjectionMatrix()
+    camX = camTarget = clampX(camTarget)
+    place()
   }
+  const scrollable = () => maxX() - minX() > 0.01
+  // glisser sur la voie (pas sur un wagon) ou molette : la vue défile
+  let pan: { x: number; cam: number } | null = null
+  const unitsPerPx = () => (2 * hw) / Math.max(1, canvas.clientWidth)
+  const onPanDown = (e: PointerEvent) => {
+    if (!scrollable() || e.button > 0) return
+    const r = canvas.getBoundingClientRect()
+    ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera)
+    if (ray.intersectObjects(cars.map((c) => c.group), true).length) return // un wagon : c'est un glisser de wagon
+    pan = { x: e.clientX, cam: camTarget }
+  }
+  const onPanMove = (e: PointerEvent) => {
+    if (pan) camTarget = clampX(pan.cam - (e.clientX - pan.x) * unitsPerPx())
+  }
+  const onPanUp = () => (pan = null)
+  const onWheel = (e: WheelEvent) => {
+    if (!scrollable()) return
+    e.preventDefault()
+    camTarget = clampX(camTarget + (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * unitsPerPx())
+  }
+  canvas.addEventListener('pointerdown', onPanDown)
+  window.addEventListener('pointermove', onPanMove)
+  window.addEventListener('pointerup', onPanUp)
+  window.addEventListener('pointercancel', onPanUp)
+  canvas.addEventListener('wheel', onWheel, { passive: false })
+  let edge = 0 // wagon tenu près d'un bord : -1 / 1, la vue défile toute seule
   fit()
   const ro = new ResizeObserver(fit)
   ro.observe(canvas)
@@ -169,6 +220,7 @@ export function createAtelier(canvas: HTMLCanvasElement): Atelier {
 
   function hold(h: { id: string; from: number | null; clientX: number; clientY: number } | null): void {
     if (!h) {
+      edge = 0
       if (held && held.from === null) drop(held.group) // venu de « Tes wagons » : le parent dira s'il entre dans le train
       if (held && held.from !== null) held.group.visible = true
       held = null
@@ -181,6 +233,8 @@ export function createAtelier(canvas: HTMLCanvasElement): Atelier {
       held = { id: h.id, from: h.from, group, x: h.from !== null ? cars[h.from]!.x : RIGHT, z: 0, at: null }
       heldTarget = held.x
     }
+    const r = canvas.getBoundingClientRect()
+    edge = h.clientY >= r.top && h.clientY <= r.bottom ? (h.clientX < r.left + 44 ? -1 : h.clientX > r.right - 44 ? 1 : 0) : 0
     const p = toWorld(h.clientX, h.clientY)
     if (p) {
       held.at = placeAt(p.x, held.from)
@@ -209,6 +263,12 @@ export function createAtelier(canvas: HTMLCanvasElement): Atelier {
       held.group.position.set(held.x, 0.04, 0)
       held.group.rotation.z = 0
     }
+    if (edge && held) camTarget = clampX(camTarget + edge * 3 * dt)
+    camTarget = clampX(camTarget)
+    if (Math.abs(camTarget - camX) > 1e-4) {
+      camX += (camTarget - camX) * (pan ? 1 : k)
+      place()
+    }
     renderer.render(scene, camera)
   }
   raf = requestAnimationFrame(loop)
@@ -220,6 +280,11 @@ export function createAtelier(canvas: HTMLCanvasElement): Atelier {
     dispose() {
       cancelAnimationFrame(raf)
       ro.disconnect()
+      canvas.removeEventListener('pointerdown', onPanDown)
+      window.removeEventListener('pointermove', onPanMove)
+      window.removeEventListener('pointerup', onPanUp)
+      window.removeEventListener('pointercancel', onPanUp)
+      canvas.removeEventListener('wheel', onWheel)
       for (const c of cars) drop(c.group)
       if (held && held.from === null) drop(held.group)
       drop(loco)
