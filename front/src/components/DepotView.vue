@@ -6,7 +6,8 @@ import type { Depot, DepotPick } from '../scenery3d/depot'
 
 // Le dépôt en 3D (scenery3d/depot.ts) : les 3 trains sur leurs voies, celui « en route » au quai, les garages au fond
 // et l'entrepôt de la collection derrière. Ce qu'on touche remonte par `pick`. Sans 3D : `fallback` (le parent montre des boutons).
-const props = defineProps<{ presets: string[][]; active: number }>()
+// full : la scène occupe tout l'écran, sans cadre (la page Mon train)
+const props = defineProps<{ presets: string[][]; active: number; full?: boolean }>()
 const emit = defineEmits<{ (e: 'pick', p: DepotPick): void; (e: 'fallback'): void }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -37,7 +38,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="ok" class="depot" data-test="depot">
+  <div v-if="ok" class="depot" :class="{ full }" data-test="depot">
     <canvas ref="canvas" aria-label="Le dépôt : touche un train pour le faire rouler, un garage pour le personnaliser, l'entrepôt pour ta collection" role="img" />
   </div>
 </template>
@@ -50,6 +51,17 @@ onUnmounted(() => {
   border: 3px solid #fff;
   background: #9fd07f;
   box-shadow: 0 3px 10px rgba(30, 64, 175, 0.15);
+}
+.depot.full {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.depot.full canvas {
+  height: 100%;
 }
 canvas {
   display: block;

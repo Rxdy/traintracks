@@ -34,7 +34,7 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (p: DepotPick) =>
   sun.target.position.set(W / 2, 0, GAP)
   sun.castShadow = true
   sun.shadow.mapSize.set(2048, 1024)
-  Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 6, bottom: -6, near: 1, far: 30 })
+  Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 8, bottom: -8, near: 1, far: 34 })
   scene.add(sun, sun.target)
 
   const disposables: { dispose(): void }[] = []
@@ -224,19 +224,45 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (p: DepotPick) =>
     storeRoof.color.set(p?.kind === 'collection' ? '#2563eb' : '#475569')
   }
 
-  // la caméra : de biais, tout le dépôt dans la largeur
+  // la caméra : de biais, le dépôt entier dans l'écran, en laissant la place de l'en-tête (en haut) et de l'aide (en bas).
+  // Écran plus large que haut : vue de face, les voies en travers, l'entrepôt derrière les garages.
+  // Écran en hauteur (téléphone, tablette debout) : vue depuis le heurtoir, les voies montent vers les garages,
+  // et l'entrepôt passe tout au fond, derrière les garages, sa porte tournée vers nous.
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 80)
+  const PAD_TOP = 78, PAD_BOTTOM = 70, PAD_SIDE = 12 // px
+  const corner = new THREE.Vector3()
   const fit = () => {
     const w = canvas.clientWidth, h = canvas.clientHeight
     if (!w || !h) return
     renderer.setSize(w, h, false)
-    // tout le dépôt : du heurtoir aux garages en largeur, de l'entrepôt (au fond) à la dernière voie en hauteur
-    const halfW = (W + 0.8) / 2
-    const halfH = Math.max(halfW * (h / w), 3.3)
-    const hw = halfH * (w / h)
-    Object.assign(camera, { left: -hw, right: hw, top: halfH, bottom: -halfH })
-    camera.position.set(W / 2, 10, GAP + 4.2) // plongée forte, comme la vue du Trajet
-    camera.lookAt(W / 2 - 0.2, 0, GAP - 0.75)
+    const tall = h > w
+    const target = new THREE.Vector3(W / 2, 0, GAP)
+    let box: [number, number, number, number] // xmin, xmax, zmin, zmax : ce qui doit se voir
+    if (tall) {
+      store.rotation.y = -Math.PI / 2
+      store.position.set(GARAGE_X + 2.2 + 2.1, 0, GAP - sw / 2)
+      camera.position.set(target.x - 4.95, 10, target.z)
+      box = [QUAI_X - 1.1, store.position.x + 0.8, -0.6, GAP * 2 + 0.6]
+    } else {
+      store.rotation.y = 0
+      store.position.set(GARAGE_X - 4.2, 0, -2.3)
+      camera.position.set(target.x + 0.2, 10, target.z + 4.95) // plongée forte, comme la vue du Trajet
+      box = [QUAI_X - 1.1, W + 0.1, -3.2, GAP * 2 + 0.6]
+    }
+    camera.up.set(0, 1, 0)
+    camera.lookAt(target)
+    camera.updateMatrixWorld()
+    // le cadre du dépôt, vu par la caméra
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
+    for (const x of [box[0], box[1]]) for (const z of [box[2], box[3]]) for (const y of [0, 1.4]) {
+      corner.set(x, y, z).applyMatrix4(camera.matrixWorldInverse)
+      x0 = Math.min(x0, corner.x); x1 = Math.max(x1, corner.x)
+      y0 = Math.min(y0, corner.y); y1 = Math.max(y1, corner.y)
+    }
+    // unités par pixel : le dépôt tient dans la zone libre ; ce qui reste se partage de chaque côté
+    const u = Math.max((x1 - x0) / Math.max(1, w - 2 * PAD_SIDE), (y1 - y0) / Math.max(1, h - PAD_TOP - PAD_BOTTOM))
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2 + ((PAD_BOTTOM - PAD_TOP) / 2) * u
+    Object.assign(camera, { left: cx - (w / 2) * u, right: cx + (w / 2) * u, top: cy + (h / 2) * u, bottom: cy - (h / 2) * u })
     camera.updateProjectionMatrix()
   }
   fit()

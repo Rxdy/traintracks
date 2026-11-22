@@ -53,7 +53,7 @@ export function createAtelier(canvas: HTMLCanvasElement): Atelier {
 
   // le sol, la voie, le heurtoir à gauche
   const len = RIGHT - LEFT + 4
-  add(new THREE.PlaneGeometry(len, 8).rotateX(-Math.PI / 2), mat('#a8d48a'), (LEFT + RIGHT) / 2, 0, 0).castShadow = false
+  add(new THREE.PlaneGeometry(len + 40, 40).rotateX(-Math.PI / 2), mat('#a8d48a'), (LEFT + RIGHT) / 2, 0, 0).castShadow = false // assez grand pour ne jamais voir son bord
   add(new THREE.BoxGeometry(len, 0.03, 0.66), mat('#b8b0a3'), (LEFT + RIGHT) / 2, 0.015, 0).castShadow = false
   const ties = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 0.03, 0.46), mat('#7a4e2d'), Math.ceil(len / 0.22))
   disposables.push(ties.geometry)
