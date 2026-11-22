@@ -35,6 +35,7 @@ const needsAccount = new Set(['daily', 'stats'])
 const isLocked = (id: string) => needsAccount.has(id) && !user.value
 const rightCubes = [
   { id: 'stats', label: 'Statistiques' },
+  { id: 'train', label: 'Mon train' },
   { id: 'account', label: 'Compte' },
 ] as const
 // Compte : l'initiale du joueur quand il est connecté

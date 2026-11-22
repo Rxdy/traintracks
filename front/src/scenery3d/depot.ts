@@ -1,15 +1,18 @@
-// Le dépôt de Mon train, en 3D (vu d'en haut, de biais, comme le Trajet) : trois voies, chacune avec son garage au fond.
-// Le train « en route » s'avance jusqu'au quai ; les deux autres attendent devant leur garage. Quand on en fait rouler
-// un autre, l'ancien recule devant son garage et le nouveau avance prendre sa place. Toucher un garage ou un train
-// choisit le train à personnaliser. Les trains regardent vers la gauche : la locomotive tire vers le quai.
+// Le dépôt de Mon train, en 3D (vu d'en haut, de biais, comme le Trajet) : trois voies, chacune avec son garage au fond,
+// et derrière les garages l'entrepôt de la collection. Le train « en route » s'avance jusqu'au quai ; les deux autres
+// attendent devant leur garage. Toucher un train le fait rouler (l'ancien recule devant son garage, le nouveau avance) ;
+// toucher un garage ouvre la personnalisation de son train ; toucher l'entrepôt ouvre la collection.
+// Les trains regardent vers la gauche : la locomotive tire vers le quai.
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { CHIMNEY, makeCar, makeSteam, makeWagon } from './trainModel'
-import { carOffsets, carLength, type WagonStyle } from '../trainStyle'
+import { carOffsets, carLength, styleOf as carStyle, type WagonStyle } from '../trainStyle'
+
+export type DepotPick = { kind: 'train' | 'garage'; slot: number } | { kind: 'collection' }
 
 export interface Depot {
   setTrains(trains: readonly (readonly WagonStyle[])[]): void
-  setState(active: number, editing: number): void
+  setActive(active: number): void
   dispose(): void
 }
 
@@ -18,7 +21,7 @@ const GAP = 1.25 // écart entre deux voies
 const GARAGE_X = W - 2.3 // porte des garages (le garage fait 2,2 de long)
 const QUAI_X = 1.1 // où s'arrête la locomotive du train en route
 
-export function createDepot(canvas: HTMLCanvasElement, onPick: (slot: number) => void): Depot {
+export function createDepot(canvas: HTMLCanvasElement, onPick: (p: DepotPick) => void): Depot {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
   renderer.shadowMap.enabled = true
@@ -78,7 +81,6 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (slot: number) =>
 
   // les garages, au fond de chaque voie
   const garages: THREE.Group[] = []
-  const frames: THREE.Mesh[] = []
   const roofs: THREE.MeshStandardMaterial[] = []
   const wall = mat('#b45309'), dark = mat('#1f2937'), gold = mat('#fbbf24', { metalness: 0.5, roughness: 0.3 })
   for (let k = 0; k < 3; k++) {
@@ -90,11 +92,7 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (slot: number) =>
     const roof = mat('#7f1d1d')
     roofs.push(roof)
     add(prism, roof, d / 2, 0.86, 0, g)
-    // devant la porte, une dalle qui s'éclaire quand ce garage est choisi
-    const pad = add(new RoundedBoxGeometry(0.5, 0.02, 0.78, 2, 0.01), mat('#fde68a', { emissive: '#f59e0b', emissiveIntensity: 0.6 }), -0.3, 0.035, 0, g)
-    pad.castShadow = false
-    pad.visible = false
-    frames.push(pad)
+
     add(new THREE.BoxGeometry(0.02, 0.56, 0.62), dark, -0.005, 0.3, 0, g) // la porte ouverte
     add(new THREE.BoxGeometry(0.04, 0.64, 0.72), gold, -0.02, 0.33, 0, g) // l'encadrement doré de la porte
     // le numéro du garage
@@ -113,9 +111,55 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (slot: number) =>
     const tex = new THREE.CanvasTexture(plate)
     disposables.push(tex)
     add(new THREE.CircleGeometry(0.13, 24).rotateY(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: tex }), -0.03, 0.62, 0, g)
-    g.traverse((o) => (o.userData.slot = k))
+    g.traverse((o) => (o.userData.pick = { kind: 'garage', slot: k }))
     scene.add(g)
     garages.push(g)
+  }
+
+  // l'entrepôt de la collection, derrière les garages (en haut de la vue), avec sa voie de garage et son enseigne
+  const store = new THREE.Group()
+  store.position.set(GARAGE_X - 4.2, 0, -2.3)
+  const sw = 4.2
+  add(new RoundedBoxGeometry(sw, 0.95, 1.5, 3, 0.05), mat('#e7d8b9'), sw / 2, 0.475, 0, store)
+  add(new THREE.CylinderGeometry(0.82, 0.82, sw + 0.12, 24, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2).scale(1, 0.5, 1), mat('#475569'), sw / 2, 0.95, 0, store)
+  add(new THREE.BoxGeometry(1.5, 0.75, 0.02), dark, sw / 2, 0.39, 0.755, store) // la grande porte ouverte
+  add(new THREE.BoxGeometry(1.6, 0.06, 0.06), gold, sw / 2, 0.79, 0.77, store)
+  for (const x of [0.45, sw - 0.45]) add(new THREE.BoxGeometry(0.5, 0.32, 0.02), mat('#bfe3fa', { metalness: 0.1, roughness: 0.2 }), x, 0.55, 0.755, store)
+  {
+    const sign = document.createElement('canvas')
+    sign.width = 512
+    sign.height = 96
+    const g2 = sign.getContext('2d')!
+    g2.fillStyle = '#7f1d1d'
+    g2.fillRect(0, 0, 512, 96)
+    g2.strokeStyle = '#fbbf24'
+    g2.lineWidth = 8
+    g2.strokeRect(4, 4, 504, 88)
+    g2.fillStyle = '#fde68a'
+    g2.font = 'bold 54px system-ui, sans-serif'
+    g2.textAlign = 'center'
+    g2.textBaseline = 'middle'
+    g2.fillText('COLLECTION', 256, 52)
+    const tex = new THREE.CanvasTexture(sign)
+    disposables.push(tex)
+    add(new THREE.PlaneGeometry(2.0, 0.38), new THREE.MeshBasicMaterial({ map: tex }), sw / 2, 1.08, 0.79, store)
+  }
+  // la voie qui entre dans l'entrepôt, et deux wagons qu'on aperçoit dehors
+  for (const o of [-0.12, 0.12]) add(new THREE.BoxGeometry(0.03, 0.03, 1.4), rail, sw / 2 + o, 0.06, 1.35, store)
+  for (const [id, z] of [['ambre', 1.25], ['vert', 0.6]] as const) {
+    const w = makeWagon(carStyle(id))
+    w.rotation.y = Math.PI / 2
+    w.position.set(sw / 2, 0.03, z)
+    store.add(w)
+  }
+  store.traverse((o) => (o.userData.pick = { kind: 'collection' }))
+  scene.add(store)
+
+  // quelques arbres autour du dépôt
+  const leaf = mat('#3f9a4a'), trunk = mat('#7a4e2d')
+  for (const [x, z, h] of [[-0.6, -1.4, 0.9], [0.6, -2.1, 1.1], [2.4, -1.6, 0.8], [5.8, -2.3, 1.0], [-0.3, 3.6, 1.0], [3.8, 3.9, 0.8], [9.2, 3.7, 1.1], [13.8, 3.5, 0.9]] as const) {
+    add(new THREE.CylinderGeometry(0.05, 0.07, 0.3, 8), trunk, x, 0.15, z)
+    add(new THREE.ConeGeometry(0.32 * h, 0.8 * h, 9), leaf, x, 0.3 + 0.4 * h, z)
   }
 
   // les trains
@@ -155,7 +199,7 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (slot: number) =>
         group.add(car)
       })
       group.position.z = k * GAP
-      group.traverse((o) => (o.userData.slot = k))
+      group.traverse((o) => (o.userData.pick = { kind: 'train', slot: k }))
       const last = wagons[wagons.length - 1] ?? null
       const tail = off[off.length - 1]! + carLength(last) / 2
       const target = targetOf(k, tail)
@@ -168,13 +212,15 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (slot: number) =>
     })
   }
 
-  let editing = 0
-  function setState(a: number, e: number): void {
+  function setActive(a: number): void {
     active = a
-    editing = e
     trains.forEach((t, k) => t && (t.target = targetOf(k, t.tail)))
-    frames.forEach((f, k) => (f.visible = k === editing))
-    roofs.forEach((r, k) => r.color.set(k === editing ? '#d97706' : '#7f1d1d')) // le garage choisi : toit orangé
+  }
+  // au survol (souris), le toit du garage ou de l'entrepôt s'éclaire : on voit ce qui se touche
+  const storeRoof = (store.children[1] as THREE.Mesh).material as THREE.MeshStandardMaterial
+  function hover(p: DepotPick | null): void {
+    roofs.forEach((r, k) => r.color.set(p?.kind === 'garage' && p.slot === k ? '#d97706' : '#7f1d1d'))
+    storeRoof.color.set(p?.kind === 'collection' ? '#2563eb' : '#475569')
   }
 
   // la caméra : de biais, tout le dépôt dans la largeur
@@ -183,12 +229,13 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (slot: number) =>
     const w = canvas.clientWidth, h = canvas.clientHeight
     if (!w || !h) return
     renderer.setSize(w, h, false)
-    const halfW = (W + 0.6) / 2
-    const halfH = Math.max(halfW * (h / w), 2.1)
+    // tout le dépôt : du heurtoir aux garages en largeur, de l'entrepôt (au fond) à la dernière voie en hauteur
+    const halfW = (W + 0.8) / 2
+    const halfH = Math.max(halfW * (h / w), 3.3)
     const hw = halfH * (w / h)
     Object.assign(camera, { left: -hw, right: hw, top: halfH, bottom: -halfH })
-    camera.position.set(W / 2, 10, GAP + 4.6) // plongée forte, comme la vue du Trajet
-    camera.lookAt(W / 2 - 0.2, 0, GAP - 0.1)
+    camera.position.set(W / 2, 10, GAP + 4.2) // plongée forte, comme la vue du Trajet
+    camera.lookAt(W / 2 - 0.2, 0, GAP - 0.75)
     camera.updateProjectionMatrix()
   }
   fit()
@@ -197,19 +244,21 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (slot: number) =>
 
   // toucher : quel garage, quel train ?
   const ray = new THREE.Raycaster()
-  const onClick = (ev: PointerEvent) => {
+  const pickAt = (ev: PointerEvent): DepotPick | null => {
     const r = canvas.getBoundingClientRect()
     ray.setFromCamera(new THREE.Vector2(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1), camera)
-    const hit = ray.intersectObjects([...garages, ...trains.filter(Boolean).map((t) => t!.group)], true)[0]
-    const slot = hit?.object.userData.slot
-    if (typeof slot === 'number') onPick(slot)
+    const hit = ray.intersectObjects([store, ...garages, ...trains.filter(Boolean).map((t) => t!.group)], true)[0]
+    return (hit?.object.userData.pick as DepotPick | undefined) ?? null
+  }
+  const onClick = (ev: PointerEvent) => {
+    const p = pickAt(ev)
+    if (p) onPick(p)
   }
   canvas.addEventListener('pointerup', onClick)
   const onMove = (ev: PointerEvent) => {
-    const r = canvas.getBoundingClientRect()
-    ray.setFromCamera(new THREE.Vector2(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1), camera)
-    const hit = ray.intersectObjects([...garages, ...trains.filter(Boolean).map((t) => t!.group)], true)[0]
-    canvas.style.cursor = hit ? 'pointer' : ''
+    const p = pickAt(ev)
+    canvas.style.cursor = p ? 'pointer' : ''
+    hover(p)
   }
   canvas.addEventListener('pointermove', onMove)
 
@@ -238,7 +287,7 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (slot: number) =>
 
   return {
     setTrains,
-    setState,
+    setActive,
     dispose() {
       cancelAnimationFrame(raf)
       ro.disconnect()

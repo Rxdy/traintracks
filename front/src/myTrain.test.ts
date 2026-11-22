@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
-import TrainView from './views/TrainView.vue'
+import TrainEditView from './views/TrainEditView.vue'
+import CollectionView from './views/CollectionView.vue'
+import DepotPage from './views/DepotPage.vue'
 import WagonMachine from './components/WagonMachine.vue'
 import TrainRun from './components/TrainRun.vue'
 import { myTrain, trainWagons, freeCount, selectPreset, setTrain } from './myTrain'
@@ -66,20 +68,48 @@ describe('la longueur du train', () => {
 const set = (train: string[], owned: Record<string, number> = myTrain.value.owned) =>
   (myTrain.value = { ...myTrain.value, owned, train, presets: [train, [...STARTER_TRAIN], [...STARTER_TRAIN]], active: 0 })
 
-describe('Mon train (page entière)', () => {
-  it('affiche le train, la collection en n/6, les 3 trains et le nombre de wagons encore à gagner', async () => {
+describe('Mon train : dépôt, personnalisation, collection', () => {
+  it('la collection : tous les wagons en n/6, ceux à découvrir, et le nombre de wagons encore à gagner', async () => {
     route({ 'GET /api/train': { status: 200, body: state({ ambre: 2, vert: 1, violet: 1 }, ['ambre', 'vert']) } })
-    const w = mount(TrainView)
+    const w = mount(CollectionView)
     await flushPromises()
-    expect(w.find('[data-test=train-car-0]').exists()).toBe(true)
-    expect(w.find('[data-test=train-car-1]').exists()).toBe(true)
-    expect(w.find('[data-test=train-slot-2]').exists()).toBe(true)
+    expect(w.findAll('.item')).toHaveLength(WAGON_DEFS.length)
     expect(w.find('[data-test=coll-ambre] [data-test=coll-count]').text()).toBe('2/6')
     expect(w.find('[data-test=coll-bleu] [data-test=coll-count]').text()).toBe('0/6')
     expect(w.find('[data-test=coll-bleu]').attributes('disabled')).toBeDefined()
     expect(w.find('[data-test=train-left]').text()).toBe(`Encore ${COLLECTION_TOTAL - 4} wagons à gagner`)
-    expect(w.findAll('[role=tab]')).toHaveLength(3)
-    expect(w.find('[data-test=preset-0] [data-test=preset-active]').exists()).toBe(true)
+    await w.find('[data-test=coll-ambre]').trigger('click')
+    expect(w.find('[data-test=wagon-big]').text()).toContain('Bagages')
+  })
+
+  it('personnaliser un train : le train et seulement les wagons qu\'on a', async () => {
+    route({ 'GET /api/train': { status: 200, body: state({ ambre: 2, vert: 1, violet: 1 }, ['ambre', 'vert']) } })
+    const w = mount(TrainEditView, { props: { slot: 0 } })
+    await flushPromises()
+    expect(w.find('[data-test=train-car-0]').exists()).toBe(true)
+    expect(w.find('[data-test=train-car-1]').exists()).toBe(true)
+    expect(w.find('[data-test=train-slot-2]').exists()).toBe(true)
+    expect(w.findAll('.item')).toHaveLength(3)
+    expect(w.find('[data-test=coll-ambre] [data-test=coll-count]').text()).toBe('1') // 2 à soi, 1 déjà dans ce train
+    expect(w.find('[data-test=preset-active]').exists()).toBe(true)
+  })
+
+  it('le dépôt sans 3D : faire rouler un train, ouvrir son garage, ouvrir la collection', async () => {
+    const calls = route({
+      'GET /api/train': { status: 200, body: state({ ambre: 1, vert: 1, violet: 1 }, [...STARTER_TRAIN]) },
+      'POST /api/train/active': { status: 200, body: { ok: true, state: state({ ambre: 1, vert: 1, violet: 1 }, [...STARTER_TRAIN], undefined, 1) } },
+    })
+    const go = vi.fn()
+    const w = mount(DepotPage, { global: { provide: { go } } })
+    await flushPromises()
+    await w.find('[data-test=depot-roll-1]').trigger('click')
+    await flushPromises()
+    expect(calls.at(-1)).toEqual({ key: 'POST /api/train/active', body: { slot: 1 } })
+    expect(myTrain.value.active).toBe(1)
+    await w.find('[data-test=depot-garage-2]').trigger('click')
+    expect(go).toHaveBeenLastCalledWith('trainEdit', 2)
+    await w.find('[data-test=depot-collection]').trigger('click')
+    expect(go).toHaveBeenLastCalledWith('collection')
   })
 
   it('toucher un wagon de la collection l\'ajoute au bout ; ✕ le range ; deux touchers échangent l\'ordre', async () => {
@@ -87,7 +117,7 @@ describe('Mon train (page entière)', () => {
       'GET /api/train': { status: 200, body: state({ ambre: 2, vert: 1, violet: 1 }, ['ambre', 'vert', 'violet']) },
       'POST /api/train/layout': { status: 200, body: { ok: true, state: state({ ambre: 2, vert: 1, violet: 1 }, ['ambre']) } },
     })
-    const w = mount(TrainView)
+    const w = mount(TrainEditView, { props: { slot: 0 } })
     await flushPromises()
     await w.find('[data-test=coll-ambre]').trigger('click')
     await flushPromises()
@@ -106,7 +136,7 @@ describe('Mon train (page entière)', () => {
 
   it('pas plus de wagons d\'un type que ceux qu\'on a ; train plein : un message', async () => {
     route({ 'GET /api/train': { status: 200, body: state({ ambre: 1, vert: 1, violet: 1 }, ['ambre', 'vert', 'violet']) } })
-    const w = mount(TrainView)
+    const w = mount(TrainEditView, { props: { slot: 0 } })
     await flushPromises()
     expect(freeCount('ambre')).toBe(0)
     await w.find('[data-test=coll-ambre]').trigger('click')
@@ -123,9 +153,8 @@ describe('Mon train (page entière)', () => {
       'POST /api/train/layout': { status: 200, body: { ok: true, state: state({ ambre: 1, vert: 1, violet: 1 }, [...STARTER_TRAIN], [[...STARTER_TRAIN], [...STARTER_TRAIN], ['violet', 'vert', 'ambre']]) } },
       'POST /api/train/active': { status: 200, body: { ok: true, state: state({ ambre: 1, vert: 1, violet: 1 }, ['violet', 'vert', 'ambre'], [[...STARTER_TRAIN], [...STARTER_TRAIN], ['violet', 'vert', 'ambre']], 2) } },
     })
-    const w = mount(TrainView)
+    const w = mount(TrainEditView, { props: { slot: 2 } })
     await flushPromises()
-    await w.find('[data-test=preset-2]').trigger('click')
     expect(w.find('[data-test=preset-roll]').exists()).toBe(true)
     await w.find('[data-test=train-car-0]').trigger('click')
     await w.find('[data-test=train-car-2]').trigger('click')
@@ -144,7 +173,7 @@ describe('Mon train (page entière)', () => {
       'GET /api/train': { status: 200, body: state({ ambre: 2, vert: 1, violet: 1 }, ['ambre', 'vert']) },
       'POST /api/train/layout': { status: 200, body: { ok: true, state: state({ ambre: 2, vert: 1, violet: 1 }, ['ambre', 'vert']) } },
     })
-    const w = mount(TrainView, { attachTo: document.body })
+    const w = mount(TrainEditView, { props: { slot: 0 }, attachTo: document.body })
     await flushPromises()
     const at = (sel: string) => document.querySelector(sel) as HTMLElement
     const drop = (target: HTMLElement) => {

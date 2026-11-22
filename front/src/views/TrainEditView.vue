@@ -1,39 +1,28 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
-import { MAX_PER_WAGON, TRAIN_SLOTS, WAGON_DEFS } from '../../../shared/wagons.js'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { TRAIN_SLOTS, WAGON_DEFS } from '../../../shared/wagons.js'
 import { freeCount, loadTrain, myTrain, selectPreset, setTrain } from '../myTrain'
 import { styleOf, wagonLabel } from '../trainStyle'
-import CoinIcon from '../components/CoinIcon.vue'
 import WagonThumb from '../components/WagonThumb.vue'
-import DepotView from '../components/DepotView.vue'
 
-// « Mon train », sur toute la page : 3 trains enregistrés (celui « en route » roule dans le Trajet), le train choisi en grand,
-// la collection dessous, la machine à côté.
+// Personnaliser un train (un des 3 du dépôt, ouvert en touchant son garage) : le train en grand sur sa voie, tes wagons dessous.
 // Glisser-déposer : un wagon de la collection vers une place du train ; un wagon du train vers une autre place ;
 // un wagon du train vers la collection pour le ranger. Au toucher : un wagon du train puis une autre place les échange,
 // un wagon de la collection va au bout du train.
-const openMachine = inject<() => void>('openMachine', () => undefined)
-
-const editing = ref(myTrain.value.active) // le train affiché (pas forcément celui qui roule)
+const props = defineProps<{ slot: number }>()
+const editing = computed(() => props.slot) // le train personnalisé (pas forcément celui qui roule)
 const cars = computed(() => myTrain.value.presets[editing.value] ?? [])
 const slots = computed(() => Array.from({ length: TRAIN_SLOTS }, (_, k) => cars.value[k] ?? null))
-const total = computed(() => Object.values(myTrain.value.owned).reduce((a, b) => a + b, 0))
+// seulement les wagons qu'on a : la collection entière a sa page (l'entrepôt du dépôt)
+const mine = computed(() => WAGON_DEFS.filter((w) => (myTrain.value.owned[w.id] ?? 0) > 0))
 const picked = ref<number | null>(null)
 const msg = ref('')
 
-onMounted(async () => {
-  await loadTrain()
-  editing.value = myTrain.value.active
-})
+onMounted(() => void loadTrain())
 
 async function save(next: string[]): Promise<void> {
   msg.value = ''
   if (!(await setTrain(next, editing.value))) msg.value = 'Le train n\'a pas pu être rangé. Réessaie.'
-}
-function chooseTab(k: number): void {
-  editing.value = k
-  picked.value = null
-  msg.value = ''
 }
 async function rollThis(): Promise<void> {
   if (!(await selectPreset(editing.value))) msg.value = 'Ce train n\'a pas pu partir. Réessaie.'
@@ -140,26 +129,9 @@ const dragId = computed(() => drag.value?.src.id ?? null)
 
 <template>
   <section class="train-page" data-test="train-page" :class="{ dragging: !!drag }">
-    <!-- le dépôt : les 3 trains sur leurs voies ; toucher un garage choisit le train à personnaliser -->
-    <DepotView :presets="myTrain.presets" :active="myTrain.active" :editing="editing" @pick="chooseTab" />
-
-    <!-- les 3 trains enregistrés -->
-    <div class="tabs" role="tablist" aria-label="Mes trains">
-      <button
-        v-for="k in [0, 1, 2]"
-        :key="k"
-        type="button"
-        role="tab"
-        class="tab"
-        :class="{ on: editing === k }"
-        :aria-selected="editing === k"
-        :data-test="'preset-' + k"
-        @click="chooseTab(k)"
-      >
-        Garage {{ k + 1 }}
-        <span v-if="myTrain.active === k" class="road" data-test="preset-active">en route</span>
-      </button>
-      <button v-if="editing !== myTrain.active" type="button" class="btn btn--small roll" data-test="preset-roll" @click="rollThis">Faire rouler le train {{ editing + 1 }}</button>
+    <div class="head">
+      <span v-if="myTrain.active === slot" class="road" data-test="preset-active">en route</span>
+      <button v-else type="button" class="btn btn--small" data-test="preset-roll" @click="rollThis">Faire rouler ce train</button>
     </div>
 
     <!-- le train, en grand, sur sa voie -->
@@ -192,42 +164,35 @@ const dragId = computed(() => drag.value?.src.id ?? null)
     </div>
     <p class="hint">
       <template v-if="picked !== null">Touche une autre place pour l'y mettre.</template>
-      <template v-else>Glisse un wagon de ta collection sur une place, ou un wagon du train vers une autre place. Glisse-le vers la collection pour le ranger.</template>
+      <template v-else>Glisse un de tes wagons sur une place, ou un wagon du train vers une autre place. Glisse-le vers tes wagons pour le ranger.</template>
       <b>{{ cars.length }}/{{ TRAIN_SLOTS }}</b>
     </p>
     <p v-if="msg" class="err" data-test="train-msg">{{ msg }}</p>
 
     <div class="below">
-      <!-- la collection : on y dépose un wagon du train pour le ranger -->
+      <!-- tes wagons : on y dépose un wagon du train pour le ranger -->
       <div class="collection card" :class="{ over: drag?.over === 'collection' }" data-drop="collection">
-        <h2>Ma collection <span>· {{ total }} wagons, jusqu'à {{ MAX_PER_WAGON }} de chaque</span></h2>
+        <h2>Tes wagons</h2>
         <div class="grid">
           <button
-            v-for="w in WAGON_DEFS"
+            v-for="w in mine"
             :key="w.id"
             type="button"
             class="item"
             :class="{ off: !myTrain.owned[w.id], ghosted: dragId === w.id && drag?.src.kind === 'coll', spent: !!myTrain.owned[w.id] && freeCount(w.id, cars) <= 0 }"
             :disabled="!myTrain.owned[w.id]"
             :data-test="'coll-' + w.id"
-            :aria-label="myTrain.owned[w.id] ? w.name + ', ' + myTrain.owned[w.id] + ' sur ' + MAX_PER_WAGON : 'À découvrir'"
+            :aria-label="w.name + ', ' + freeCount(w.id, cars) + ' libre' + (freeCount(w.id, cars) > 1 ? 's' : '')"
             @pointerdown="myTrain.owned[w.id] && down($event, { kind: 'coll', id: w.id })"
             @click="click(() => tapCollection(w.id))()"
           >
-            <span class="count" data-test="coll-count">{{ myTrain.owned[w.id] ?? 0 }}/{{ MAX_PER_WAGON }}</span>
+            <span class="count" data-test="coll-count" title="libres pour ce train">{{ Math.max(0, freeCount(w.id, cars)) }}</span>
             <WagonThumb :id="w.id" />
-            <span class="name">{{ myTrain.owned[w.id] ? w.name : 'À découvrir' }}</span>
+            <span class="name">{{ w.name }}</span>
           </button>
         </div>
       </div>
 
-      <!-- la machine -->
-      <div class="machine-card">
-        <strong>WAGON SURPRISE</strong>
-        <span>Un wagon au hasard, on gagne à chaque fois.</span>
-        <span class="left" data-test="train-left">Encore {{ myTrain.left }} wagons à gagner</span>
-        <button type="button" class="btn btn--small pull" data-test="open-machine" @click="openMachine()">Tirer · {{ myTrain.price }} <CoinIcon /></button>
-      </div>
     </div>
 
     <!-- le wagon qui suit le doigt pendant un glisser -->
@@ -256,38 +221,12 @@ const dragId = computed(() => drag.value?.src.id ?? null)
   background: rgba(255, 255, 255, 0.95);
   box-shadow: 0 3px 10px rgba(30, 64, 175, 0.15);
 }
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-.tab {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.45rem 1rem;
-  border-radius: 999px;
-  border: 2px solid #fff;
-  background: rgba(255, 255, 255, 0.85);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
-.tab.on {
-  background: #f59e0b;
-  color: #3b2400;
-  border-color: #fde68a;
-}
 .road {
   padding: 0.05rem 0.5rem;
   border-radius: 999px;
   background: #16a34a;
   color: #fff;
   font-size: 0.75rem;
-}
-.roll {
-  margin-left: auto;
 }
 .track {
   display: flex;
@@ -387,18 +326,24 @@ const dragId = computed(() => drag.value?.src.id ?? null)
   font-weight: 700;
 }
 .below {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 15rem;
-  gap: 0.75rem;
-  align-items: start;
+  display: block;
 }
-@media (max-width: 48rem) {
-  .below {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .machine-card {
-    order: -1;
-  }
+.head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2rem;
+}
+.head .road {
+  padding: 0.25rem 0.8rem;
+  font-size: 0.9rem;
+}
+.head h2 {
+  margin: 0;
+  padding: 0.25rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 1.2rem;
 }
 .collection {
   padding: 0.8rem 1rem 1rem;
@@ -468,32 +413,6 @@ const dragId = computed(() => drag.value?.src.id ?? null)
 .name {
   font-size: 0.85rem;
   font-weight: 700;
-}
-.machine-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 1rem;
-  border-radius: 1.2rem;
-  border: 3px solid #fde68a;
-  background: linear-gradient(#b91c1c, #7f1d1d);
-  color: #fff;
-  text-align: center;
-  font-size: 0.9rem;
-}
-.machine-card strong {
-  color: #fde68a;
-  letter-spacing: 0.06em;
-  font-size: 1.05rem;
-}
-.machine-card .left {
-  color: #fde68a;
-  font-weight: 800;
-}
-.pull {
-  background: #fbbf24;
-  color: #3b2400;
 }
 .ghost {
   position: fixed;

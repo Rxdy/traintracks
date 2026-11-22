@@ -128,7 +128,7 @@ onUnmounted(() => {
           <span v-else-if="phase === 'idle'">Tire la manette : on gagne à chaque fois.</span>
           <div v-if="phase !== 'spinning'" class="actions">
             <button type="button" class="btn btn--small" data-test="machine-again" :disabled="left === 0" @click="pull">{{ phase === 'won' ? 'Encore' : 'Tirer' }} · {{ price }} <CoinIcon /></button>
-            <button v-if="phase === 'won'" type="button" class="btn btn--ghost btn--small" data-test="machine-my-train" @click="emit('myTrain')">Mon train</button>
+            <button v-if="phase === 'won'" type="button" class="btn btn--ghost btn--small" data-test="machine-my-train" @click="emit('myTrain')">Ma collection</button>
           </div>
         </div>
       </div>
