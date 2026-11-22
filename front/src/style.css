@@ -134,3 +134,12 @@ body {
   border-radius: 12px;
   box-shadow: var(--shadow);
 }
+
+/* Paramètres, « Animations réduites » : plus de mouvements ni de transitions (de simples changements) */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001s !important;
+}

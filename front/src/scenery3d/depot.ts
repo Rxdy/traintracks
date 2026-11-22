@@ -3,6 +3,7 @@
 // attendent devant leur garage. Toucher un train le fait rouler (l'ancien recule devant son garage, le nouveau avance) ;
 // toucher un garage ouvre la personnalisation de son train ; toucher l'entrepôt ouvre la collection.
 // Les trains regardent vers la gauche : la locomotive tire vers le quai.
+import { reducedMotion } from '../settings'
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { CHIMNEY, makeCar, makeSteam, makeWagon } from './trainModel'
@@ -24,7 +25,7 @@ const QUAI_X = 1.1 // où s'arrête la locomotive du train en route
 export function createDepot(canvas: HTMLCanvasElement, onPick: (p: DepotPick) => void): Depot {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
-  renderer.shadowMap.enabled = true
+  renderer.shadowMap.enabled = !reducedMotion() // animations réduites : pas d'ombres, plus léger
   renderer.shadowMap.type = THREE.PCFShadowMap
   const scene = new THREE.Scene()
   scene.add(new THREE.HemisphereLight('#ffffff', '#8fb36b', 1.5))
@@ -262,7 +263,7 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (p: DepotPick) =>
   }
   canvas.addEventListener('pointermove', onMove)
 
-  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const still = reducedMotion()
   const chimney = new THREE.Vector3()
   let raf = 0
   let last = performance.now()

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { reducedMotion } from '../settings'
 import { computed, ref, shallowRef } from 'vue'
 import type { Scenery } from '../scenery/generate'
 import { useClock } from '../scenery/clock'
@@ -20,7 +21,7 @@ const empty: LandFrame = { cars: [], barrier: 0, lights: false, animals: [], bir
 const frame = shallowRef<LandFrame>(empty)
 // Apparition : tout ce qui vit sur le décor (animaux, oiseaux, voitures, cabane…) apparaît case par case, chaque case à un
 // moment tiré au hasard (scenery/reveal.ts, le même tirage que les arbres et les maisons), à partir du moment où le décor est prêt (`start`).
-const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+const reduce = reducedMotion()
 const REVEAL_END = REVEAL.start + REVEAL.spread + 100
 const elapsed = ref(reduce ? REVEAL_END : 0) // ms depuis le début de l'apparition ; au-delà de REVEAL_END, plus de masque
 let revealT0 = -1

@@ -6,6 +6,7 @@
 // Tout ce qui est plat (herbe, champs, ballast, route, lit de la rivière, prolongements de la voie) est peint dans
 // une seule texture de sol, dessinée en SVG puis rastérisée : c'est le rendu « option 1 ». Les objets debout sont
 // en volumes, avec des textures générées par le code (écorce, tuiles, pierre, bois, façades). Aucune image à charger.
+import { reducedMotion } from '../settings'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { PAL, rng, type Scenery, type Tile } from '../scenery'
@@ -779,7 +780,7 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
 
   // une seule boucle d'animation pour le monde ; chaque vue y dessine à son tour
   const views = new Set<(t: number, dt: number) => void>()
-  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const still = reducedMotion()
   const t0 = performance.now()
   let raf = 0
   let last = t0
@@ -866,7 +867,7 @@ export function finish(renderer: THREE.WebGLRenderer) {
 // Un rendu WebGL sur un canvas, à la bonne résolution (la grille est agrandie par CSS à la victoire : on dessine à la taille réelle).
 export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: !opaque })
-  renderer.shadowMap.enabled = true
+  renderer.shadowMap.enabled = !reducedMotion() // animations réduites : pas d'ombres, plus léger
   renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.shadowMap.autoUpdate = true
   const fin = finish(renderer)
@@ -879,7 +880,9 @@ export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
     if (!w || !h) return
     const scale = canvas.getBoundingClientRect().width / w || 1
     lastScale = scale
-    renderer.setPixelRatio(Math.min(3, (window.devicePixelRatio || 1) * scale))
+    // téléphone et tablette : 2 fois la résolution au plus (au-delà, ça ne se voit pas et ça rame)
+    const cap = window.matchMedia?.('(pointer: coarse)').matches ? 2 : 3
+    renderer.setPixelRatio(Math.min(cap, (window.devicePixelRatio || 1) * scale))
     renderer.setSize(w, h, false)
     onSize(w, h)
   }
