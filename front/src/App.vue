@@ -146,7 +146,7 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
     <p v-if="notice" class="notice" data-test="notice" role="status" @click="notice = ''">{{ notice }}</p>
 
     <main class="board-area" :class="{ top: panel }">
-      <div class="content" :class="{ panel, wide: view === 'train' || view === 'trainEdit' || view === 'collection' || view === 'settings' }" data-test="content">
+      <div class="content" :class="{ panel, wide: view === 'train' || view === 'trainEdit' || view === 'collection' || view === 'settings' || view === 'stats' }" data-test="content">
         <JourneyView v-if="view === 'home'" @playing="playing = $event" @navigate="go" />
         <DailyView v-else-if="view === 'daily'" @playing="playing = $event" />
         <TutorialView v-else-if="view === 'tuto'" />
@@ -312,6 +312,16 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #111827;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* téléphone debout : un titre plus petit, pour que les boutons de droite tiennent dans l'écran */
+@media (max-width: 26rem) {
+  .title {
+    font-size: 1rem;
+  }
 }
 .content:not(.panel) {
   /* accueil et parties : occupent toute la hauteur (barre de jeu tout en haut) */
