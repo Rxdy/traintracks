@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ANIMALS_3D, ANIMAL_BIG } from '../scenery/animals3d'
 import { reducedMotion } from '../settings'
 import { computed, ref, shallowRef } from 'vue'
 import type { Scenery } from '../scenery/generate'
@@ -55,7 +56,7 @@ const armA = computed(() => -85 + 85 * frame.value.barrier)
 const armB = computed(() => 265 - 85 * frame.value.barrier)
 const uc = computed(() => sim.uc ?? 0)
 // Les petites scènes (feu de camp, skieur, cabine de téléphérique…) sont agrandies pour se voir à côté des arbres.
-const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, skier: 1.5, sled: 1.5, goat: 1.3, tractor: 1.3, sheep: 1.3, cow: 1.3 }
+const BIG = ANIMAL_BIG
 </script>
 
 <template>
@@ -133,7 +134,7 @@ const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, 
       </g>
 
       <!-- animaux -->
-      <g v-for="a in frame.animals" :key="a.id" :transform="`translate(${a.x} ${a.y}) scale(${a.face * 1.45 * (BIG[a.kind] ?? 1)} ${1.45 * (BIG[a.kind] ?? 1)})`">
+      <g v-for="a in in3d ? frame.animals.filter((x) => !ANIMALS_3D.has(x.kind)) : frame.animals" :key="a.id" :transform="`translate(${a.x} ${a.y}) scale(${a.face * 1.45 * (BIG[a.kind] ?? 1)} ${1.45 * (BIG[a.kind] ?? 1)})`">
         <template v-if="a.kind === 'owl'">
           <g :transform="`rotate(${Math.sin(a.t * 0.5) * 4})`">
             <ellipse cx="0" cy="0.05" rx="0.12" ry="0.14" fill="#8b6f47" />
