@@ -88,3 +88,23 @@ describe('corrélation de rang', () => {
     expect(Math.abs(spearman([1, 2, 3, 4, 5, 6], [3, 6, 1, 5, 2, 4]))).toBeLessThan(0.6)
   })
 })
+
+describe('niveaux équivalents (miroir, rotation, sens inverse)', () => {
+  it('symmetryKey : le même tracé retourné, tourné ou parcouru à l\'envers donne la même clé', async () => {
+    const { symmetryKey } = await import('./levelBuilder.js')
+    const path: [number, number][] = [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]]
+    const n = 3
+    const mirror = path.map(([r, c]) => [r, n - 1 - c] as [number, number])
+    const turned = path.map(([r, c]) => [c, n - 1 - r] as [number, number])
+    const key = symmetryKey(path, n)
+    expect(symmetryKey(mirror, n)).toBe(key)
+    expect(symmetryKey(turned, n)).toBe(key)
+    expect(symmetryKey([...path].reverse(), n)).toBe(key)
+    expect(symmetryKey([[0, 0], [0, 1], [0, 2], [1, 2], [2, 2]], n)).not.toBe(key)
+  })
+
+  it('un nouveau niveau qui se joue comme un autre fait échouer l\'audit, les jumeaux déjà publiés sont tolérés', async () => {
+    const { KNOWN_TWINS } = await import('./levelBuilder.js')
+    expect([...KNOWN_TWINS].sort((a, b) => a - b)).toEqual([7, 13, 21, 26, 30, 43, 52, 58])
+  })
+})

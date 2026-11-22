@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { revealDelay } from '../scenery/reveal'
 import { computed } from 'vue'
 import type { Scenery } from '../scenery'
 import { PAL } from '../scenery'
@@ -44,15 +45,15 @@ const box = computed(() => {
   const board = s.rows - s.margin.y - s.margin.b
   const u = 100 / (board + 1)
   // hauteur : seulement la partie visible (jusqu'au bas de la zone d'origine) ; le reste du dessin est rogné (slice)
-  return { width: `${s.cols * u}%`, height: `${s.frame.visibleRows * u}%`, left: `${-s.margin.x * u}%`, top: `${-s.margin.y * u}%` }
+  return { width: `${s.cols * u}%`, height: `${s.frame.visibleRows * u}%`, left: `${(1 - s.margin.x) * u}%`, top: `${(1 - s.margin.y) * u}%` }
 })
 
 const items = computed(() => {
   const out: { r: number; c: number; kind: string; v: number; dir?: 'h' | 'v'; d: number }[] = []
   props.scenery.tiles.forEach((row, r) =>
     row.forEach((t, c) => {
-      if (t.kind === 'rail' || t.kind === 'road' || props.scenery.water.has(`${r},${c}`)) return
-      out.push({ r, c, kind: t.kind, v: t.v, dir: t.dir, d: 500 + (r + c) * 120 })
+      if (t.kind === 'rail' || t.kind === 'road' || t.kind === 'path' || t.kind === 'clear' || props.scenery.water.has(`${r},${c}`)) return
+      out.push({ r, c, kind: t.kind, v: t.v, dir: t.dir, d: revealDelay(props.scenery.seed, r, c) })
     }),
   )
   return out
@@ -61,6 +62,7 @@ const fields = computed(() => items.value.filter((i) => i.kind === 'field'))
 const standing = computed(() => items.value.filter((i) => i.kind !== 'field'))
 // la voie de la grille de jeu est donnée dans son propre repère : on la décale de la marge du décor
 const ballast = computed(() => (props.route ? 'M' + props.route.points.map((p) => `${p.x + props.scenery.margin.x} ${p.y + props.scenery.margin.y}`).join(' L') : ''))
+const pathDs = computed(() => props.scenery.paths.map((p) => 'M' + p.map((q) => `${q.x} ${q.y}`).join(' L')))
 const extPaths = computed(() => props.scenery.ext.map((e) => 'M' + e.map((p) => `${p.x} ${p.y}`).join(' L')))
 // Prolongements : EXACTEMENT la géométrie d'un rail de la grille (rails.ts, case = 100) : deux rails à ±0,12 de l'axe
 // (épaisseur 0,06), traverses de 0,4 de long (épaisseur 0,07) tous les quarts de case, calées sur les cases entières.
@@ -106,6 +108,12 @@ const bridges = computed(() => [...props.scenery.bridges].map(([k, axis]) => ({ 
       <path :d="d" fill="none" :stroke="pal.bedEdge" stroke-width="0.68" stroke-linejoin="round" />
       <path :d="d" fill="none" :stroke="pal.bed" stroke-width="0.58" stroke-linejoin="round" />
     </template>
+
+    <!-- sentiers de terre : sous la route, la rivière et les objets -->
+    <g v-for="(d, i) in pathDs" :key="'p' + i" data-test="path" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path :d="d" :stroke="pal.bedEdge" stroke-width="0.3" />
+      <path :d="d" :stroke="pal.bed" stroke-width="0.22" />
+    </g>
 
     <RoadEl v-if="scenery.road" :road="scenery.road" :rows="rows" :cols="cols" :pal="pal" />
 

@@ -2,7 +2,7 @@
 // et leur palette (couleurs de chaque élément ET de la voie : pas de rails enneigés sur un sol de prairie).
 // Un environnement par « chapitre » du Voyage : le décor reste cohérent d'un niveau à l'autre, puis change.
 // Durée pendant laquelle le décor se dévoile avant que le train ne démarre (0 : tout de suite, pour les tests).
-export const timing = { revealMs: 2800 }
+export const timing = { revealMs: 2500 } // le train part quand tout le décor est apparu (scenery/reveal.ts : 300 + 1 500 ms, plus l'animation)
 
 export type Theme =
   | 'plaine' | 'foret' | 'automne' | 'montagne' | 'hiver'
@@ -60,14 +60,15 @@ export interface Params {
   peakKind?: 'mountain' | 'mesa' | 'dune' // ce que « montagne » devient : mesa au canyon, dune au désert
   clump?: boolean // arbres et reliefs en GROUPES (bosquets, crêtes) plutôt qu'au hasard
   treeKind?: 'tree' | 'cactus' | 'palm' | 'crater' | 'obsidian' | 'deadtree' // ce que « arbre » devient dans cet environnement
+  paths?: boolean // sentiers de terre entre les maisons et la route
   pineKind?: 'pine' | 'cactus' | 'palm' | 'vent' | 'skull' | 'boulder'
 }
 export const PARAMS: Record<Theme, Params> = {
-  plaine: { clump: true, river: 0.7, tree: 0.4, pine: 0.1, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0, road: 0.85, windmills: 1 },
-  foret: { clump: true, river: 0.5, tree: 0.6, pine: 0.6, houseBase: 0, houseRatio: 0, fields: 0, peaks: 0, boulders: 0.05, snowmen: 0, road: 0.35, windmills: 0 },
+  plaine: { paths: true, clump: true, river: 0.7, tree: 0.32, pine: 0.1, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0, road: 0.85, windmills: 1 },
+  foret: { clump: true, river: 0.5, tree: 0.85, pine: 0.6, houseBase: 0, houseRatio: 0, fields: 0, peaks: 0, boulders: 0.05, snowmen: 0, road: 0.35, windmills: 0 },
   automne: { clump: true, river: 0.6, tree: 0.5, pine: 0.12, houseBase: 1, houseRatio: 0.12, fields: 2, peaks: 0, boulders: 0, snowmen: 0, road: 0.8, windmills: 0 },
   montagne: { clump: true, river: 0.7, tree: 0.25, pine: 0.7, houseBase: 1, houseRatio: 0.05, fields: 0, peaks: 0.3, boulders: 0.2, snowmen: 0, road: 0.5, windmills: 0 },
-  hiver: { clump: true, river: 0.7, tree: 0.35, pine: 0.7, houseBase: 1, houseRatio: 0.1, fields: 0, peaks: 0.08, boulders: 0, snowmen: 0.2, road: 0.6, windmills: 0 },
+  hiver: { clump: true, river: 0.3, tree: 0.35, pine: 0.7, houseBase: 1, houseRatio: 0.1, fields: 0, peaks: 0.08, boulders: 0, snowmen: 0.2, road: 0.6, windmills: 0 },
   ville: { river: 0.7, tree: 0.25, pine: 0.1, houseBase: 3, houseRatio: 0.38, fields: 0, peaks: 0, boulders: 0, snowmen: 0, road: 1, windmills: 0, houseKind: 'building' },
   desert: { clump: true, peakKind: 'dune', river: 0.4, tree: 0.3, pine: 0.5, houseBase: 1, houseRatio: 0.08, fields: 0, peaks: 0.3, boulders: 0.25, snowmen: 0, road: 0.7, windmills: 0, treeKind: 'cactus', pineKind: 'cactus' },
   tropical: { clump: true, river: 0.65, tree: 0.5, pine: 0.7, houseBase: 1, houseRatio: 0.06, fields: 0, peaks: 0, boulders: 0.1, snowmen: 0, road: 0.35, windmills: 0, pineKind: 'palm', treeKind: 'palm' },

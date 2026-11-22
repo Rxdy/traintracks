@@ -14,6 +14,14 @@ let master: GainNode
 let noise: AudioBuffer
 let reverb: ConvolverNode
 const buses = {} as Record<BusName, GainNode>
+// le volume choisi par le joueur (Paramètres), par famille de sons : un étage à part, que les fondus du jeu ne touchent pas
+const userGains = {} as Record<BusName, GainNode>
+const userLevel: Record<BusName, number> = { sfx: 1, train: 1, amb: 1, music: 1, lobby: 1 }
+/** Volume du joueur pour une famille de sons (0 à 1). */
+export function setUserLevel(name: BusName, v: number): void {
+  userLevel[name] = Math.max(0, Math.min(1, v))
+  if (ctx && userGains[name]) userGains[name].gain.setTargetAtTime(userLevel[name], ctx.currentTime, 0.05)
+}
 
 export const available = () => !!Ctx
 
@@ -29,7 +37,10 @@ function ensure(): AudioContext | null {
     for (const k of Object.keys(BUS_LEVEL) as BusName[]) {
       buses[k] = ctx.createGain()
       buses[k].gain.value = BUS_LEVEL[k]
-      buses[k].connect(master)
+      userGains[k] = ctx.createGain()
+      userGains[k].gain.value = userLevel[k]
+      buses[k].connect(userGains[k])
+      userGains[k].connect(master)
     }
     noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate)
     const d = noise.getChannelData(0)

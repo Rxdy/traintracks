@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { levels } from '../testLevels'
 import { buildScenery, seedOf, type Scenery } from '../scenery/generate'
-import { offBoardBridges } from './bridgeRails'
+import { bridgesWithRails, offBoardBridges } from './bridgeRails'
 import SceneryLayer from '../components/SceneryLayer.vue'
 
 // Contrôle de #38 : sur les ponts et les passages à niveau, la voie doit rester visible quand le décor est affiché.
@@ -51,7 +51,20 @@ describe('décor : la voie reste visible sur les ponts et les passages à niveau
     expect(offCrossings).toBeGreaterThan(10)
   })
 
-  it('3D : le monde repose des rails sur tous les ponts hors de la grille, et seulement sur ceux-là', () => {
+  it('3D : le monde repose des rails sur tous les ponts, dans la grille comme hors de la grille', () => {
+    let inside = 0
+    for (const { n, sc } of scenes) {
+      const got = bridgesWithRails(sc).map(({ r, c }) => `${r},${c}`).sort()
+      expect(got, `niveau ${n}`).toEqual([...sc.bridges.keys()].sort())
+      for (const { r, c, axis } of bridgesWithRails(sc)) {
+        expect(axis, `niveau ${n}, pont ${r},${c}`).toBe(sc.bridges.get(`${r},${c}`))
+        if (inBoard(sc, r, c)) inside++
+      }
+    }
+    expect(inside).toBeGreaterThan(10) // le cas du bug : un pont dans la grille, sans rails sur son tablier
+  })
+
+  it('hors de la grille : la liste des ponts du décor classique est inchangée', () => {
     for (const { n, sc } of scenes) {
       const got = offBoardBridges(sc).map(({ r, c }) => `${r},${c}`).sort()
       const want = [...sc.bridges.keys()].filter((k) => !inBoard(sc, ...(k.split(',').map(Number) as [number, number]))).sort()

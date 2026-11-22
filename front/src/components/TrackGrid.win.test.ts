@@ -1,3 +1,4 @@
+import SceneryLife from './SceneryLife.vue'
 import { describe, it, expect, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mount } from '@vue/test-utils'
@@ -241,12 +242,11 @@ describe('TrackGrid : récapitulatif de fin de partie', () => {
     expect(w.find('[data-test=fold]').exists()).toBe(false)
     expect(w.find('[data-test=reopen]').exists()).toBe(false)
     expect(w.find('[data-test=undo]').exists()).toBe(false) // fin de partie : les outils de tracé laissent la place
-    expect(w.find('[data-test=replay]').exists()).toBe(true)
-    await w.find('[data-test=replay]').trigger('click') // le train repart : le récapitulatif reste
+    expect(w.find('[data-test=replay]').exists()).toBe(false) // « Revoir le trajet » est dans la fenêtre de fin de l'écran de jeu
+    ;(w.vm as unknown as { replayTrain: () => void }).replayTrain() // le train repart : le récapitulatif reste
     await w.vm.$nextTick()
     await w.vm.$nextTick()
     expect(w.find('[data-test=train]').exists()).toBe(true)
-    expect(w.find('[data-test=replay]').attributes('disabled')).toBeDefined() // pas de relance pendant que le train roule
     expect(w.find('.win-zone [data-test=finish]').exists()).toBe(true)
     w.unmount()
   })
@@ -355,32 +355,58 @@ describe('TrackGrid : accélérer le train', () => {
     await w.vm.$nextTick()
   }
 
-  it('un bouton à côté de « Relancer » accélère le train (4 fois), et on peut revenir à la vitesse normale', async () => {
+  it('la vitesse du train a trois crans, le cran actif est marqué, et le choix change la vitesse', async () => {
     const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
-    expect(w.find('[data-test=fast]').exists()).toBe(false) // pas avant la victoire
+    expect(w.find('[data-test=speed]').exists()).toBe(false) // pas avant la victoire
     await tracer(w)
-    const fast = w.get('[data-test=fast]')
-    expect(fast.element.previousElementSibling).toBe(w.get('[data-test=replay]').element) // juste à côté du bouton ▷
-    expect(fast.attributes('aria-pressed')).toBe('false')
     const vitesse = () => w.findComponent(TrainRun).props('speed') as number
-    const tranquille = vitesse() as number
-    await fast.trigger('click')
-    expect(w.get('[data-test=fast]').attributes('aria-pressed')).toBe('true')
-    expect(vitesse()).toBeCloseTo(tranquille * 4)
-    await fast.trigger('click')
-    expect(vitesse()).toBe(tranquille)
+    expect(w.get('[data-test=speed-normal]').attributes('aria-pressed')).toBe('true')
+    const normale = vitesse()
+    await w.get('[data-test=speed-fast]').trigger('click')
+    expect(w.get('[data-test=speed-fast]').attributes('aria-pressed')).toBe('true')
+    expect(w.get('[data-test=speed-normal]').attributes('aria-pressed')).toBe('false')
+    expect(vitesse()).toBeGreaterThan(normale)
+    await w.get('[data-test=speed-slow]').trigger('click')
+    expect(w.get('[data-test=speed-slow]').attributes('aria-pressed')).toBe('true')
+    expect(vitesse()).toBeLessThan(normale)
+    await w.get('[data-test=speed-normal]').trigger('click')
+    expect(vitesse()).toBe(normale)
     w.unmount()
   })
 
-  it('le train est tranquille par défaut (moins de 2,5 cases par seconde), et le bouton est inactif une fois le train arrivé', async () => {
+  it('par défaut, le train roule au cran du milieu (4,5 cases par seconde)', async () => {
     const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
     await tracer(w)
-    expect(w.findComponent(TrainRun).props('speed')).toBeLessThan(2.5)
-    await w.get('[data-test=fast]').trigger('click')
-    w.findComponent(TrainRun).vm.$emit('done')
+    expect(w.findComponent(TrainRun).props('speed')).toBe(4.5)
+    w.unmount()
+  })
+
+  it('écran tourné : le décor garde sa forme pendant le trajet, et se refait pour la nouvelle forme au « Revoir le trajet »', async () => {
+    const taille = (l: number, h: number) => {
+      Object.defineProperty(window, 'innerWidth', { value: l, configurable: true })
+      Object.defineProperty(window, 'innerHeight', { value: h, configurable: true })
+    }
+    taille(390, 844)
+    const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
+    await tracer(w)
+    // le décor affiché (celui que reçoit la couche du décor vivant)
+    const scene = () => { const l = w.findComponent(SceneryLife); return l.exists() ? { scenery: l.props('scenery') as unknown } : undefined }
+    const depart = scene()?.scenery
+    expect(depart).toBeTruthy()
+    const rejouer = () => (w.vm as unknown as { replayTrain: () => void }).replayTrain()
+    taille(844, 390) // rotation pendant le trajet : rien ne change
+    window.dispatchEvent(new Event('resize'))
     await w.vm.$nextTick()
-    expect(w.get('[data-test=fast]').attributes('disabled')).toBeDefined()
-    expect(w.get('[data-test=fast]').attributes('aria-pressed')).toBe('false') // la prochaine fois, on repart tranquillement
+    expect(scene()?.scenery).toBe(depart)
+    w.findComponent(TrainRun).vm.$emit('done')
+    rejouer() // écran tourné : décor refait
+    await flushPromises()
+    expect(scene()?.scenery).not.toBe(depart)
+    const refait = scene()?.scenery
+    rejouer() // même forme : le décor reste
+    await flushPromises()
+    expect(scene()?.scenery).toBe(refait)
+    taille(1024, 768)
     w.unmount()
   })
 })

@@ -112,7 +112,7 @@ describe('meilleure série', () => {
 })
 
 describe('série de jours et statistiques', () => {
-  it('jours consécutifs : bonus de +2 par jour de série (max +10)', async () => {
+  it('jours consécutifs : toujours 20 pièces, sans bonus de série ; la série est comptée', async () => {
     const { db } = await makeGame()
     const days = ['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13']
     const earned: number[] = []
@@ -120,21 +120,14 @@ describe('série de jours et statistiques', () => {
       const r = await play(db, U, d, Date.UTC(2026, 10, 12), Date.UTC(2026, 10, 12) + 1000)
       if (r.ok) earned.push(r.earned.base + r.earned.streakBonus)
     }
-    expect(earned).toEqual([20, 22, 24, 26, 28])
+    expect(earned).toEqual([20, 20, 20, 20, 20])
     expect(await streakUntil(db, U, '2026-11-13')).toBe(5)
   })
-  it('un jour manqué remet la série à 1 ; le bonus plafonne à +10', async () => {
+  it('un jour manqué remet la série à 1', async () => {
     const { db } = await makeGame()
     await play(db, U, '2026-11-09', t0, t0 + 1)
     const r = await play(db, U, '2026-11-11', t0, t0 + 1) // le 10 manqué
     expect(r).toMatchObject({ ok: true, streak: 1, earned: { base: 20, streakBonus: 0 } })
-    let last = 0
-    for (let d = 1; d <= 9; d++) {
-      const date = `2026-12-${String(d).padStart(2, '0')}`
-      const x = await play(db, U, date, t0, t0 + 1)
-      if (x.ok) last = x.earned.streakBonus
-    }
-    expect(last).toBe(10)
   })
   it('statistiques : nombre, moyenne, plus rapide, plus lent, série', async () => {
     const { db } = await makeGame()

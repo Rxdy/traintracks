@@ -47,18 +47,32 @@ describe('pièces affichées', () => {
 })
 
 describe('présentation d\'un pouvoir qui vient de se débloquer', () => {
-  it('au niveau du déblocage, un encadré explique le pouvoir ; on peut le fermer ; ailleurs il n\'apparaît pas', async () => {
+  it('au niveau du déblocage, tant que l\'essai offert n\'a pas servi : encadré sans bouton OK, bouton qui clignote, grille bloquée', async () => {
     aids.value = [aid('colors', { unlockLevel: 20, demoPending: true }), aid('cell', { unlockLevel: 50, unlocked: false })]
     const w = bar({ level: 20 })
     const box = w.find('[data-test=aid-new]')
     expect(box.exists()).toBe(true)
     expect(box.text()).toContain('Nouveau pouvoir : Couleurs')
-    expect(box.text()).toContain('4 pour commencer')
-    expect(w.find('[data-test=aid-colors]').classes()).toContain('fresh')
+    expect(w.find('[data-test=aid-try]').exists()).toBe(true) // « essaie-le maintenant »
+    expect(w.find('[data-test=aid-new-ok]').exists()).toBe(false) // on ne peut pas l'écarter avant d'avoir essayé
+    expect(w.find('[data-test=aid-colors]').classes()).toEqual(expect.arrayContaining(['fresh', 'pulse']))
+    expect(w.emitted('forced')?.at(-1)).toEqual([true]) // la grille refuse les tracés
+  })
+  it('après l\'essai : la grille se débloque, l\'encadré se ferme avec OK ; ailleurs il n\'apparaît pas', async () => {
+    aids.value = [aid('colors', { unlockLevel: 20, demoPending: false, usedThisLevel: true }), aid('cell', { unlockLevel: 50, unlocked: false })]
+    const w = bar({ level: 20 })
+    expect(w.emitted('forced')?.at(-1)).toEqual([false])
+    expect(w.find('[data-test=aid-colors]').classes()).not.toContain('pulse')
     await w.find('[data-test=aid-new-ok]').trigger('click')
     expect(w.find('[data-test=aid-new]').exists()).toBe(false)
     expect(bar({ level: 21 }).find('[data-test=aid-new]').exists()).toBe(false)
     expect(bar().find('[data-test=aid-new]').exists()).toBe(false)
+  })
+  it('pendant l\'essai obligatoire, un autre pouvoir renvoie vers le nouveau', async () => {
+    aids.value = [aid('colors', { stock: 3 }), aid('cell', { unlockLevel: 50, demoPending: true })]
+    const w = bar({ level: 50 })
+    await w.find('[data-test=aid-colors]').trigger('click')
+    expect(w.find('[data-test=aid-message]').text()).toContain('Essaie d\'abord ton nouveau pouvoir : Une case')
   })
 })
 
@@ -180,17 +194,20 @@ describe('barre des aides', () => {
     await flushPromises()
     expect(w.emitted('reveal')![0]).toEqual([[], [{ row: 0, col: 0 }]])
   })
-  it('Une ligne : choix d\'une ligne ou d\'une colonne (numérotées à partir de 1, envoyées à partir de 0)', async () => {
+  it('Une ligne : on touche un compteur de la grille (la barre demande à la grille de les rendre touchables)', async () => {
     aids.value = [aid('line')]
     const calls = server({ body: { ok: true, demo: false, result: { givens: [], crosses: [] } } }, { body: { ok: true, demo: false, result: { givens: [], crosses: [] } } })
     const w = bar()
+    const pickLine = (axis: 'row' | 'col', i: number) => (w.vm as unknown as { onPickLine(a: 'row' | 'col', i: number): void }).onPickLine(axis, i)
     await w.find('[data-test=aid-line]').trigger('click')
-    expect(w.findAll('[data-test^=aid-row-]')).toHaveLength(6)
-    await w.find('[data-test=aid-row-1]').trigger('click')
+    expect(w.emitted('pickingLine')?.at(-1)).toEqual([true])
+    expect(w.find('[data-test=aid-hint]').text()).toContain('Touche un chiffre bleu')
+    pickLine('row', 1)
     await flushPromises()
     expect(calls[0].body).toMatchObject({ target: { axis: 'row', index: 1 } })
+    expect(w.emitted('pickingLine')?.at(-1)).toEqual([false])
     await w.find('[data-test=aid-line]').trigger('click')
-    await w.find('[data-test=aid-col-4]').trigger('click')
+    pickLine('col', 4)
     await flushPromises()
     expect(calls[1].body).toMatchObject({ target: { axis: 'col', index: 4 } })
   })
@@ -276,6 +293,7 @@ describe('grille : rails révélés', () => {
     await w.find(`[data-r="${r}"][data-c="${c}"]`).trigger('pointerdown')
     window.dispatchEvent(new Event('pointerup'))
     await w.find('.clear').trigger('click')
+    await w.find('.clear').trigger('click') // effacer tout se confirme d'un second toucher
     await w.vm.$nextTick()
     expect(api.snapshotForAid().edges).toHaveLength(2)
     await w.find('[data-test=undo]').trigger('click')

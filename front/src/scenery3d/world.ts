@@ -6,19 +6,22 @@
 // Tout ce qui est plat (herbe, champs, ballast, route, lit de la rivière, prolongements de la voie) est peint dans
 // une seule texture de sol, dessinée en SVG puis rastérisée : c'est le rendu « option 1 ». Les objets debout sont
 // en volumes, avec des textures générées par le code (écorce, tuiles, pierre, bois, façades). Aucune image à charger.
+import { reducedMotion } from '../settings'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { PAL, rng, type Scenery, type Tile } from '../scenery'
 import { riverD, sample } from '../scenery/motion'
 import type { Pal } from '../scenery/themes'
-import { offBoardBridges } from './bridgeRails'
+import { bridgesWithRails } from './bridgeRails'
+import { buildForest, buildMassif, buildVillage, components } from './clusters'
+import { revealDelay } from '../scenery/reveal'
 import { pointAt, type Route } from '../trainRoute'
-import { SKY } from '../scenery/sky'
 
 const SHEAR = 1 // une hauteur h remonte de h à l'écran (vue cavalière : on voit les façades et les troncs)
 const NIGHT = new Set(['lune', 'neon'])
 const HOT = new Set(['volcan', 'enfer'])
 const BIG = new Set(['mountain', 'mesa', 'dune', 'building', 'crater'])
+const FOREST = new Set(['tree', 'pine', 'palm', 'cactus', 'deadtree']) // regroupées en forêt quand elles se touchent
 
 // ---------- couleurs ----------
 const hex = (h: string): [number, number, number] => {
@@ -171,6 +174,11 @@ export function groundSvg(sc: Scenery, route: Route | null, pal: Pal): string {
   for (const e of sc.ext) lines.push('M' + e.map((p) => `${(p.x * 100).toFixed(1)} ${(p.y * 100).toFixed(1)}`).join(' L'))
   for (const d of lines) s += `<path d="${d}" fill="none" stroke="#000" stroke-opacity="0.16" stroke-width="72" stroke-linejoin="round" transform="translate(3 5)"/>`
   for (const d of lines) s += `<path d="${d}" fill="none" stroke="${pal.bedEdge}" stroke-width="68" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="url(#gravel)" stroke-width="58" stroke-linejoin="round"/>`
+  // sentiers de terre : sous la route, la rivière et les objets
+  for (const p of sc.paths ?? []) {
+    const d = 'M' + p.map((q) => `${(q.x * 100).toFixed(1)} ${(q.y * 100).toFixed(1)}`).join(' L')
+    s += `<path d="${d}" fill="none" stroke="${pal.bedEdge}" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="${pal.bed}" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>`
+  }
   // route
   if (sc.road) {
     const mid = (sc.road.line + 0.5) * 100
@@ -200,8 +208,27 @@ export function groundSvg(sc: Scenery, route: Route | null, pal: Pal): string {
     const { x, y, w, h } = pond
     s += `<g transform="scale(100)"><rect x="${x - 0.06}" y="${y - 0.06}" width="${w + 0.12}" height="${h + 0.12}" rx="0.42" fill="${pal.deep}"/><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="0.36" fill="${pal.shallow}"/><rect x="${x + 0.08}" y="${y + 0.08}" width="${w - 0.16}" height="${h - 0.16}" rx="0.3" fill="${pal.water}"/></g>`
   }
-  // rails des prolongements, à plat (même géométrie que les rails de la grille, qui eux restent dessinés par la grille)
-  for (const e of sc.ext) {
+  // rails de toute la voie (grille comprise), à plat : en 3D le train roule DANS la scène (les arbres devant la voie le cachent),
+  // donc la voie de la grille est peinte ici et celle du DOM est masquée pendant le Trajet (TrackGrid, classe rails-3d)
+  if (route) {
+    const mx = sc.margin.x, my = sc.margin.y
+    for (let t = 0.125; t < route.length; t += 0.25) {
+      const p = pointAt(route, t)
+      s += `<rect x="${((p.x + mx) * 100 - 3.5).toFixed(1)}" y="${((p.y + my) * 100 - 20).toFixed(1)}" width="7" height="40" fill="${pal.rail.tie}" transform="rotate(${p.angle.toFixed(1)} ${((p.x + mx) * 100).toFixed(1)} ${((p.y + my) * 100).toFixed(1)})"/>`
+    }
+    for (const o of [-0.12, 0.12]) {
+      const pts: string[] = []
+      for (let t = 0; t <= route.length + 1e-6; t += 0.05) {
+        const p = pointAt(route, Math.min(t, route.length))
+        const a = (p.angle * Math.PI) / 180
+        pts.push(`${((p.x + mx - Math.sin(a) * o) * 100).toFixed(1)} ${((p.y + my + Math.cos(a) * o) * 100).toFixed(1)}`)
+      }
+      s += `<path d="M${pts.join(' L')}" fill="none" stroke="${pal.rail.rail}" stroke-width="6" stroke-linejoin="round"/>`
+    }
+  }
+  // rails des prolongements, à plat (même géométrie que les rails de la grille, qui eux restent dessinés par la grille).
+  // Avec la voie entière (ci-dessus), ils y sont déjà : les repeindre doublait les traverses (décalées, donc deux fois plus serrées).
+  for (const e of route ? [] : sc.ext) {
     const [p, q] = e
     const horiz = Math.abs(p.y - q.y) < 1e-9
     const lo = horiz ? Math.min(p.x, q.x) : Math.min(p.y, q.y)
@@ -243,6 +270,14 @@ export function loadSvgTexture(svg: string, w: number, h: number, maxSide: numbe
     img.onerror = () => reject(new Error('texture du sol'))
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
   })
+}
+
+// Échauffement : la toute première image SVG avec filtre décodée par le navigateur coûte ~1,4 s (puis ~30 ms), et c'est celle
+// du sol du premier décor, à la première victoire. On la fait faire à l'avance, avec un minuscule SVG du même genre.
+export function warmUp(): Promise<unknown> {
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs><filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="64" height="64"><feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="3" seed="1"/><feColorMatrix type="matrix" values="0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  1.8 0 0 0 -0.8"/></filter></defs><rect width="64" height="64" fill="#88cc88" filter="url(#f)"/></svg>'
+  return loadSvgTexture(svg, 64, 64, 64).then((t) => t.dispose())
 }
 
 // ---------- objets debout ----------
@@ -543,27 +578,18 @@ export function tickAnims(anims: Anim[], t: number, dt: number, still: boolean):
 }
 
 // ---------- le monde partagé ----------
-// Un niveau gagné = UN monde 3D, regardé par deux vues : le plateau (vu du dessus) et le pare-brise de la cabine.
-// Chaque vue a son propre rendu (son canvas) ; le monde, lui, n'est construit et animé qu'une fois.
-//   - 'top' : vue du dessus, monde cisaillé (vue cavalière) ; les rails sont ceux de la grille (DOM), cachés ici ;
-//   - 'cab' : depuis la locomotive ; rails 3D visibles, brume et ciel à l'horizon.
-export type Mode = 'top' | 'cab'
+// Un niveau gagné = UN monde 3D, vu du dessus (monde cisaillé : vue cavalière). Les rails de la grille sont ceux du DOM ; ceux du
+// décor sont peints dans le sol. Le monde n'est construit et animé qu'une fois, même si plusieurs vues le dessinent.
 export interface World {
   scene: THREE.Scene
   sc: Scenery
-  setMode(m: Mode): void
   addView(draw: (t: number, dt: number) => void): () => void
-}
-
-function along(route: Route, s: number, mg: { x: number; y: number }) {
-  const p = pointAt(route, s)
-  const a = (p.angle * Math.PI) / 180
-  return { x: p.x + mg.x, z: p.y + mg.y, tx: Math.cos(a), tz: Math.sin(a) }
+  /** Pose un objet dans le monde (repère des cases, vue cavalière comprise) ; renvoie de quoi le retirer. */
+  add(o: THREE.Object3D): () => void
 }
 
 async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { dispose(): void }> {
   const pal = PAL[sc.theme]
-  const sky = SKY[sc.theme] ?? SKY.plaine
   const scene = new THREE.Scene()
   const night = NIGHT.has(sc.theme)
   const hot = HOT.has(sc.theme)
@@ -581,26 +607,14 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
   sun.shadow.normalBias = 0.02
   scene.add(sun, sun.target)
 
-  // horizon : ciel en dégradé et brume de la couleur du bas du ciel (vue de la cabine)
-  const skyTex = canvasTex(4, 256, (g, w, h) => {
-    const gr = g.createLinearGradient(0, 0, 0, h)
-    gr.addColorStop(0, sky.top)
-    gr.addColorStop(0.6, sky.mid)
-    gr.addColorStop(1, sky.low)
-    g.fillStyle = gr
-    g.fillRect(0, 0, w, h)
-  }, false)
-  const fogCab = new THREE.Fog(sky.low, 4, 22)
-
   const world = new THREE.Group()
   world.matrixAutoUpdate = false
   scene.add(world)
-  const shear = new THREE.Matrix4().set(1, 0, 0, 0, 0, 1, 0, 0, 0, -SHEAR, 1, 0, 0, 0, 0, 1)
-  const flat = new THREE.Matrix4()
+  world.matrix.copy(new THREE.Matrix4().set(1, 0, 0, 0, 0, 1, 0, 0, 0, -SHEAR, 1, 0, 0, 0, 0, 1)) // vue cavalière : une hauteur h remonte de h à l'écran
 
   const texs = makeTextures(sc.seed)
   const kit = makeKit(texs)
-  const disposables: { dispose(): void }[] = [kit, skyTex, ...Object.values(texs)]
+  const disposables: { dispose(): void }[] = [kit, ...Object.values(texs)]
 
   // sol du décor
   const groundMat = new THREE.MeshStandardMaterial({ color: pal.a, roughness: 1, toneMapped: false }) // le sol est une peinture : on garde ses couleurs franches
@@ -609,35 +623,34 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
   ground.receiveShadow = true
   world.add(ground)
   disposables.push(ground.geometry, groundMat)
-  // au-delà du décor : la même herbe qui continue jusqu'à l'horizon (on ne la voit que depuis la cabine)
-  const farMat = new THREE.MeshStandardMaterial({ color: pal.a, roughness: 1, toneMapped: false })
-  const far = new THREE.Mesh(new THREE.PlaneGeometry(160, 160).rotateX(-Math.PI / 2), farMat)
-  far.position.set(cx, -0.004, cz)
-  far.receiveShadow = true
-  world.add(far)
-  disposables.push(far.geometry, farMat)
-
+  // Le sol peint (route, rivière, champs, sentiers, herbe détaillée) apparaît dans la même vague diagonale que les objets debout :
+  // un sol uni dessous, et par-dessus le sol peint, découpé au-delà du front de la vague (`uWave`, en cases x + y).
+  const waveU = { value: 0 }
+  const topMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+  topMat.onBeforeCompile = (sh) => {
+    sh.uniforms.uWave = waveU
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vG;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvG = vec2(position.x + ${(sc.cols / 2).toFixed(2)}, position.z + ${(sc.rows / 2).toFixed(2)});`)
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vG;\nuniform float uWave;')
+      .replace('void main() {', 'void main() {\n  if (vG.x + vG.y > uWave) discard;')
+  }
+  const groundTop = new THREE.Mesh(new THREE.PlaneGeometry(sc.cols, sc.rows).rotateX(-Math.PI / 2), topMat)
+  groundTop.position.set(cx, 0.0008, cz)
+  groundTop.receiveShadow = true
+  groundTop.visible = false // tant que la texture n'est pas chargée
+  world.add(groundTop)
+  disposables.push(groundTop.geometry, topMat)
   const groundReady = loadSvgTexture(groundSvg(sc, rails, pal), sc.cols * 100, sc.rows * 100, 4096)
     .then((t) => {
       t.anisotropy = 8
-      groundMat.map = t
-      groundMat.color.set('#ffffff')
-      groundMat.needsUpdate = true
+      topMat.map = t
+      topMat.needsUpdate = true
+      groundTop.visible = true
       disposables.push(t)
     })
     .catch(() => undefined) // sans texture : un sol uni de la bonne couleur
-  const tile = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">${groundSvg({ ...sc, cols: 4, rows: 4, tiles: [], ext: [], road: null, river: null, pond: [] } as Scenery, null, pal).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '').replace(/<feTurbulence /g, '<feTurbulence stitchTiles="stitch" ')}</svg>`
-  const farReady = loadSvgTexture(tile, 400, 400, 512)
-    .then((t) => {
-      t.wrapS = t.wrapT = THREE.RepeatWrapping
-      t.repeat.set(40, 40)
-      t.anisotropy = 8
-      farMat.map = t
-      farMat.color.set('#ffffff')
-      farMat.needsUpdate = true
-      disposables.push(t)
-    })
-    .catch(() => undefined)
 
   // eau : un ruban brillant posé sur le lit peint, avec des reflets qui avancent (sauf glace)
   const frozen = sc.theme === 'hiver'
@@ -709,11 +722,12 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     world.add(deck)
   }
 
-  // Rails sur les ponts hors de la grille, en vue du dessus (voir bridgeRails.ts) : la voie y est peinte sur le sol, sous
-  // l'eau et le tablier ; on repose rails et traverses sur le tablier, avec la géométrie des rails de la grille.
+  // Rails sur tous les ponts, dans la grille comme hors de la grille (voir bridgeRails.ts) : en 3D la voie est peinte sur le sol,
+  // sous l'eau et le tablier, et les rails des cases s'effacent ; on repose rails et traverses sur le tablier, avec la
+  // géométrie des rails de la grille.
   const bridgeRails = new THREE.Group()
   world.add(bridgeRails)
-  for (const { r, c, axis } of offBoardBridges(sc)) {
+  for (const { r, c, axis } of bridgesWithRails(sc)) {
     const g = new THREE.Group()
     // la vue cavalière remonte ce qui a de la hauteur (z − SHEAR·y) : on compense, la voie reste dans l'alignement de celle du sol
     g.position.set(c + 0.5, DECK_TOP, r + 0.5 + SHEAR * (DECK_TOP + 0.016))
@@ -722,47 +736,47 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     for (const z of [-0.12, 0.12]) kit.mesh(kit.geo('bridge-rail', () => new THREE.BoxGeometry(1, 0.012, 0.06)), kit.mat(pal.rail.rail, null, { metalness: 0.6, roughness: 0.35, flatShading: false }), 0, 0.016, z, g)
     bridgeRails.add(g)
   }
-  const onBridge = (x: number, z: number) => sc.bridges.has(`${Math.floor(z)},${Math.floor(x)}`)
-
-  // rails 3D le long de toute la voie (grille comprise) : seulement pour la vue de la cabine (vue du dessus : ceux de la grille)
-  const track = new THREE.Group()
-  track.visible = false
-  world.add(track)
-  if (rails) {
-    const mg = sc.margin
-    const STEP = 0.05
-    const n = Math.ceil(rails.length / STEP) + 2
-    const railMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(STEP + 0.008, 0.035, 0.03), kit.mat(pal.rail.rail, null, { metalness: 0.6, roughness: 0.35, flatShading: false }), 2 * n)
-    const sleeperMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, 0.025, 0.42), kit.mat(pal.rail.tie, texs.wood), Math.ceil(rails.length / 0.25) + 2)
-    for (const m of [railMesh, sleeperMesh]) {
-      m.castShadow = m.receiveShadow = true
-      m.count = 0
-      track.add(m)
-    }
-    const d = new THREE.Object3D()
-    const put = (m: THREE.InstancedMesh, x: number, y: number, z: number, ang: number) => {
-      d.position.set(x, y, z)
-      d.rotation.set(0, ang, 0)
-      d.updateMatrix()
-      m.setMatrixAt(m.count++, d.matrix)
-    }
-    for (let s = 0; s <= rails.length; s += STEP) {
-      const q = along(rails, s, mg)
-      const y = onBridge(q.x, q.z) ? DECK_TOP + 0.03 : 0.05 // sur un pont, au-dessus du tablier (sinon les rails s'y enfoncent)
-      for (const o of [-0.12, 0.12]) put(railMesh, q.x - q.tz * o, y, q.z + q.tx * o, Math.atan2(-q.tz, q.tx))
-    }
-    for (let s = 0.125; s <= rails.length; s += 0.25) {
-      const q = along(rails, s, mg)
-      put(sleeperMesh, q.x, onBridge(q.x, q.z) ? DECK_TOP + 0.0125 : 0.02, q.z, Math.atan2(-q.tz, q.tx))
-    }
-  }
 
   // objets debout, qui poussent l'un après l'autre (même rythme que le décor SVG)
   const anims: Anim[] = []
+  const tileKind = (r: number, c: number): string => (sc.water.has(`${r},${c}`) ? 'water' : (sc.tiles[r]?.[c]?.kind ?? 'none'))
+  const delayOf = (r: number, c: number) => revealDelay(sc.seed, r, c) // chaque élément à son heure, sans ordre (scenery/reveal.ts)
+  // Cases voisines de même nature = un seul ensemble : massif de montagnes (crête, plus haut) et forêt (plusieurs arbres par case).
+  const grouped = new Set<string>()
+  for (const comp of components(sc.rows, sc.cols, tileKind, new Set(['mountain']))) {
+    comp.forEach(([r, c]) => grouped.add(`${r},${c}`))
+    buildMassif(comp, palAt(sc, comp[0][0], comp[0][1]), kit, anims, delayOf, (g) => world.add(g))
+  }
+  for (const comp of components(sc.rows, sc.cols, tileKind, FOREST)) {
+    if (comp.length < 2) continue
+    comp.forEach(([r, c]) => grouped.add(`${r},${c}`))
+    const pal = palAt(sc, comp[0][0], comp[0][1])
+    buildForest(
+      comp,
+      tileKind,
+      (r, c) => sc.tiles[r][c].v,
+      (kind, v, delay) => build(kind as Tile['kind'], v, pal, kit, anims, delay),
+      delayOf,
+      (g) => world.add(g),
+    )
+  }
+  for (const comp of components(sc.rows, sc.cols, tileKind, new Set(['house', 'building']))) {
+    if (comp.length < 2) continue
+    comp.forEach(([r, c]) => grouped.add(`${r},${c}`))
+    const pal = palAt(sc, comp[0][0], comp[0][1])
+    buildVillage(
+      comp,
+      tileKind,
+      (r, c) => sc.tiles[r][c].v,
+      (kind, v, delay) => build(kind as Tile['kind'], v, pal, kit, anims, delay),
+      delayOf,
+      (g) => world.add(g),
+    )
+  }
   sc.tiles.forEach((row, r) =>
     row.forEach((t, c) => {
-      if (t.kind === 'rail' || t.kind === 'road' || t.kind === 'grass' || sc.water.has(`${r},${c}`)) return
-      const g = build(t.kind, t.v, palAt(sc, r, c), kit, anims, 500 + (r + c) * 120)
+      if (t.kind === 'rail' || t.kind === 'road' || t.kind === 'path' || t.kind === 'clear' || t.kind === 'grass' || sc.water.has(`${r},${c}`) || grouped.has(`${r},${c}`)) return
+      const g = build(t.kind, t.v, palAt(sc, r, c), kit, anims, delayOf(r, c))
       if (!g) return
       g.position.set(c + 0.5, 0, r + 0.5)
       g.userData.base = BIG.has(t.kind) ? 1 : 1.3 // les petits objets remplissent mieux leur case
@@ -771,22 +785,11 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     }),
   )
 
-  await Promise.all([groundReady, farReady])
-
-  function setMode(m: Mode): void {
-    const cab = m === 'cab'
-    world.matrix.copy(cab ? flat : shear)
-    track.visible = cab
-    bridgeRails.visible = !cab // en cabine, la voie 3D complète passe déjà sur les ponts
-    far.visible = cab
-    scene.fog = cab ? fogCab : null
-    scene.background = cab ? skyTex : null
-  }
-  setMode('top')
+  await groundReady
 
   // une seule boucle d'animation pour le monde ; chaque vue y dessine à son tour
   const views = new Set<(t: number, dt: number) => void>()
-  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const still = reducedMotion()
   const t0 = performance.now()
   let raf = 0
   let last = t0
@@ -797,6 +800,7 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     const dt = Math.min(0.1, (now - last) / 1000)
     last = now
     tickAnims(anims, t, dt, still)
+    waveU.value = 1e9 // le sol peint est là tout de suite : seuls les éléments posés dessus apparaissent (au hasard)
     if (shineTex && !still) shineTex.offset.y -= dt * 0.35
     views.forEach((draw) => draw(t, dt))
   }
@@ -805,10 +809,13 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
   return {
     scene,
     sc,
-    setMode,
     addView(draw) {
       views.add(draw)
       return () => views.delete(draw)
+    },
+    add(o) {
+      world.add(o)
+      return () => world.remove(o)
     },
     dispose() {
       cancelAnimationFrame(raf)
@@ -869,7 +876,7 @@ export function finish(renderer: THREE.WebGLRenderer) {
 // Un rendu WebGL sur un canvas, à la bonne résolution (la grille est agrandie par CSS à la victoire : on dessine à la taille réelle).
 export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: !opaque })
-  renderer.shadowMap.enabled = true
+  renderer.shadowMap.enabled = !reducedMotion() // animations réduites : pas d'ombres, plus léger
   renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.shadowMap.autoUpdate = true
   const fin = finish(renderer)
@@ -882,7 +889,9 @@ export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
     if (!w || !h) return
     const scale = canvas.getBoundingClientRect().width / w || 1
     lastScale = scale
-    renderer.setPixelRatio(Math.min(3, (window.devicePixelRatio || 1) * scale))
+    // téléphone et tablette : 2 fois la résolution au plus (au-delà, ça ne se voit pas et ça rame)
+    const cap = window.matchMedia?.('(pointer: coarse)').matches ? 2 : 3
+    renderer.setPixelRatio(Math.min(cap, (window.devicePixelRatio || 1) * scale))
     renderer.setSize(w, h, false)
     onSize(w, h)
   }

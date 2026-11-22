@@ -44,13 +44,13 @@ describe('App', () => {
     expect(w.text()).not.toMatch(/\d×\d/)
   })
 
-  it('5 petits cubes (3 à gauche, 2 à droite du grand) mènent aux autres écrans, sans menu déroulant', async () => {
+  it('6 petits cubes (3 de chaque côté du grand) mènent aux autres écrans, sans menu déroulant', async () => {
     const w = mount(App)
     expect(w.find('[data-test=menu]').exists()).toBe(false)
     const sides = w.findAll('.side')
     expect(sides).toHaveLength(2)
     expect(sides[0].findAll('.mini').map((m) => m.attributes('data-test'))).toEqual(['nav-daily', 'nav-tuto', 'nav-ranking'])
-    expect(sides[1].findAll('.mini').map((m) => m.attributes('data-test'))).toEqual(['nav-stats', 'nav-account'])
+    expect(sides[1].findAll('.mini').map((m) => m.attributes('data-test'))).toEqual(['nav-stats', 'nav-train', 'nav-account'])
     await open(w, 'Tutoriel')
     expect(w.find('[data-test=tutorial]').exists()).toBe(true)
     expect(w.find('[data-test=landscape]').exists()).toBe(true) // le décor suit
@@ -233,16 +233,12 @@ describe('App', () => {
     await flushPromises() // le faux serveur vérifie le tracé
     // 1) le train passe ; le résultat n'existe pas encore
     expect(w.find('[data-test=train]').exists()).toBe(true)
-    expect(w.find('[data-test=next]').exists()).toBe(false) // « Niveau suivant » arrive avec le récapitulatif, sur le store
-    // la cabine montre la voie qui défile tant que le train roule ; le store est ouvert, le récapitulatif pas encore visible
-    expect(w.find('[data-test=cabin-windshield]').attributes('data-running')).toBe('true')
-    expect(w.find('[data-test=store]').classes()).not.toContain('down')
-    // 2) le train est arrivé : le store se ferme sur le pare-brise et porte le récapitulatif ; « Suivant » s'active
+    expect(w.find('.overlay').classes()).not.toContain('open') // la fenêtre de fin arrive avec le récapitulatif, à l'arrivée du train
+    // 2) le train est arrivé : la fenêtre de fin s'ouvre au centre avec le récapitulatif ; « Niveau suivant » est proposé
     w.findComponent(TrainRun).vm.$emit('done')
     await flushPromises()
-    expect(w.find('[data-test=cabin-windshield]').attributes('data-running')).toBe('false')
-    expect(w.find('[data-test=store]').classes()).toContain('down')
-    expect(w.find('[data-test=store] [data-test=finish]').exists()).toBe(true) // le récapitulatif est sur le store, pas sur le décor
+    expect(w.find('.overlay').classes()).toContain('open')
+    expect(w.find('.overlay [data-test=finish]').exists()).toBe(true) // le récapitulatif est dans la fenêtre de fin, pas sur le décor
     expect(w.find('.finish--inline').exists()).toBe(false)
     expect(w.find('[data-test=finish] [data-test=result-time]').text()).toContain('0:01') // temps officiel du serveur (1000 ms)
     expect(w.find('[data-test=win]').exists()).toBe(true)
@@ -253,8 +249,8 @@ describe('App', () => {
     expect(w.find('[data-test=receipt-total]').text()).toBe('Total+15')
     expect(w.find('[data-test=receipt-total] [data-test=coin-icon]').exists()).toBe(true)
     expect(w.find('[data-test=finish]').text()).not.toMatch(/🎉|🏆|⏱/) // pas d'emoji de fête
-    expect(w.find('[data-test=store] [data-test=finish] [data-test=next]').exists()).toBe(true) // sous le récapitulatif
-    expect(w.find('.pupitre-wrap [data-test=next]').exists()).toBe(false) // plus sur le pupitre
+    expect(w.find('.overlay [data-test=finish] [data-test=next]').exists()).toBe(true) // sous le récapitulatif
+    expect(w.find('[data-test=replay-trip]').exists()).toBe(true) // « Revoir le trajet » à côté
     expect(w.find('.win-zone').element).toBe(zoneBefore.element) // même zone : pas de saut
     await w.find('[data-test=quit]').trigger('click')
     await flushPromises()
@@ -277,8 +273,8 @@ describe('icônes du menu', () => {
   it('chaque cube a son illustration (plus d\'emoji) et des libellés explicites', () => {
     const w = mount(App)
     const icons = w.findAll('.mini svg').map((s) => s.attributes('data-icon'))
-    expect(icons).toEqual(['daily', 'tuto', 'ranking', 'stats', 'account'])
-    expect(w.findAll('.mini .lbl').map((l) => l.text())).toEqual(['Puzzle du jour', 'Tutoriel', 'Classement', 'Statistiques', 'Compte'])
+    expect(icons).toEqual(['daily', 'tuto', 'ranking', 'stats', 'train', 'account'])
+    expect(w.findAll('.mini .lbl').map((l) => l.text())).toEqual(['Puzzle du jour', 'Tutoriel', 'Classement', 'Statistiques', 'Mon train', 'Compte'])
     expect(w.find('[data-test=day]').text()).toBe(String(new Date().getDate())) // calendrier = date du jour
   })
   it('Compte : affiche l\'initiale du joueur une fois connecté', async () => {
@@ -287,5 +283,17 @@ describe('icônes du menu', () => {
     user.value = { name: 'rudy', email: 'ini@b.fr', provider: 'local' }
     await w.vm.$nextTick()
     expect(w.find('[data-test=nav-account] [data-test=initial]').text()).toBe('R')
+  })
+})
+
+describe('App : plus de vue cabine', () => {
+  it('aucune fenêtre de cabine dans la page : le Trajet se regarde vu du dessus', async () => {
+    localStorage.clear()
+    logout()
+    fakeServer()
+    const w = mount(App, { attachTo: document.body })
+    await flushPromises()
+    expect(w.find('[data-test=cabin]').exists()).toBe(false)
+    w.unmount()
   })
 })

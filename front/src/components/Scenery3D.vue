@@ -1,19 +1,26 @@
 <script setup lang="ts">
+import { reducedMotion } from '../settings'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { Scenery } from '../scenery'
-import type { Route } from '../trainRoute'
+import { pointAt, type Route } from '../trainRoute'
+import { carLength, carOffsets } from '../trainStyle'
+import { trainWagons } from '../myTrain'
+import { PAL } from '../scenery'
+import { animalScale, ANIMALS_3D } from '../scenery/animals3d'
+import type { LandFrame } from '../scenery/motion'
 
 // Décor 3D d'un niveau gagné : même place et même taille que le décor SVG (SceneryLayer), sous les rails de la grille.
 // Vue du dessus calée sur les cases. Three.js n'est chargé qu'ici, à la première victoire (fichier à part).
 // En cas d'échec (pas de WebGL, chargement raté), on prévient le parent, qui remet le décor classique.
-const props = defineProps<{ scenery: Scenery; route: Route | null }>()
-const emit = defineEmits<{ (e: 'fail'): void }>()
+// `train` : la voie suivie et la position de la locomotive (cases) ; le train roule DANS la scène 3D, les arbres devant la voie le cachent.
+const props = defineProps<{ scenery: Scenery; route: Route | null; train?: { route: Route; s: number } | null; life?: LandFrame | null }>()
+const emit = defineEmits<{ (e: 'fail'): void; (e: 'ready'): void }>()
 
 const box = computed(() => {
   const s = props.scenery
   const board = s.rows - s.margin.y - s.margin.b
   const u = 100 / (board + 1)
-  return { width: `${s.cols * u}%`, height: `${s.frame.visibleRows * u}%`, left: `${-s.margin.x * u}%`, top: `${-s.margin.y * u}%` }
+  return { width: `${s.cols * u}%`, height: `${s.frame.visibleRows * u}%`, left: `${(1 - s.margin.x) * u}%`, top: `${(1 - s.margin.y) * u}%` }
 })
 
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -39,17 +46,190 @@ onMounted(async () => {
       top.updateProjectionMatrix()
     }
     r.fit(onSize)
-    const remove = world.addView(() => {
+    // le train, en 3D (même modèle que les icônes) : posé sur la voie à chaque image d'après la position de la locomotive
+    const { makeCar, makeSteam, makeWagon, CHIMNEY } = await import('../scenery3d/trainModel')
+    const { makeAnimal } = await import('../scenery3d/animals')
+    if (gone) return releaseWorld(sc)
+    const train = new THREE.Group()
+    // le train du joueur (Mon train), figé pour ce trajet
+    const wagons = [...trainWagons.value]
+    const offsets = carOffsets(wagons)
+    const halves = [null, ...wagons].map((w) => carLength(w) * 0.36) // où sont les essieux (ou bogies) avant et arrière
+    const cars = [makeCar(0), ...wagons.map(makeWagon)]
+    cars.forEach((c) => train.add(c))
+    train.visible = false
+    const unTrain = world.add(train)
+    // les animaux (même simulation que le SVG de SceneryLife) : posés sur le sol de la scène, ils passent sous le train et derrière les arbres
+    const critters = new THREE.Group()
+    const unCritters = world.add(critters)
+    const snow = !!PAL[sc.theme].snow
+    const living = new Map<number, { a: NonNullable<ReturnType<typeof makeAnimal>>; born: number }>()
+    const syncAnimals = () => {
+      const now = performance.now()
+      const live = new Set<number>()
+      for (const s of props.life?.animals ?? []) {
+        if (!ANIMALS_3D.has(s.kind)) continue
+        live.add(s.id)
+        let e = living.get(s.id)
+        if (!e) {
+          const a = makeAnimal(s.kind, snow, s.id)
+          if (!a) continue
+          critters.add(a.group)
+          living.set(s.id, (e = { a, born: now }))
+        }
+        const k = animalScale(s.kind) * Math.min(1, (now - e.born) / 600) // il apparaît en grandissant
+        e.a.group.scale.setScalar(Math.max(0.001, k))
+        e.a.group.position.set(s.x, e.a.lift ?? 0, s.y)
+        e.a.group.rotation.y = e.a.front ? -Math.PI / 2 : s.face > 0 ? 0 : Math.PI
+        e.a.pose(s)
+      }
+      for (const [id, e] of living) if (!live.has(id)) (critters.remove(e.a.group), living.delete(id))
+    }
+    // la barrière du fond du passage à niveau : en 3D, pour que le train passe DEVANT elle (celle du devant reste dessinée en SVG, par-dessus)
+    const road = sc.road
+    const far = new THREE.Group()
+    let setBarrier: (barrier: number, lights: boolean) => void = () => undefined
+    if (road?.crossing) {
+      const uc = (road.axis === 'v' ? road.crossing[0] : road.crossing[1]) + 0.5
+      const m = road.line + 0.5
+      const lx = -0.42, ly = uc - 0.3 // le pied, dans le repère de la route (comme le SVG de SceneryLife)
+      far.position.set(road.axis === 'v' ? m + lx : ly, 0, road.axis === 'v' ? ly : m + lx)
+      const flat = (w: number, h: number, d: number, color: string, x: number, y: number) => {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color, roughness: 0.6 }))
+        mesh.position.set(x, y, 0)
+        mesh.castShadow = true
+        return mesh
+      }
+      const arm = new THREE.Group()
+      arm.add(flat(0.62, 0.05, 0.05, '#ffffff', 0.29, 0.14))
+      for (let k = 0; k < 3; k++) arm.add(flat(0.08, 0.052, 0.052, '#dc2626', 0.12 + k * 0.17, 0.14))
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.14, 12), new THREE.MeshStandardMaterial({ color: '#374151' }))
+      post.position.y = 0.07
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 8), new THREE.MeshStandardMaterial({ color: '#7f1d1d', emissive: '#000000' }))
+      lamp.position.set(road.axis === 'v' ? 0 : -0.1, 0.2, road.axis === 'v' ? -0.1 : 0)
+      far.add(post, arm, lamp)
+      setBarrier = (barrier, lights) => {
+        const a = ((-85 + 85 * barrier) * Math.PI) / 180 // 0 : baissée en travers de la route, -85° : relevée
+        // même sens que le SVG : le bras tourne dans le plan de la route
+        const dX = road.axis === 'v' ? Math.cos(a) : Math.sin(a)
+        const dZ = road.axis === 'v' ? Math.sin(a) : Math.cos(a)
+        arm.rotation.y = -Math.atan2(dZ, dX)
+        const mat = lamp.material as InstanceType<typeof THREE.MeshStandardMaterial>
+        mat.color.set(lights ? '#ef4444' : '#7f1d1d')
+        mat.emissive.set(lights ? '#ef4444' : '#000000')
+      }
+      setBarrier(props.life?.barrier ?? 0, props.life?.lights ?? false)
+    }
+    const unFar = world.add(far)
+    // les voitures de la route (même simulation que le SVG de SceneryLife) : en 3D, le train passe devant celles qui attendent
+    const roadCars = new THREE.Group()
+    const unCars = world.add(roadCars)
+    const carMats = new Map<string, InstanceType<typeof THREE.MeshStandardMaterial>>()
+    const carMat = (color: string) => carMats.get(color) ?? carMats.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.55 })).get(color)!
+    const carBoxes = new Map<string, InstanceType<typeof THREE.BoxGeometry>>()
+    const box = (w: number, h: number, d: number) => {
+      const key = `${w}:${h}:${d}`
+      return carBoxes.get(key) ?? carBoxes.set(key, new THREE.BoxGeometry(w, h, d)).get(key)!
+    }
+    const part = (g: InstanceType<typeof THREE.Group>, w: number, h: number, d: number, color: string, x: number, y: number) => {
+      const mesh = new THREE.Mesh(box(w, h, d), carMat(color))
+      mesh.position.set(x, y, 0)
+      mesh.castShadow = true
+      g.add(mesh)
+    }
+    const shown = new Map<number, InstanceType<typeof THREE.Group>>()
+    const syncCars = () => {
+      if (!road) return
+      const cars3 = props.life?.cars ?? []
+      const m = road.line + 0.5
+      const live = new Set<number>()
+      for (const c of cars3) {
+        live.add(c.id)
+        let g = shown.get(c.id)
+        if (!g) {
+          g = new THREE.Group()
+          if (c.kind === 1) {
+            part(g, 0.3, 0.1, 0.2, '#e5e7eb', -0.09, 0.07) // la remorque
+            part(g, 0.15, 0.08, 0.2, c.color, 0.145, 0.06) // la cabine
+          } else {
+            part(g, 0.32, 0.07, 0.18, c.color, 0, 0.055) // la caisse
+            part(g, 0.09, 0.05, 0.14, '#bfe3fa', -0.02, 0.115) // l'habitacle
+          }
+          roadCars.add(g)
+          shown.set(c.id, g)
+        }
+        g.position.set(road.axis === 'v' ? m + c.lane : c.u, 0, road.axis === 'v' ? c.u : m + c.lane)
+        g.rotation.y = road.axis === 'v' ? (c.dir > 0 ? -Math.PI / 2 : Math.PI / 2) : c.dir > 0 ? 0 : Math.PI
+      }
+      for (const [id, g] of shown) if (!live.has(id)) (roadCars.remove(g), shown.delete(id))
+    }
+    // fumée de la locomotive (rien si le joueur a demandé moins d'animations)
+    const still = reducedMotion()
+    const steam = makeSteam()
+    const unSteam = world.add(steam.group)
+    const chimney = new THREE.Vector3()
+    let lastS = -1
+    const placeTrain = () => {
+      const tr = props.train
+      train.visible = !!tr && tr.s >= 0
+      if (!tr || tr.s < 0) return
+      // chaque voiture posée sur ses deux essieux : un wagon long coupe le virage comme un vrai, sans sortir de la voie
+      cars.forEach((car, i) => {
+        const c = tr.s - offsets[i]!
+        const a = pointAt(tr.route, c + halves[i]!)
+        const b = pointAt(tr.route, c - halves[i]!)
+        car.position.set((a.x + b.x) / 2 + sc.margin.x, 0, (a.y + b.y) / 2 + sc.margin.y)
+        // aux deux bouts de la voie, les essieux se rejoignent : on garde alors le sens de la voie
+        const far = Math.hypot(a.x - b.x, a.y - b.y) > 0.05
+        car.rotation.y = far ? -Math.atan2(a.y - b.y, a.x - b.x) : (-pointAt(tr.route, c).angle * Math.PI) / 180
+      })
+    }
+    const remove = world.addView((_t, dt) => {
       r.check(onSize)
-      world.setMode('top')
+      setBarrier(props.life?.barrier ?? 0, props.life?.lights ?? false)
+      syncCars()
+      syncAnimals()
+      placeTrain()
+      const s = props.train?.s ?? -1
+      const rolling = train.visible && s !== lastS && !still
+      lastS = s
+      // dans le repère du monde (avant la vue cavalière, que le monde applique lui-même à la fumée)
+      cars[0]!.updateMatrix()
+      steam.update(dt, chimney.copy(CHIMNEY).applyMatrix4(cars[0]!.matrix), rolling)
       r.draw(world.scene, top)
+      if (!ready.value) {
+        ready.value = true
+        emit('ready')
+      }
     })
     stop = () => {
       remove()
+      unTrain()
+      unFar()
+      unCars()
+      unCritters()
+      carMats.forEach((x) => x.dispose())
+      carBoxes.forEach((x) => x.dispose())
+      far.traverse((o) => {
+        const m = o as InstanceType<typeof THREE.Mesh>
+        if (!m.isMesh) return
+        m.geometry.dispose()
+        ;(m.material as { dispose(): void }).dispose()
+      })
+      unSteam()
+      steam.dispose()
+      train.traverse((o) => {
+        const m = o as InstanceType<typeof THREE.Mesh>
+        if (!m.isMesh) return
+        m.geometry.dispose()
+        ;([] as { dispose(): void }[]).concat(m.material as never).forEach((x) => x.dispose())
+      })
       r.dispose()
       releaseWorld(sc)
     }
-    ready.value = true
+    // `ready` (le décor apparaît en fondu, les rails des cases s'effacent) seulement après la PREMIÈRE image : la compilation
+    // des shaders bloque le navigateur ~0,2 à 0,5 s, et elle ne doit pas tomber au milieu du fondu.
+    ready.value = false
   } catch {
     if (!gone) emit('fail')
   }

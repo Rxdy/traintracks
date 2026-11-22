@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import TrainRun from './components/TrainRun.vue'
 import TrackGrid from './components/TrackGrid.vue'
 import { levels } from './testLevels'
-import { lockedEdges, dragStep, tapCell, clearCell, isSolved, edgeKey } from './track'
+import { lockedEdges, dragStep, tapCell, clearCell, isSolved, edgeKey, edgesInGrid } from './track'
 import { isLocked, isGiven, railVariant, isConsistent } from './puzzle'
 
 const lvl = levels.find((l) => l.id === 70)! // premier niveau à rails imposés
@@ -72,8 +72,20 @@ describe('rails imposés : jeu', () => {
     expect(cell().classes()).toContain('cell--given')
     expect(w.findAll('[data-variant=given]').length).toBeGreaterThan(0)
     await w.find('.clear').trigger('click')
+    await w.find('.clear').trigger('click') // effacer tout se confirme d'un second toucher
     expect(cell().classes()).toContain('cell--rail')
     expect(cell().classes()).toContain('cell--given')
+  })
+
+  it('effacer tout se confirme : le premier toucher arme le bouton, le second efface', async () => {
+    const w = mount(TrackGrid, { props: { puzzle } })
+    const btn = () => w.find('[data-test=clear]')
+    expect(btn().classes()).not.toContain('armed')
+    await btn().trigger('click')
+    expect(btn().classes()).toContain('armed')
+    expect(btn().attributes('aria-label')).toBe('Toucher encore pour tout effacer')
+    await btn().trigger('click')
+    expect(btn().classes()).not.toContain('armed')
   })
 
   it('un clic sur un rail imposé ne l\'efface pas', async () => {
@@ -119,5 +131,14 @@ describe('rails imposés : aucun indice au départ', () => {
     window.dispatchEvent(new Event('pointerup'))
     await w.vm.$nextTick()
     expect(w.find(`[data-r="${free[0]}"][data-c="${free[1]}"] [data-variant]`).attributes('data-variant')).toBe('user')
+  })
+})
+
+describe('liaisons envoyées au serveur', () => {
+  it('un rail révélé sur la case d\'entrée ou de sortie ne produit jamais de liaison hors grille (niveau 102 bloqué en prod)', () => {
+    // le Canon avait révélé la case d'entrée (3,0) côté gauche et la sortie (1,4) côté droit : « h:3:-1 » et « h:1:4 »
+    const keys = ['h:3:-1', 'h:1:4', 'v:4:0', 'h:3:0', 'v:2:1', 'h:0:3']
+    expect(edgesInGrid(keys, 5)).toEqual(['h:3:0', 'v:2:1', 'h:0:3'])
+    expect(edgeKey(3, 0, 3, -1)).toBe('h:3:-1') // c'est bien edgeKey qui fabrique la liaison hors grille
   })
 })

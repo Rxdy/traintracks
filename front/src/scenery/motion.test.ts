@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { levels } from '../testLevels'
-import { buildScenery, THEMES, type Scenery, type Road } from './generate'
+import { buildScenery, seedOf, THEMES, type Scenery, type Road } from './generate'
 import { at, createLandSim, createWaterSim, distanceNear, sample } from './motion'
 import { buildRoute } from '../trainRoute'
 
@@ -94,12 +94,12 @@ describe('mouvement du décor', () => {
         const sim = createLandSim(s)
         for (let t = 0; t < 40; t += 0.1) {
           for (const a of sim.step(0.1, t, false).animals) {
-            if (a.kind === 'butterfly' || a.kind === 'squirrel' || a.kind === 'owl') continue // ils volent ou sautent d'un arbre à l'autre
+            if (a.kind === 'butterfly' || a.kind === 'squirrel' || a.kind === 'owl' || a.kind === 'gondola' || a.kind === 'skater') continue // ils volent, sautent d'un arbre à l'autre, pendent à un câble ou patinent sur l'étang
             const r = Math.floor(a.y - 0.05), c = Math.floor(a.x)
             if (a.y < 0 || r < 0 || r >= s.size || c < 0 || c >= s.size) continue
             seen++
             expect(s.water.has(`${r},${c}`), `${lv.id} ${th} ${a.kind} dans l'eau`).toBe(false)
-            expect(['grass', 'tree', 'pine', 'boulder', 'snowman', 'house'].includes(s.tiles[r][c].kind) || s.tiles[r][c].kind === 'field', `${lv.id} ${th} ${a.kind} sur ${s.tiles[r][c].kind}`).toBe(true)
+            expect(['grass', 'tree', 'pine', 'boulder', 'snowman', 'house'].includes(s.tiles[r][c].kind) || s.tiles[r][c].kind === 'field' || s.tiles[r][c].kind === 'clear', `${lv.id} ${th} ${a.kind} sur ${s.tiles[r][c].kind}`).toBe(true)
           }
         }
       }
@@ -157,5 +157,73 @@ describe('chaque environnement a ses animaux', () => {
         expect(createLandSim(s).step(0.05, 1, false).animals.length, `${th} niveau ${lv.id}`).toBeGreaterThan(0)
       }
     }
+  })
+
+  it('plaine : un troupeau broute près de son point d\'attache, un tracteur travaille dans un champ d\'au moins 2 cases, ailleurs rien de tout cela', () => {
+    let herds = 0, tractors = 0
+    for (const lv of levels.slice(0, 80)) {
+      const s = buildScenery(lv.puzzle, lv.solution, 'plaine', seedOf(lv.puzzle), { x: 3, y: 3 })
+      const sim = createLandSim(s)
+      let f = sim.step(0.05, 1, false)
+      const kinds = f.animals.map((a) => a.kind)
+      if (kinds.includes('sheep') || kinds.includes('cow')) herds++
+      const tr = f.animals.find((a) => a.kind === 'tractor')
+      if (tr) {
+        tractors++
+        const r = Math.floor(tr.y), c0 = Math.floor(tr.x)
+        expect(s.tiles[r][c0].kind, `niveau ${lv.id}`).toBe('field')
+        for (let t = 2; t < 40; t += 0.5) {
+          f = sim.step(0.5, t, false)
+          const a = f.animals.find((x) => x.kind === 'tractor')!
+          expect(s.tiles[Math.floor(a.y)][Math.floor(a.x)].kind, `niveau ${lv.id}`).toBe('field')
+        }
+      }
+    }
+    expect(herds).toBeGreaterThan(40)
+    expect(tractors).toBeGreaterThan(10)
+    for (const th of THEMES.filter((t) => t !== 'plaine')) {
+      const s = buildScenery(levels[0].puzzle, levels[0].solution, th)
+      const kinds = createLandSim(s).step(0.05, 1, false).animals.map((a) => a.kind)
+      expect(kinds).not.toContain('tractor')
+      expect(kinds).not.toContain('sheep')
+      expect(kinds).not.toContain('cow')
+    }
+  })
+
+  it('forêt, montagne, hiver : leurs éléments propres, et seulement chez eux', () => {
+    const kinds = (th: Parameters<typeof buildScenery>[2], lv = levels[0]) => {
+      const s = buildScenery(lv.puzzle, lv.solution, th, seedOf(lv.puzzle), { x: 3, y: 3 })
+      return { s, k: new Set(createLandSim(s).step(0.05, 1, false).animals.map((a) => a.kind)) }
+    }
+    let feu = 0, cabane = 0, teleph = 0, chevre = 0, patin = 0, ski = 0
+    for (const lv of levels.slice(0, 120)) {
+      const f = kinds('foret', lv), m = kinds('montagne', lv), h = kinds('hiver', lv)
+      if (f.k.has('campfire')) feu++
+      if (f.s.props.some((p) => p.kind === 'cabin') && f.s.props.some((p) => p.kind === 'woodpile')) cabane++
+      if (m.s.cable && m.k.has('gondola') && m.s.props.filter((p) => p.kind === 'pylon').length === 2) teleph++
+      if (m.k.has('goat')) chevre++
+      if (h.k.has('skater')) patin++
+      if (h.k.has('skier')) ski++
+    }
+    expect(feu).toBeGreaterThan(80)
+    expect(cabane).toBeGreaterThan(80)
+    expect(teleph).toBeGreaterThan(30)
+    expect(chevre).toBeGreaterThan(80)
+    expect(patin).toBeGreaterThan(50)
+    expect(ski).toBeGreaterThan(40)
+    for (const th of THEMES.filter((t) => !['foret', 'montagne', 'hiver'].includes(t))) {
+      const { s, k } = kinds(th)
+      expect(s.props, th).toEqual([])
+      for (const x of ['campfire', 'goat', 'gondola', 'skater', 'skier', 'sled']) expect(k.has(x as never), `${th} ${x}`).toBe(false)
+    }
+  })
+
+  it('hiver : des étangs de tailles différentes (1, 2, 4 ou 9 cases : 1×1, 2×1, 2×2, 3×3)', () => {
+    const sizes = new Set<number>()
+    for (const lv of levels) {
+      const s = buildScenery(lv.puzzle, lv.solution, 'hiver', seedOf(lv.puzzle), { x: 3, y: 3 })
+      if (s.pond.length) sizes.add(s.pond.length)
+    }
+    expect([...sizes].sort((a, b) => a - b)).toEqual([1, 2, 4, 9])
   })
 })

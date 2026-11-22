@@ -67,11 +67,11 @@ describe('connexion avec Google : démarrage', () => {
 })
 
 describe('connexion avec Google : retour', () => {
-  it('nouveau compte : pseudo neutre, adresse confirmée, 100 pièces, connecté, redirigé vers le site', async () => {
+  it('nouveau compte : pseudo neutre, adresse confirmée, 100 pièces, connecté, redirigé vers le site pour choisir son pseudo', async () => {
     const { connecter, get, db } = await setup()
     const { retour, session } = await connecter('alice')
     expect(retour.statusCode).toBe(302)
-    expect(retour.headers.location).toBe('http://site.test/')
+    expect(retour.headers.location).toBe('http://site.test/?bienvenue=1') // le site ouvre le choix du pseudo
     expect(session).toBeTruthy()
     const me = (await get('/api/me', session)).json().user
     expect(me).toMatchObject({ email: 'alice@gmail.com', provider: 'google', localLogin: false })
@@ -88,6 +88,7 @@ describe('connexion avec Google : retour', () => {
     const { connecter, get, db } = await setup()
     const a = await connecter('alice')
     const b = await connecter('alice')
+    expect(b.retour.headers.location).toBe('http://site.test/') // compte déjà là : pas de nouvelle proposition de pseudo
     expect((await get('/api/me', a.session)).json().user.id).toBe((await get('/api/me', b.session)).json().user.id)
     expect((await db.query('SELECT 1 FROM users')).rows).toHaveLength(1)
     expect((await db.query('SELECT 1 FROM identities')).rows).toHaveLength(1)

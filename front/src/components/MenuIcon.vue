@@ -7,8 +7,9 @@ import { AVATAR_ART, DEFAULT_AVATAR } from '../avatars'
 //   tuto    : livre ouvert avec un bout de voie et un « ? » → Tutoriel
 //   stats   : podium 1-2-3 avec étoile                 → Statistiques
 //   account : avatar ; initiale du joueur s'il est connecté → Compte
+//   train   : un garage d'où sort la locomotive            → Mon train (le dépôt)
 const props = defineProps<{
-  name: 'daily' | 'tuto' | 'stats' | 'ranking' | 'account'
+  name: 'daily' | 'tuto' | 'stats' | 'ranking' | 'account' | 'train'
   initial?: string // repli : l'initiale du joueur connecté si son avatar n'est pas connu
   avatar?: string // l'avatar du joueur connecté (liste fixe, voir avatars/)
 }>()
@@ -62,6 +63,20 @@ const day = new Date().getDate()
         <text x="13" y="49">2</text><text x="32" y="42">1</text><text x="51" y="52">3</text>
       </g>
       <path d="M32 4 L35.2 11 L42.5 11.8 L37 16.8 L38.6 24 L32 20.3 L25.4 24 L27 16.8 L21.5 11.8 L28.8 11 Z" fill="#fde047" stroke="#fff" stroke-width="2" stroke-linejoin="round" />
+    </g>
+
+    <!-- Mon train : un garage, la locomotive qui en sort sur sa voie -->
+    <g v-else-if="props.name === 'train'">
+      <path d="M30 26 L45 14 L60 26 V54 H30 Z" fill="#b45309" stroke="#fff" stroke-width="2.5" stroke-linejoin="round" />
+      <path d="M27 27 L45 12 L63 27" fill="none" stroke="#7f1d1d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+      <rect x="36" y="31" width="18" height="23" rx="2" fill="#1f2937" />
+      <rect x="2" y="54" width="60" height="4" rx="2" fill="#6b7280" />
+      <rect x="6" y="32" width="24" height="16" rx="4" fill="#dc2626" stroke="#fff" stroke-width="2" />
+      <rect x="20" y="26" width="12" height="20" rx="2.5" fill="#991b1b" stroke="#fff" stroke-width="2" />
+      <rect x="9" y="25" width="5" height="9" rx="1.5" fill="#1f2937" />
+      <circle cx="11" cy="50" r="4.5" fill="#1f2937" stroke="#fbbf24" stroke-width="2" />
+      <circle cx="25" cy="50" r="4.5" fill="#1f2937" stroke="#fbbf24" stroke-width="2" />
+      <circle cx="9" cy="19" r="3" fill="#f8fafc" /><circle cx="5" cy="13" r="2.2" fill="#f8fafc" opacity="0.8" />
     </g>
 
     <!-- Compte : avatar (initiale si connecté) -->
