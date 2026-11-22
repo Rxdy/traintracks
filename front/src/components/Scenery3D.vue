@@ -72,15 +72,15 @@ onMounted(async () => {
         live.add(s.id)
         let e = living.get(s.id)
         if (!e) {
-          const a = makeAnimal(s.kind, snow)
+          const a = makeAnimal(s.kind, snow, s.id)
           if (!a) continue
           critters.add(a.group)
           living.set(s.id, (e = { a, born: now }))
         }
         const k = animalScale(s.kind) * Math.min(1, (now - e.born) / 600) // il apparaît en grandissant
         e.a.group.scale.setScalar(Math.max(0.001, k))
-        e.a.group.position.set(s.x, 0, s.y)
-        e.a.group.rotation.y = s.face > 0 ? 0 : Math.PI
+        e.a.group.position.set(s.x, e.a.lift ?? 0, s.y)
+        e.a.group.rotation.y = e.a.front ? -Math.PI / 2 : s.face > 0 ? 0 : Math.PI
         e.a.pose(s)
       }
       for (const [id, e] of living) if (!live.has(id)) (critters.remove(e.a.group), living.delete(id))
