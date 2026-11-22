@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref, watch } from 'vue'
 import AuthPanel from '../components/AuthPanel.vue'
+import CoinIcon from '../components/CoinIcon.vue'
 import { user } from '../auth'
 import { fetchStats, formatLong, formatTime, type StatsData } from '../stats'
-import { THEME_NAMES, THEMES, LEVELS_PER_THEME, themeForLevel } from '../scenery'
+import { PAL, THEME_NAMES, THEMES, LEVELS_PER_THEME, themeForLevel } from '../scenery'
 
-// Tout vient du serveur : le Voyage (niveaux, temps, records, pièces) et les résultats du puzzle du jour.
+// Statistiques, dans l'esprit du jeu : le voyage dessiné comme une ligne de chemin de fer (une gare par environnement,
+// le train là où on en est), les temps sur des billets, les tailles de grille en barres, le puzzle du jour et sa série.
+// Tout vient du serveur.
 const go = inject<(view: string) => void>('go', () => undefined)
 const s = ref<StatsData | null>(null)
 async function refresh(): Promise<void> {
@@ -14,127 +17,440 @@ async function refresh(): Promise<void> {
 onMounted(refresh)
 watch(user, refresh)
 
-// Environnement en cours, et nombre d'environnements déjà traversés (un tout nouveau tour recommence à zéro de ce côté).
 const j = computed(() => s.value?.journey ?? null)
-const place = computed(() => {
+const d = computed(() => s.value?.daily ?? null)
+// la ligne du tour en cours : 15 environnements de 25 niveaux, dans l'ordre de ce tour
+const line = computed(() => {
   const level = j.value?.level ?? 1
-  const chapter = Math.floor((level - 1) / LEVELS_PER_THEME)
-  return { name: THEME_NAMES[themeForLevel(level)], crossed: chapter, total: THEMES.length }
+  const per = LEVELS_PER_THEME
+  const tour = Math.floor((level - 1) / (per * THEMES.length))
+  const first = tour * per * THEMES.length + 1
+  const chapter = Math.floor((level - first) / per) // environnements déjà traversés dans ce tour
+  const stops = THEMES.map((_, k) => {
+    const t = themeForLevel(first + k * per)
+    return { theme: t, name: THEME_NAMES[t], color: PAL[t].a, done: k < chapter, here: k === chapter }
+  })
+  const progress = (level - first) / (per * THEMES.length) // 0 à 1 le long de la ligne
+  return { stops, chapter, progress, current: THEME_NAMES[themeForLevel(level)], tour: tour + 1 }
 })
+const maxCount = computed(() => Math.max(1, ...(j.value?.bySize ?? []).map((z) => z.count)))
 </script>
 
 <template>
-  <section data-test="stats">
+  <section class="stats" data-test="stats">
     <AuthPanel v-if="!user" />
     <template v-else>
-      <h2 class="halo">{{ user.name }}</h2>
+      <!-- le voyage : la ligne de chemin de fer du tour en cours -->
+      <article class="card voyage">
+        <header class="head">
+          <div>
+            <p class="eyebrow">Voyage de {{ user.name }}</p>
+            <p class="level">Niveau <b data-test="highest">{{ j ? j.level : '…' }}</b></p>
+          </div>
+          <p class="sub"><span data-test="solved">{{ j ? j.solved : '…' }}</span> niveau{{ j && j.solved > 1 ? 'x' : '' }} terminé{{ j && j.solved > 1 ? 's' : '' }}<template v-if="j"> sur {{ j.total }}</template></p>
+        </header>
+        <div class="line" aria-hidden="true">
+          <div class="rails" />
+          <div class="segs">
+            <span v-for="(st, k) in line.stops" :key="k" class="seg" :class="{ done: st.done, here: st.here }" :style="{ '--c': st.color }" :title="st.name" />
+          </div>
+          <span class="train" :style="{ left: `calc(${line.progress * 100}% - 0.9rem)` }">
+            <svg viewBox="0 0 36 22"><rect x="2" y="7" width="20" height="10" rx="3" fill="#dc2626" /><rect x="15" y="2" width="9" height="15" rx="2" fill="#991b1b" /><rect x="5" y="3" width="4" height="6" rx="1" fill="#1f2937" /><circle cx="8" cy="18" r="3" fill="#1f2937" /><circle cx="19" cy="18" r="3" fill="#1f2937" /><rect x="26" y="9" width="9" height="8" rx="2" fill="#f59e0b" /><circle cx="30.5" cy="18.5" r="2.4" fill="#1f2937" /></svg>
+          </span>
+        </div>
+        <p class="place" data-test="place">
+          <b>{{ line.current }}</b> · environnement {{ line.chapter + 1 }} sur {{ line.stops.length }}
+          <span v-if="line.tour > 1"> · tour {{ line.tour }}</span>
+          <span class="crossed">{{ line.chapter }} traversé{{ line.chapter > 1 ? 's' : '' }}</span>
+        </p>
+      </article>
 
-      <h3 class="halo">Voyage</h3>
-      <div class="tiles">
-        <!-- une seule tuile : le niveau en cours vaut presque toujours « terminés + 1 », deux tuiles disaient la même chose -->
-        <div class="tile tile--wide"><b data-test="highest">{{ j ? j.level : '…' }}</b><span>Niveau en cours · <span data-test="solved">{{ j ? j.solved : '…' }}</span> terminé{{ j && j.solved > 1 ? 's' : '' }}</span></div>
-        <div class="tile"><b data-test="playtime">{{ j ? formatLong(j.totalTimeMs) : '…' }}</b><span>Temps de jeu</span></div>
-        <div class="tile"><b>{{ j ? formatTime(j.avgMs) : '…' }}</b><span>Temps moyen</span></div>
-        <div class="tile"><b data-test="fastest">{{ j?.fastest ? formatTime(j.fastest.timeMs) : '—' }}</b><span>Le plus rapide{{ j?.fastest ? ` (niv. ${j.fastest.level})` : '' }}</span></div>
-        <div class="tile"><b>{{ j?.slowest ? formatTime(j.slowest.timeMs) : '—' }}</b><span>Le plus long{{ j?.slowest ? ` (niv. ${j.slowest.level})` : '' }}</span></div>
-        <div class="tile"><b data-test="coins-earned">{{ j ? j.coinsEarned : '…' }}</b><span>Pièces gagnées</span></div>
-        <div class="tile"><b>{{ j ? j.coins : '…' }}</b><span>Pièces en poche</span></div>
-        <div class="tile tile--wide" data-test="place"><b>{{ place.name }}</b><span>Environnement en cours · {{ place.crossed }} traversé{{ place.crossed > 1 ? 's' : '' }} sur {{ place.total }}</span></div>
-      </div>
+      <!-- les temps, sur des billets -->
+      <article class="card times">
+        <h2>Temps</h2>
+        <div class="tickets">
+          <div class="ticket"><span>Temps de jeu</span><b data-test="playtime">{{ j ? formatLong(j.totalTimeMs) : '…' }}</b></div>
+          <div class="ticket"><span>Temps moyen</span><b>{{ j ? formatTime(j.avgMs) : '…' }}</b></div>
+          <div class="ticket"><span>Le plus rapide</span><b data-test="fastest">{{ j?.fastest ? formatTime(j.fastest.timeMs) : '—' }}</b><small v-if="j?.fastest">niv. {{ j.fastest.level }}</small></div>
+          <div class="ticket"><span>Le plus long</span><b>{{ j?.slowest ? formatTime(j.slowest.timeMs) : '—' }}</b><small v-if="j?.slowest">niv. {{ j.slowest.level }}</small></div>
+        </div>
+      </article>
 
-      <template v-if="j && j.bySize.length">
-        <h3 class="halo">Par taille de grille</h3>
+      <!-- les pièces -->
+      <article class="card coins">
+        <h2>Pièces</h2>
+        <div class="purse">
+          <div><b data-test="coins-earned">{{ j ? j.coinsEarned : '…' }}</b><span>gagnées en jouant</span></div>
+          <div><b><CoinIcon size="0.8em" /> {{ j ? j.coins : '…' }}</b><span>dans ta poche</span></div>
+        </div>
+      </article>
+
+      <!-- par taille de grille -->
+      <article v-if="j && j.bySize.length" class="card sizes-card">
+        <h2>Par taille de grille</h2>
         <ul class="sizes" data-test="by-size">
           <li v-for="z in j.bySize" :key="z.size">
-            <b>{{ z.size }}×{{ z.size }}</b>
-            <span>{{ z.count }} niveau{{ z.count > 1 ? 'x' : '' }}</span>
-            <span>moy. {{ formatTime(z.avgMs) }}</span>
-            <span>record {{ formatTime(z.bestMs) }}</span>
+            <b class="sz">{{ z.size }}×{{ z.size }}</b>
+            <span class="bar"><i :style="{ width: (z.count / maxCount) * 100 + '%' }" /></span>
+            <span class="n">{{ z.count }} niveau{{ z.count > 1 ? 'x' : '' }}</span>
+            <span class="t">moy. {{ formatTime(z.avgMs) }}</span>
+            <span class="t">record {{ formatTime(z.bestMs) }}</span>
           </li>
         </ul>
-      </template>
+      </article>
 
-      <h3 class="halo">Puzzle du jour</h3>
-      <div class="tiles" v-if="s">
-        <div class="tile"><b data-test="count">{{ s.daily.count }}</b><span>Grilles faites</span></div>
-        <div class="tile"><b data-test="streak">{{ s.daily.streak }}</b><span>Série en cours</span></div>
-        <div class="tile"><b data-test="best-streak">{{ s.daily.bestStreak }}</b><span>Meilleure série</span></div>
-        <div class="tile"><b>{{ formatTime(s.daily.avgMs) }}</b><span>Moyenne</span></div>
-        <div class="tile"><b>{{ formatTime(s.daily.bestMs) }}</b><span>Meilleur temps</span></div>
-        <div class="tile tile--wide"><b>{{ formatTime(s.daily.worstMs) }}</b><span>Pire temps</span></div>
-      </div>
-      <button type="button" class="btn btn--small rank" data-test="to-ranking" @click="go('ranking')">Voir le classement</button>
+      <!-- le puzzle du jour -->
+      <article v-if="d" class="card daily">
+        <h2>Puzzle du jour</h2>
+        <div class="streak">
+          <div class="big"><b data-test="streak">{{ d.streak }}</b><span>jour{{ d.streak > 1 ? 's' : '' }} d'affilée</span></div>
+          <div class="small">
+            <p><span>Meilleure série</span><b data-test="best-streak">{{ d.bestStreak }}</b></p>
+            <p><span>Grilles faites</span><b data-test="count">{{ d.count }}</b></p>
+          </div>
+        </div>
+        <div class="tickets three">
+          <div class="ticket"><span>Moyenne</span><b>{{ formatTime(d.avgMs) }}</b></div>
+          <div class="ticket"><span>Meilleur temps</span><b>{{ formatTime(d.bestMs) }}</b></div>
+          <div class="ticket"><span>Pire temps</span><b>{{ formatTime(d.worstMs) }}</b></div>
+        </div>
+      </article>
+
+      <button type="button" class="btn rank" data-test="to-ranking" @click="go('ranking')">Voir le classement</button>
     </template>
   </section>
 </template>
 
 <style scoped>
-section {
-  width: min(26rem, 100%);
-  color: #374151;
-  text-align: center;
-}
-h2 {
-  font-weight: 800;
-}
-h3 {
-  margin: 1.1rem 0 0.6rem;
-  font-size: 1rem;
-}
-.tiles {
+.stats {
+  --navy: #2f4a6b;
+  --ink: #1f2937;
+  --muted: #5b6676;
+  --gold: #e2b33c;
+  width: 100%;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.75rem;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.9rem;
+  align-items: start;
+  color: var(--ink);
 }
-.tile {
+.stats > :deep([data-test='auth']) {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+.card {
+  border-radius: 1.3rem;
+  border: 3px solid #fff;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 3px 10px rgba(30, 64, 175, 0.15);
+  padding: 1rem 1.2rem 1.1rem;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  padding: 0.9rem 0.4rem;
-  border: 2px solid #fff;
-  border-radius: 22px;
-  background: linear-gradient(#eaf6ff, #ffffff);
-  box-shadow: var(--shadow);
+  gap: 0.75rem;
+  min-width: 0;
 }
-.tile--wide {
+h2 {
+  margin: 0;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--navy);
+}
+.voyage {
   grid-column: 1 / -1;
 }
-.tile b {
-  font-size: 1.9rem;
+.times {
+  grid-column: span 4;
+}
+.coins {
+  grid-column: span 2;
+}
+.sizes-card {
+  grid-column: span 3;
+}
+.daily {
+  grid-column: span 3;
+}
+.rank {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+@media (max-width: 52rem) {
+  .times,
+  .coins,
+  .sizes-card,
+  .daily {
+    grid-column: 1 / -1;
+  }
+}
+
+/* le voyage */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+.eyebrow {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.level {
+  margin: 0;
+  font-size: 1.4rem;
   font-weight: 800;
-  color: #2563eb;
+}
+.level b {
+  font-size: 2.6rem;
+  color: var(--navy);
   font-variant-numeric: tabular-nums;
 }
-.tile span {
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-.note {
-  margin-top: 1rem;
-  font-size: 0.85rem;
+.sub {
+  margin: 0;
+  color: var(--muted);
   font-weight: 600;
 }
+.line {
+  position: relative;
+  height: 3.2rem;
+  margin: 0.3rem 0.4rem 0;
+}
+.rails {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2.15rem;
+  height: 0.5rem;
+  border-top: 3px solid #6b7280;
+  border-bottom: 3px solid #6b7280;
+  background: repeating-linear-gradient(90deg, #7a4e2d 0 5px, transparent 5px 12px);
+}
+.segs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 1.5rem;
+  display: flex;
+  gap: 3px;
+}
+.seg {
+  flex: 1;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--c);
+  opacity: 0.35;
+}
+.seg.done {
+  opacity: 1;
+}
+.seg.here {
+  opacity: 1;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--gold);
+}
+.train {
+  position: absolute;
+  top: 0;
+  width: 2.2rem;
+  transition: left 0.6s ease;
+}
+.place {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+  color: var(--muted);
+}
+.place b {
+  color: var(--ink);
+  font-size: 1.1rem;
+}
+.crossed {
+  margin-left: auto;
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #166534;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+/* les billets */
+.tickets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.6rem;
+}
+.ticket {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.65rem 0.9rem 0.65rem 1.3rem;
+  border-radius: 0.7rem;
+  background: #fff8e6;
+  border: 1.5px dashed #e7c77a;
+}
+.ticket::before {
+  /* l'encoche du billet */
+  content: '';
+  position: absolute;
+  left: -0.55rem;
+  top: calc(50% - 0.5rem);
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px dashed #e7c77a;
+  border-left-color: transparent;
+  border-bottom-color: transparent;
+  transform: rotate(45deg);
+}
+.ticket span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #92400e;
+}
+.ticket b {
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.ticket small {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* les pièces */
+.purse {
+  display: grid;
+  gap: 0.6rem;
+}
+.purse div {
+  display: flex;
+  flex-direction: column;
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.8rem;
+  background: #fffbeb;
+}
+.purse b {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #92400e;
+  font-variant-numeric: tabular-nums;
+}
+.purse span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* par taille */
 .sizes {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.4rem;
+  gap: 0.55rem;
 }
 .sizes li {
   display: grid;
-  grid-template-columns: 3.4rem 1fr 1fr 1fr;
+  grid-template-columns: 2.6rem minmax(4rem, 1fr) auto;
+  grid-template-areas: 'sz bar n' 'sz t t';
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.6rem;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.9);
-  font-size: 0.82rem;
-  text-align: left;
+  column-gap: 0.6rem;
+  font-size: 0.85rem;
 }
-.rank {
-  margin-top: 1rem;
+.sz {
+  grid-area: sz;
+  display: grid;
+  place-items: center;
+  height: 2.4rem;
+  border-radius: 0.6rem;
+  background: var(--navy);
+  color: #fff;
+  font-weight: 800;
+}
+.bar {
+  grid-area: bar;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: #e5edf6;
+  overflow: hidden;
+}
+.bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #60a5fa, #2563eb);
+}
+.n {
+  grid-area: n;
+  font-weight: 700;
+}
+.t {
+  grid-area: t;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.sizes li .t + .t {
+  margin-left: 6.5rem;
+}
+
+/* puzzle du jour */
+.streak {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.big {
+  flex: 1 1 8rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem;
+  border-radius: 0.9rem;
+  background: linear-gradient(#fff7ed, #ffedd5);
+}
+.big b {
+  font-size: 2.6rem;
+  font-weight: 800;
+  color: #c2410c;
+  line-height: 1;
+}
+.big span {
+  font-weight: 700;
+  color: #9a3412;
+}
+.small {
+  flex: 1 1 9rem;
+  display: grid;
+  gap: 0.4rem;
+}
+.small p {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.45rem 0.8rem;
+  border-radius: 0.7rem;
+  background: #f1f5f9;
+}
+.small b {
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-motion: reduce) {
+  .train {
+    transition: none;
+  }
 }
 </style>
