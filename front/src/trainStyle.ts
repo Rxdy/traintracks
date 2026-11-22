@@ -43,3 +43,6 @@ export function trainTail(wagons: readonly WagonStyle[]): number {
 
 /** Ce qu'on dit au joueur : un nom court (« Bagages », « Vaches »). */
 export const wagonLabel = (id: string): string => styleOf(id).name
+
+/** Le plus long train possible derrière la locomotive (6 des plus longs wagons) : la place à prévoir sur une voie. */
+export const TRAIN_LONGEST = trainTail(Array(6).fill(WAGON_DEFS.reduce((a, b) => (b.length > a.length ? b : a))))
