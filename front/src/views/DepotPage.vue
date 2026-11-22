@@ -21,7 +21,7 @@ async function pick(p: DepotPick): Promise<void> {
 
 <template>
   <section class="depot-page" data-test="depot-page">
-    <DepotView :presets="myTrain.presets" :active="myTrain.active" @pick="pick" @fallback="flat = true" />
+    <DepotView :presets="myTrain.presets" :active="myTrain.active" full @pick="pick" @fallback="flat = true" />
     <p class="hint" data-test="depot-hint">Touche un train pour le faire rouler · un garage pour le personnaliser · l'entrepôt pour voir ta collection</p>
     <p v-if="msg" class="err" data-test="depot-msg">{{ msg }}</p>
     <!-- sans 3D : les mêmes choix, en boutons -->
@@ -45,8 +45,15 @@ async function pick(p: DepotPick): Promise<void> {
   width: 100%;
 }
 .hint {
+  position: fixed;
+  z-index: 2;
+  left: 50%;
+  bottom: max(1rem, calc(env(safe-area-inset-bottom) + 0.6rem));
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 2rem);
   margin: 0;
-  align-self: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   padding: 0.35rem 0.9rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.9);
@@ -55,6 +62,11 @@ async function pick(p: DepotPick): Promise<void> {
   text-align: center;
 }
 .err {
+  position: fixed;
+  z-index: 2;
+  left: 50%;
+  bottom: 4.5rem;
+  transform: translateX(-50%);
   margin: 0;
   align-self: center;
   padding: 0.3rem 0.8rem;

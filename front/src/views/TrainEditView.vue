@@ -246,12 +246,16 @@ const dragId = computed(() => drag.value?.src.id ?? null)
 </template>
 
 <style scoped>
+/* L'atelier remplit l'écran (App.vue, classe `fit`) : la scène prend la place libre en haut,
+   tes wagons défilent dans leur panneau en bas ; la page elle-même ne défile pas. */
 .train-page {
   --car: clamp(4.6rem, 10vw, 8.5rem);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   width: 100%;
+  height: 100%;
+  min-height: 0;
   touch-action: pan-y;
 }
 .train-page.dragging {
@@ -271,15 +275,24 @@ const dragId = computed(() => drag.value?.src.id ?? null)
   color: #fff;
   font-size: 0.75rem;
 }
+/* la scène se fond dans la page (même vert que son sol éclairé) ; elle ne grandit pas plus que ce que la voie demande */
 .atelier {
   position: relative;
+  flex: 1 1 0;
+  min-height: 8rem;
+  max-height: max(8rem, 45vw);
   overflow: hidden;
-  background: #a8d48a;
+  border: 0;
+  border-radius: 0;
+  background: #afd685;
+  box-shadow: none;
 }
 .atelier canvas {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
-  height: clamp(10rem, 22vw, 19rem);
+  height: 100%;
   touch-action: none;
   cursor: grab;
 }
@@ -384,7 +397,14 @@ const dragId = computed(() => drag.value?.src.id ?? null)
   font-weight: 700;
 }
 .below {
-  display: block;
+  flex: 1.25 1 0;
+  min-height: 7rem;
+  display: flex;
+}
+.below .collection {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .head {
   display: flex;

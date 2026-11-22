@@ -196,19 +196,20 @@ watch(() => props.action, () => (dragAt.value = -1))
         :key="'cell-' + r + '-' + c"
         :data-r="r"
         :data-c="c"
+        :style="{ gridRow: r + 2, gridColumn: c + 2, ...(order.has(k(r, c)) ? { '--i': order.get(k(r, c)) } : {}) }"
         :mark="markOf(r, c)"
         :sides="sides(r, c)"
         :variant="variantOf(r, c)"
         :class="{ target: remaining.has(k(r, c)), seq: order.has(k(r, c)), start: isStart(r, c), pressing: pressing === k(r, c) }"
-        :style="order.has(k(r, c)) ? { '--i': order.get(k(r, c)) } : undefined"
         @pointerdown="onDown($event, r, c)"
         @pointerenter="step(r, c)"
         @contextmenu.prevent="onContext(r, c)"
       />
-      <ClueNumber :value="lesson.rowClues[r]" orientation="row" :class="{ focus: focusRow === r }" />
+      <!-- Compteurs à gauche et en haut, comme dans le jeu. -->
+      <ClueNumber :style="{ gridRow: r + 2, gridColumn: 1 }" :value="lesson.rowClues[r]" orientation="row" :class="{ focus: focusRow === r }" />
     </template>
-    <ClueNumber v-for="c in colsIdx" :key="'col-' + c" :value="lesson.colClues[c]" orientation="col" :class="{ focus: focusCol === c }" />
-    <div></div>
+    <ClueNumber v-for="c in colsIdx" :key="'col-' + c" :style="{ gridRow: 1, gridColumn: c + 2 }" :value="lesson.colClues[c]" orientation="col" :class="{ focus: focusCol === c }" />
+    <div style="grid-row: 1; grid-column: 1"></div>
   </div>
 </template>
 

@@ -61,7 +61,11 @@ const view = ref<View>('home')
 // Vrai pendant une partie : on cache alors tout le reste.
 const playing = ref(false)
 // En partie (chargement, grille, Trajet) : la page ne défile plus et ne déborde plus (style.css, `lock-screen`).
-watch(playing, (v) => document.documentElement.classList.toggle('lock-screen', v), { immediate: true })
+// Mon train (dépôt, atelier, collection) : une interface à part, sans le paysage ni le pied de page.
+// Le dépôt et l'atelier tiennent dans l'écran (rien ne défile) ; la collection défile.
+const dedicated = computed(() => !playing.value && (view.value === 'train' || view.value === 'trainEdit' || view.value === 'collection'))
+const fitScreen = computed(() => dedicated.value && view.value !== 'collection')
+watch(() => playing.value || fitScreen.value, (v) => document.documentElement.classList.toggle('lock-screen', v), { immediate: true })
 // Paramètres, « Animations réduites » : tout le site passe en simples changements (style.css)
 watch(reducedPref, (v) => document.documentElement.classList.toggle('reduce-motion', v), { immediate: true })
 // Le paysage suit tous les écrans de menu ; seule une partie en cours reste blanche.
@@ -89,8 +93,8 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
 </script>
 
 <template>
-  <div class="app" :class="{ immersive: playing, landscape: scenery }">
-    <LandscapeBg v-if="scenery" :theme="homeTheme" />
+  <div class="app" :class="{ immersive: playing, landscape: scenery && !dedicated, dedicated, ['ded-' + view]: dedicated, fit: fitScreen }">
+    <LandscapeBg v-if="scenery && !dedicated" :theme="homeTheme" />
     <RotateHint />
 
     <header v-if="!playing" class="header">
@@ -161,7 +165,7 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
       </div>
     </main>
 
-    <footer v-if="!playing && view !== 'legal'" class="footer">
+    <footer v-if="!playing && !dedicated && view !== 'legal'" class="footer">
       <button type="button" class="foot-link" data-test="legal-footer" @click="go('legal')">Mentions légales et confidentialité</button>
     </footer>
   </div>
@@ -253,6 +257,29 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
   background: linear-gradient(#dbeefe, #ffffff 45%);
 }
 
+/* Mon train : chaque page a son propre fond, sans paysage. Le dépôt met sa scène dessous (position fixe),
+   l'en-tête flotte par-dessus. L'atelier remplit l'écran : sa scène en haut, tes wagons défilent dans leur panneau. */
+.app.ded-train {
+  background: #9fd07f;
+}
+.app.ded-trainEdit {
+  background: #afd685; /* le sol de l'atelier, éclairé */
+}
+.app.ded-collection {
+  /* le parquet de l'entrepôt */
+  background: repeating-linear-gradient(90deg, rgba(120, 84, 44, 0.07) 0 2px, transparent 2px 6.5rem), linear-gradient(#efe4cc, #e4d4b2);
+  background-attachment: fixed;
+}
+.app.dedicated .header {
+  z-index: 2;
+}
+.app.fit .board-area {
+  align-items: stretch;
+  min-height: 0;
+}
+.app.fit .content {
+  min-height: 0;
+}
 .footer {
   position: relative;
   z-index: 1;
