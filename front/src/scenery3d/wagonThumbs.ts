@@ -8,12 +8,19 @@ const cache = new Map<string, string>()
 let renderer: THREE.WebGLRenderer | null = null
 let scene: THREE.Scene | null = null
 const W = 320, H = 200
+let scale = 1
+/** Outils de développement : des vignettes plus grandes (planches, galerie). */
+export function setThumbScale(k: number): void {
+  scale = k
+  cache.clear()
+  renderer?.setPixelRatio(k)
+}
 
 function setup(): { renderer: THREE.WebGLRenderer; scene: THREE.Scene } {
   if (renderer && scene) return { renderer, scene }
   const canvas = document.createElement('canvas')
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true })
-  renderer.setPixelRatio(1)
+  renderer.setPixelRatio(scale)
   renderer.setSize(W, H, false)
   renderer.shadowMap.enabled = true
   scene = new THREE.Scene()

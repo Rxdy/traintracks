@@ -26,12 +26,13 @@ async function setup() {
 }
 
 describe('le catalogue des wagons', () => {
-  it('12 wagons courts (un type par coloris) et des wagons de fret plus longs, identifiants uniques', () => {
+  it('des wagons courts (un type et un coloris chacun) et des wagons de fret plus longs, identifiants uniques', () => {
     const base = WAGON_DEFS.filter((w) => w.family === 'base')
     const fret = WAGON_DEFS.filter((w) => w.family === 'fret')
-    expect(base).toHaveLength(12)
-    expect(new Set(base.map((w) => w.kind)).size).toBe(12)
-    expect(new Set(base.map((w) => w.color)).size).toBe(12)
+    expect(base.length).toBeGreaterThanOrEqual(12)
+    expect(new Set(base.map((w) => w.kind)).size).toBe(base.length)
+    expect(new Set(base.map((w) => w.color)).size).toBe(base.length)
+    expect(new Set(WAGON_DEFS.map((w) => w.kind)).size).toBe(WAGON_DEFS.length)
     expect(base.every((w) => w.length === 1)).toBe(true)
     expect(fret.length).toBeGreaterThanOrEqual(6)
     expect(fret.every((w) => w.length >= 1.5 && w.length <= 2)).toBe(true)

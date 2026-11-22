@@ -216,6 +216,85 @@ function wagonBody(kind: WagonStyle['kind'], c: string, { add, box, cyl, glossy,
       add(box(0.012, 0.28, 0.012, 0.003), gold, -0.285, 0.29, 0.13)
       break
     }
+    case 'milk': { // wagon à lait : une petite cuve blanche cerclée de bleu, des bidons sur la passerelle
+      const r = 0.13
+      add(box(0.54, 0.03, 0.3, 0.01), glossy('#374151'), 0, 0.16, 0)
+      add(new THREE.CylinderGeometry(r, r, 0.4, 24).rotateZ(Math.PI / 2), paint, -0.04, 0.3, 0)
+      for (const sx of [-1, 1]) add(new THREE.SphereGeometry(r, 20, 12).scale(0.45, 1, 1), paint, -0.04 + sx * 0.2, 0.3, 0)
+      add(new THREE.CylinderGeometry(r + 0.004, r + 0.004, 0.04, 24).rotateZ(Math.PI / 2), glossy('#2563eb'), -0.04, 0.3, 0)
+      add(cyl(0.035, 0.035, 0.04), dark, -0.04, 0.44, 0)
+      for (const z of [-0.06, 0.06]) {
+        add(cyl(0.03, 0.035, 0.08), glossy('#cbd5e1'), 0.23, 0.21, z)
+        add(cyl(0.018, 0.018, 0.02), glossy('#94a3b8'), 0.23, 0.26, z)
+      }
+      break
+    }
+    case 'wine': { // wagon à foudres : deux gros tonneaux couchés sous un petit toit
+      add(box(0.54, 0.04, 0.32, 0.012), wood, 0, 0.17, 0)
+      for (const x of [-0.23, 0.23]) for (const z of [-0.14, 0.14]) add(box(0.025, 0.26, 0.025, 0.006), paint, x, 0.31, z)
+      add(box(0.56, 0.035, 0.36, 0.015), paint, 0, 0.45, 0)
+      for (const x of [-0.12, 0.12]) {
+        add(new THREE.CylinderGeometry(0.1, 0.1, 0.22, 20).rotateX(Math.PI / 2), glossy('#92400e'), x, 0.29, 0)
+        for (const z of [-0.07, 0.07]) add(new THREE.CylinderGeometry(0.104, 0.104, 0.015, 20).rotateX(Math.PI / 2), glossy('#374151'), x, 0.29, z)
+      }
+      break
+    }
+    case 'salon': { // voiture-salon : bleu nuit, double liseré doré, grandes fenêtres à rideaux rouges, lanterneau doré
+      caisse(); liser(0.22); liser(0.36); toit()
+      for (const x of [-0.13, 0.13]) {
+        win(x, 0.29, 0.16, 0.09)
+        sides((z, sg) => {
+          for (const dx of [-0.07, 0.07]) add(box(0.03, 0.09, 0.008, 0.003), glossy('#dc2626'), x + dx, 0.29, z + sg * 0.003)
+        })
+      }
+      add(box(0.36, 0.03, 0.14, 0.012), gold, 0, ROOF + 0.015, 0)
+      break
+    }
+    case 'crane': { // wagon-grue : une cabine, la flèche repliée vers l'arrière, le crochet
+      add(box(0.54, 0.05, 0.32, 0.015), dark, 0, 0.17, 0)
+      add(box(0.22, 0.2, 0.26, 0.04), paint, 0.12, 0.3, 0)
+      add(box(0.15, 0.06, 0.262, 0.01), glass, 0.15, 0.33, 0)
+      add(cyl(0.05, 0.05, 0.03), glossy('#1f2937'), 0.12, 0.42, 0)
+      add(box(0.5, 0.05, 0.05, 0.012).rotateZ(-0.25), glossy('#facc15'), -0.1, 0.36, 0) // la flèche, repliée
+      add(box(0.006, 0.12, 0.006, 0.002), glossy('#111827'), -0.32, 0.25, 0)
+      add(new THREE.TorusGeometry(0.02, 0.006, 6, 12, Math.PI * 1.5), glossy('#111827'), -0.32, 0.18, 0)
+      break
+    }
+    case 'horses': { // wagon à chevaux : fermé, deux chevaux passent la tête par les fenêtres
+      caisse(); liser(); toit()
+      // un cheval passe la tête par la fenêtre du haut (porte d'écurie) : cou vers l'extérieur, tête qui penche vers le bas
+      const horse = (x: number, sg: number, coat: string) => {
+        const z = sg * SIDE
+        const hide = glossy(coat), dk = glossy(darker(coat, 0.45)), nose = glossy(lighter(coat, 0.45))
+        add(box(0.15, 0.13, 0.012, 0.02), glossy('#1f2937'), x, 0.32, z) // la fenêtre ouverte (le noir de l'écurie)
+        add(box(0.17, 0.015, 0.016, 0.004), gold, x, 0.25, z) // l'appui de la fenêtre
+        add(box(0.07, 0.09, 0.12, 0.025).rotateX(sg * 0.15), hide, x, 0.34, z + sg * 0.05) // le cou, qui sort
+        add(box(0.022, 0.03, 0.11, 0.008).rotateX(sg * 0.15), dk, x, 0.395, z + sg * 0.045) // la crinière, sur le cou
+        add(box(0.075, 0.08, 0.17, 0.03).rotateX(sg * 0.45), hide, x, 0.31, z + sg * 0.14) // la tête, un peu penchée
+        add(box(0.07, 0.06, 0.06, 0.025).rotateX(sg * 0.45), nose, x, 0.27, z + sg * 0.215) // le bout du nez
+        add(box(0.016, 0.05, 0.05, 0.006).rotateX(sg * 0.45), glossy('#f8fafc'), x, 0.345, z + sg * 0.15) // la liste blanche du front
+        for (const dx of [-0.024, 0.024]) {
+          add(new THREE.ConeGeometry(0.013, 0.045, 6), hide, x + dx, 0.385, z + sg * 0.09) // les oreilles, dressées
+          add(new THREE.SphereGeometry(0.01, 8, 6), glossy('#111827'), x + dx * 1.65, 0.335, z + sg * 0.12) // les yeux
+        }
+        add(box(0.03, 0.03, 0.03, 0.01), dk, x, 0.37, z + sg * 0.11) // le toupet
+      }
+      horse(0.12, 1, '#8b5a2b')
+      horse(-0.12, -1, '#d6d3d1')
+      break
+    }
+    case 'fire': { // wagon des pompiers : citerne rouge, dévidoir de tuyau, échelle et cloche dorée
+      add(box(0.54, 0.04, 0.3, 0.012), dark, 0, 0.165, 0)
+      add(new THREE.CylinderGeometry(0.12, 0.12, 0.34, 24).rotateZ(Math.PI / 2), paint, -0.06, 0.3, 0)
+      for (const sx of [-1, 1]) add(new THREE.SphereGeometry(0.12, 18, 10).scale(0.4, 1, 1), paint, -0.06 + sx * 0.17, 0.3, 0)
+      add(new THREE.CylinderGeometry(0.124, 0.124, 0.03, 24).rotateZ(Math.PI / 2), gold, -0.06, 0.3, 0)
+      add(new THREE.TorusGeometry(0.06, 0.025, 8, 18).rotateY(Math.PI / 2), glossy('#f5f5f4'), 0.2, 0.27, 0) // le dévidoir
+      add(cyl(0.012, 0.012, 0.18).rotateX(Math.PI / 2), glossy('#1f2937'), 0.2, 0.27, 0)
+      for (const z of [-0.05, 0.05]) add(box(0.4, 0.012, 0.012, 0.003), glossy('#e5e7eb'), -0.06, 0.44, z) // l'échelle
+      for (let k = 0; k < 6; k++) add(box(0.01, 0.01, 0.1, 0.002), glossy('#e5e7eb'), -0.24 + k * 0.07, 0.44, 0)
+      add(new THREE.CylinderGeometry(0.02, 0.035, 0.04, 14), gold, 0.2, 0.36, 0)
+      break
+    }
   }
 }
 
@@ -376,8 +455,124 @@ function freightBody(kind: WagonStyle['kind'], c: string, len: number, { add, bo
       for (const x of [-len / 4, len / 4]) add(box(0.015, 0.2, 0.33, 0.004), glossy('#f59e0b'), x, TOP + 0.1, 0) // sangles
       break
     }
+
+    case 'hay': { // wagon de foin : des bottes empilées sur deux rangs
+      deck(c)
+      stakes(0.1, 5)
+      const straw = glossy('#eab308')
+      const n = Math.floor((len - 0.06) / 0.22)
+      for (let k = 0; k < n; k++) {
+        const x = -half + 0.14 + k * 0.22
+        for (const z of [-0.075, 0.075]) add(box(0.2, 0.12, 0.14, 0.03), straw, x, TOP + 0.06, z)
+        if (k % 2 === 0 || k < n - 1) add(box(0.2, 0.12, 0.14, 0.03), straw, x + 0.11, TOP + 0.18, 0)
+      }
+      break
+    }
+    case 'tractors': { // porte-tracteurs : deux tracteurs verts sanglés sur le plateau
+      deck(c)
+      for (const x of [-len / 4, len / 4]) tractor(x)
+      break
+    }
+    case 'giraffe': { // wagon de cirque haut : la girafe passe le cou par la trappe du toit
+      add(box(len, 0.34, 0.34, 0.05), paint, 0, 0.36, 0)
+      add(box(len + 0.01, 0.03, 0.345, 0.01), gold, 0, 0.21, 0)
+      add(box(len + 0.01, 0.03, 0.345, 0.01), gold, 0, 0.5, 0)
+      add(box(len - 0.02, 0.04, 0.36, 0.02), glossy(lighter(c, 0.3)), 0, 0.55, 0)
+      add(box(0.2, 0.02, 0.2, 0.01), glossy('#1f2937'), 0.15, 0.575, 0) // la trappe ouverte
+      const spot = glossy('#92400e'), fur = glossy('#facc15')
+      add(cyl(0.035, 0.045, 0.36).rotateZ(-0.15), fur, 0.17, 0.75, 0) // le cou
+      for (const y of [0.66, 0.78, 0.88]) add(new THREE.SphereGeometry(0.02, 8, 6), spot, 0.165 + (y - 0.6) * 0.15, y, 0.04)
+      add(box(0.13, 0.06, 0.07, 0.025), fur, 0.24, 0.94, 0) // la tête
+      for (const z of [-0.025, 0.025]) add(cyl(0.008, 0.008, 0.05), spot, 0.21, 1.0, z) // les cornes
+      for (const sx of [-1, 1]) for (const x of [-len / 4, len / 4]) add(box(0.14, 0.12, 0.012, 0.02), glossy('#fde68a'), x, 0.36, sx * (SIDE + 0.001))
+      break
+    }
+    case 'blade': { // une pale d'éolienne, plus longue que le wagon, sur ses berceaux
+      deck(c)
+      for (const x of [-half + 0.15, half - 0.15]) add(box(0.06, 0.08, 0.26, 0.01), glossy('#1f2937'), x, TOP + 0.04, 0)
+      const L = len + 0.4
+      add(new THREE.CylinderGeometry(0.035, 0.1, L, 16).rotateZ(Math.PI / 2).scale(1, 1, 0.55), glossy('#f8fafc'), 0.2, TOP + 0.12, 0)
+      add(new THREE.CylinderGeometry(0.1, 0.1, 0.08, 18).rotateZ(Math.PI / 2), glossy('#e5e7eb'), 0.2 - L / 2, TOP + 0.12, 0)
+      add(new THREE.CylinderGeometry(0.035, 0.035, 0.05, 12).rotateZ(Math.PI / 2), glossy('#ef4444'), 0.2 + L / 2, TOP + 0.12, 0)
+      break
+    }
+    case 'digger': { // wagon de chantier : une pelleteuse jaune sanglée sur le plateau, le bras replié
+      deck(c)
+      const yellow = glossy('#facc15'), black = glossy('#111827'), steel = glossy('#6b7280')
+      for (const z of [-0.09, 0.09]) add(box(0.5, 0.06, 0.07, 0.03), black, -0.05, TOP + 0.03, z) // les chenilles
+      add(box(0.3, 0.05, 0.22, 0.02), steel, -0.05, TOP + 0.085, 0)
+      add(box(0.3, 0.1, 0.24, 0.03), yellow, -0.1, TOP + 0.16, 0) // la tourelle
+      add(box(0.14, 0.13, 0.15, 0.025), yellow, 0.0, TOP + 0.27, 0.03) // la cabine
+      add(box(0.12, 0.08, 0.152, 0.01), glass, 0.0, TOP + 0.29, 0.03)
+      add(box(0.32, 0.05, 0.05, 0.015).rotateZ(0.55), yellow, 0.2, TOP + 0.3, -0.05) // la flèche, levée
+      add(box(0.26, 0.04, 0.04, 0.012).rotateZ(-0.9), yellow, 0.38, TOP + 0.26, -0.05) // le bras, replié
+      add(box(0.1, 0.08, 0.12, 0.02), steel, 0.38, TOP + 0.08, -0.05) // le godet, posé
+      for (const x of [-0.34, 0.24]) for (const z of [-0.09, 0.09]) add(box(0.04, 0.04, 0.06, 0.008), glossy('#7a4e2d'), x, TOP + 0.02, z) // les cales
+      break
+    }
+    case 'ballast': { // wagon à ballast : caisse basse aux bords en pente, pleine de cailloux
+      add(box(len, 0.05, 0.32, 0.015), glossy('#374151'), 0, 0.16, 0)
+      for (const z of [-0.15, 0.15]) add(box(len, 0.12, 0.03, 0.008), paint, 0, 0.24, z)
+      for (const sx of [-1, 1]) add(box(0.03, 0.12, 0.32, 0.008), paint, sx * (half - 0.015), 0.24, 0)
+      const stone = glossy('#a8a29e'), stone2 = glossy('#78716c')
+      for (let k = 0; k < 18; k++) {
+        const x = -half + 0.1 + ((k * 37) % 100) / 100 * (len - 0.2)
+        const z = (((k * 53) % 100) / 100 - 0.5) * 0.22
+        add(new THREE.DodecahedronGeometry(0.05 + (k % 3) * 0.012, 0), k % 2 ? stone : stone2, x, 0.29 + (k % 4) * 0.012, z)
+      }
+      break
+    }
+    case 'stone': { // wagon de pierres : de gros blocs taillés
+      deck(c)
+      const marble = glossy('#e7e5e4'), granite = glossy('#a8a29e')
+      add(box(0.36, 0.16, 0.26, 0.02), marble, -len / 4, TOP + 0.08, 0)
+      add(box(0.28, 0.13, 0.22, 0.02), granite, len / 4, TOP + 0.065, -0.02)
+      add(box(0.18, 0.1, 0.16, 0.02), granite, -len / 4 + 0.04, TOP + 0.21, 0.02)
+      for (const x of [-len / 4, len / 4]) add(box(0.015, 0.2, 0.3, 0.004), glossy('#f59e0b'), x, TOP + 0.1, 0)
+      break
+    }
+    case 'plane': { // wagon à avion : un petit avion, ailes démontées posées à côté
+      deck(c)
+      const white = glossy('#f8fafc'), blue = glossy('#2563eb')
+      add(new THREE.CylinderGeometry(0.08, 0.06, len * 0.72, 18).rotateZ(Math.PI / 2), white, -0.04, TOP + 0.12, 0.04)
+      add(new THREE.SphereGeometry(0.08, 16, 12).scale(1.3, 1, 1), white, len * 0.32, TOP + 0.12, 0.04)
+      add(box(0.12, 0.05, 0.161, 0.015), glass, len * 0.26, TOP + 0.17, 0.04)
+      add(box(0.12, 0.14, 0.015, 0.01), blue, -len * 0.38, TOP + 0.2, 0.04) // la dérive
+      add(new THREE.CylinderGeometry(0.082, 0.082, 0.03, 18).rotateZ(Math.PI / 2), blue, 0.05, TOP + 0.12, 0.04)
+      add(box(len * 0.55, 0.02, 0.09, 0.008), white, 0, TOP + 0.02, -0.11) // une aile, à plat
+      add(box(0.02, 0.1, 0.02, 0.004), glossy('#1f2937'), len * 0.42, TOP + 0.12, 0.04) // l'hélice
+      for (const x of [-len / 4, len / 4]) add(box(0.06, 0.06, 0.2, 0.01), glossy('#1f2937'), x, TOP + 0.03, 0.04)
+      break
+    }
+    case 'lions': { // cage de cirque : des barreaux dorés, un toit rouge, deux lions
+      add(box(len, 0.05, 0.34, 0.015), paint, 0, 0.18, 0)
+      add(box(len, 0.04, 0.36, 0.015), paint, 0, 0.48, 0)
+      add(box(len + 0.01, 0.02, 0.37, 0.006), gold, 0, 0.505, 0)
+      for (let k = 0; k <= Math.round(len / 0.06); k++) for (const z of [-0.16, 0.16]) add(cyl(0.008, 0.008, 0.28), gold, -half + 0.02 + k * 0.06, 0.34, z)
+      for (const sx of [-1, 1]) add(box(0.02, 0.28, 0.34, 0.006), paint, sx * (half - 0.01), 0.34, 0)
+      const fur = glossy('#f59e0b'), mane = glossy('#92400e')
+      for (const [x, dir] of [[-len / 4, 1], [len / 4, -1]] as const) {
+        add(box(0.24, 0.1, 0.1, 0.04), fur, x, 0.27, 0)
+        add(new THREE.SphereGeometry(0.075, 14, 10), mane, x + dir * 0.13, 0.32, 0)
+        add(new THREE.SphereGeometry(0.05, 12, 8), fur, x + dir * 0.16, 0.32, 0)
+      }
+      break
+    }
   }
 
+  function tractor(x: number): void {
+    const green = glossy('#16a34a'), black = glossy('#111827'), yellow = glossy('#facc15')
+    add(box(0.24, 0.09, 0.14, 0.03), green, x + 0.04, TOP + 0.1, 0) // le capot
+    add(box(0.1, 0.16, 0.15, 0.025), green, x - 0.09, TOP + 0.14, 0) // la cabine
+    add(box(0.104, 0.07, 0.152, 0.01), glass, x - 0.09, TOP + 0.18, 0)
+    add(cyl(0.012, 0.012, 0.08), black, x + 0.1, TOP + 0.18, 0.04) // le pot d'échappement
+    for (const z of [-0.09, 0.09]) {
+      add(new THREE.CylinderGeometry(0.075, 0.075, 0.04, 18).rotateX(Math.PI / 2), black, x - 0.09, TOP + 0.075, z)
+      add(new THREE.CylinderGeometry(0.035, 0.035, 0.044, 12).rotateX(Math.PI / 2), yellow, x - 0.09, TOP + 0.075, z)
+      add(new THREE.CylinderGeometry(0.045, 0.045, 0.035, 14).rotateX(Math.PI / 2), black, x + 0.12, TOP + 0.045, z)
+    }
+    add(box(0.015, 0.16, 0.28, 0.004), glossy('#f59e0b'), x + 0.02, TOP + 0.08, 0) // la sangle
+  }
   function car(x: number, y: number, col: string): void {
     add(box(0.36, 0.07, 0.2, 0.03), glossy(col), x, y + 0.055, 0)
     add(box(0.18, 0.06, 0.18, 0.03), glossy(col), x - 0.02, y + 0.11, 0)
