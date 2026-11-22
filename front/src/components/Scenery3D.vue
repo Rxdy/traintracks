@@ -86,6 +86,10 @@ onMounted(async () => {
       cars[0]!.updateMatrix()
       steam.update(dt, chimney.copy(CHIMNEY).applyMatrix4(cars[0]!.matrix), rolling)
       r.draw(world.scene, top)
+      if (!ready.value) {
+        ready.value = true
+        emit('ready')
+      }
     })
     stop = () => {
       remove()
@@ -101,8 +105,9 @@ onMounted(async () => {
       r.dispose()
       releaseWorld(sc)
     }
-    ready.value = true
-    emit('ready')
+    // `ready` (le décor apparaît en fondu, les rails des cases s'effacent) seulement après la PREMIÈRE image : la compilation
+    // des shaders bloque le navigateur ~0,2 à 0,5 s, et elle ne doit pas tomber au milieu du fondu.
+    ready.value = false
   } catch {
     if (!gone) emit('fail')
   }

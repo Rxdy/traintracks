@@ -8,7 +8,10 @@ export function preloadWorld(): Promise<boolean> {
   // sans WebGL, la grille garde le décor classique : inutile de télécharger three.js
   if (!webglAvailable()) return Promise.resolve(false)
   world ??= import('./scenery3d/world').then(
-    () => true,
+    (m) => {
+      void m.warmUp().catch(() => undefined) // la première victoire ne paie plus le démarrage du décodage SVG (~1,4 s)
+      return true
+    },
     () => false,
   )
   return world
