@@ -5,6 +5,8 @@ import type { Scenery } from '../scenery'
 import { pointAt, type Route } from '../trainRoute'
 import { carLength, carOffsets } from '../trainStyle'
 import { trainWagons } from '../myTrain'
+import { PAL } from '../scenery'
+import { animalScale, ANIMALS_3D } from '../scenery/animals3d'
 import type { LandFrame } from '../scenery/motion'
 
 // Décor 3D d'un niveau gagné : même place et même taille que le décor SVG (SceneryLayer), sous les rails de la grille.
@@ -46,6 +48,7 @@ onMounted(async () => {
     r.fit(onSize)
     // le train, en 3D (même modèle que les icônes) : posé sur la voie à chaque image d'après la position de la locomotive
     const { makeCar, makeSteam, makeWagon, CHIMNEY } = await import('../scenery3d/trainModel')
+    const { makeAnimal } = await import('../scenery3d/animals')
     if (gone) return releaseWorld(sc)
     const train = new THREE.Group()
     // le train du joueur (Mon train), figé pour ce trajet
@@ -56,6 +59,32 @@ onMounted(async () => {
     cars.forEach((c) => train.add(c))
     train.visible = false
     const unTrain = world.add(train)
+    // les animaux (même simulation que le SVG de SceneryLife) : posés sur le sol de la scène, ils passent sous le train et derrière les arbres
+    const critters = new THREE.Group()
+    const unCritters = world.add(critters)
+    const snow = !!PAL[sc.theme].snow
+    const living = new Map<number, { a: NonNullable<ReturnType<typeof makeAnimal>>; born: number }>()
+    const syncAnimals = () => {
+      const now = performance.now()
+      const live = new Set<number>()
+      for (const s of props.life?.animals ?? []) {
+        if (!ANIMALS_3D.has(s.kind)) continue
+        live.add(s.id)
+        let e = living.get(s.id)
+        if (!e) {
+          const a = makeAnimal(s.kind, snow)
+          if (!a) continue
+          critters.add(a.group)
+          living.set(s.id, (e = { a, born: now }))
+        }
+        const k = animalScale(s.kind) * Math.min(1, (now - e.born) / 600) // il apparaît en grandissant
+        e.a.group.scale.setScalar(Math.max(0.001, k))
+        e.a.group.position.set(s.x, 0, s.y)
+        e.a.group.rotation.y = s.face > 0 ? 0 : Math.PI
+        e.a.pose(s)
+      }
+      for (const [id, e] of living) if (!live.has(id)) (critters.remove(e.a.group), living.delete(id))
+    }
     // la barrière du fond du passage à niveau : en 3D, pour que le train passe DEVANT elle (celle du devant reste dessinée en SVG, par-dessus)
     const road = sc.road
     const far = new THREE.Group()
@@ -159,6 +188,7 @@ onMounted(async () => {
       r.check(onSize)
       setBarrier(props.life?.barrier ?? 0, props.life?.lights ?? false)
       syncCars()
+      syncAnimals()
       placeTrain()
       const s = props.train?.s ?? -1
       const rolling = train.visible && s !== lastS && !still
@@ -173,6 +203,7 @@ onMounted(async () => {
       unTrain()
       unFar()
       unCars()
+      unCritters()
       carMats.forEach((x) => x.dispose())
       carBoxes.forEach((x) => x.dispose())
       far.traverse((o) => {
