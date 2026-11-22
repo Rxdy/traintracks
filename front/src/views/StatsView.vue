@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, ref, watch } from 'vue'
 import AuthPanel from '../components/AuthPanel.vue'
 import CoinIcon from '../components/CoinIcon.vue'
 import { user } from '../auth'
 import { fetchStats, formatLong, formatTime, type StatsData } from '../stats'
 import { PAL, THEME_NAMES, LEVELS_PER_THEME, themeForLevel } from '../scenery'
+import { SKY } from '../scenery/sky'
 
 // Statistiques, dans l'esprit du jeu : le voyage dessiné comme une ligne de chemin de fer (une gare par environnement,
 // le train là où on en est), les temps sur des billets, les tailles de grille en barres, le puzzle du jour et sa série.
@@ -19,25 +20,34 @@ watch(user, refresh)
 
 const j = computed(() => s.value?.journey ?? null)
 const d = computed(() => s.value?.daily ?? null)
-// La ligne du voyage : les environnements traversés, celui en cours, puis la voie qui continue et s'efface.
-// Le joueur ne voit jamais de fin (ni nombre total de niveaux, ni nombre d'environnements) : le voyage paraît sans fin.
-const SHOWN_BEHIND = 6 // environnements traversés montrés au plus (les plus récents)
-const AHEAD = 4 // tronçons à venir, de plus en plus pâles, sans nom
-const line = computed(() => {
+// La frise du voyage : tous les niveaux déjà parcourus, du premier au niveau en cours, et rien au-delà.
+// Chaque niveau : son numéro, et dessous la couleur de son environnement (le nom au début de chaque environnement).
+// Par défaut on voit les 10 derniers ; on fait défiler vers la gauche pour remonter jusqu'au niveau 1.
+// Le joueur ne voit jamais la suite : le voyage paraît sans fin.
+// Les niveaux groupés par environnement : chaque groupe est un petit bandeau de paysage (son ciel, son sol).
+const frieze = computed(() => {
   const level = j.value?.level ?? 1
-  const per = LEVELS_PER_THEME
-  const crossed = Math.floor((level - 1) / per) // environnements traversés depuis le début
-  const from = Math.max(0, crossed - SHOWN_BEHIND)
-  const stops: { name: string; color: string; done: boolean; here: boolean; fade: number }[] = []
-  for (let k = from; k <= crossed; k++) {
-    const t = themeForLevel(k * per + 1)
-    stops.push({ name: THEME_NAMES[t], color: PAL[t].a, done: k < crossed, here: k === crossed, fade: 1 })
+  const groups: { theme: string; style: Record<string, string>; levels: { n: number; here: boolean }[] }[] = []
+  for (let n = 1; n <= level; n++) {
+    const t = themeForLevel(n)
+    if (!groups.length || groups[groups.length - 1]!.theme !== t || groups[groups.length - 1]!.levels.length >= LEVELS_PER_THEME) {
+      const sky = SKY[t], pal = PAL[t]
+      groups.push({ theme: t, style: { '--s1': sky.top, '--s2': sky.low, '--g1': pal.a, '--g2': pal.b }, levels: [] })
+    }
+    groups[groups.length - 1]!.levels.push({ n, here: n === level })
   }
-  for (let a = 1; a <= AHEAD; a++) stops.push({ name: '', color: '#cbd5e1', done: false, here: false, fade: 1 - a / (AHEAD + 1) })
-  const inChapter = ((level - 1) % per) / per // où en est le train dans l'environnement en cours
-  const progress = (crossed - from + inChapter) / stops.length
-  return { stops, crossed, progress, current: THEME_NAMES[themeForLevel(level)] }
+  return groups
 })
+const current = computed(() => THEME_NAMES[themeForLevel(j.value?.level ?? 1)])
+const crossed = computed(() => Math.floor(((j.value?.level ?? 1) - 1) / LEVELS_PER_THEME))
+const strip = ref<HTMLElement | null>(null)
+// à l'ouverture (et quand les chiffres arrivent) : la frise est calée sur le niveau en cours, à droite
+watch(frieze, async () => {
+  await nextTick()
+  if (strip.value) strip.value.scrollLeft = strip.value.scrollWidth
+}, { flush: 'post' })
+// les pièces : ce qu'on a, ce qu'on a dépensé, ce qu'on a gagné en tout
+const spent = computed(() => (j.value ? Math.max(0, j.value.coinsEarned - j.value.coins) : 0))
 const maxCount = computed(() => Math.max(1, ...(j.value?.bySize ?? []).map((z) => z.count)))
 </script>
 
@@ -54,18 +64,20 @@ const maxCount = computed(() => Math.max(1, ...(j.value?.bySize ?? []).map((z) =
           </div>
           <p class="sub"><span data-test="solved">{{ j ? j.solved : '…' }}</span> niveau{{ j && j.solved > 1 ? 'x' : '' }} terminé{{ j && j.solved > 1 ? 's' : '' }}</p>
         </header>
-        <div class="line" aria-hidden="true">
-          <div class="rails" />
-          <div class="segs">
-            <span v-for="(st, k) in line.stops" :key="k" class="seg" :class="{ done: st.done, here: st.here, ahead: !st.name }" :style="{ '--c': st.color, '--f': st.fade }" :title="st.name || undefined" />
+        <!-- la frise des niveaux parcourus ; on fait défiler vers la gauche pour remonter au début -->
+        <div ref="strip" class="frieze" data-test="frieze" tabindex="0" aria-label="Les niveaux parcourus, du premier au niveau en cours">
+          <div v-for="(g, gi) in frieze" :key="gi" class="env" :style="g.style" :title="THEME_NAMES[g.theme as keyof typeof THEME_NAMES]">
+            <div v-for="c in g.levels" :key="c.n" class="lvl" :class="{ here: c.here }" :data-test="c.here ? 'frieze-here' : undefined">
+              <span class="num">{{ c.n }}</span>
+              <span v-if="c.here" class="loco" aria-hidden="true">
+                <svg viewBox="0 0 36 22"><rect x="2" y="7" width="20" height="10" rx="3" fill="#dc2626" /><rect x="15" y="2" width="9" height="15" rx="2" fill="#991b1b" /><rect x="5" y="3" width="4" height="6" rx="1" fill="#1f2937" /><circle cx="8" cy="18" r="3" fill="#1f2937" /><circle cx="19" cy="18" r="3" fill="#1f2937" /></svg>
+              </span>
+            </div>
           </div>
-          <span class="train" :style="{ left: `calc(${line.progress * 100}% - 0.9rem)` }">
-            <svg viewBox="0 0 36 22"><rect x="2" y="7" width="20" height="10" rx="3" fill="#dc2626" /><rect x="15" y="2" width="9" height="15" rx="2" fill="#991b1b" /><rect x="5" y="3" width="4" height="6" rx="1" fill="#1f2937" /><circle cx="8" cy="18" r="3" fill="#1f2937" /><circle cx="19" cy="18" r="3" fill="#1f2937" /><rect x="26" y="9" width="9" height="8" rx="2" fill="#f59e0b" /><circle cx="30.5" cy="18.5" r="2.4" fill="#1f2937" /></svg>
-          </span>
         </div>
         <p class="place" data-test="place">
-          <b>{{ line.current }}</b> · l'environnement que tu traverses
-          <span class="crossed">{{ line.crossed }} environnement{{ line.crossed > 1 ? 's' : '' }} traversé{{ line.crossed > 1 ? 's' : '' }}</span>
+          <b>{{ current }}</b> · l'environnement que tu traverses
+          <span class="crossed">{{ crossed }} environnement{{ crossed > 1 ? 's' : '' }} traversé{{ crossed > 1 ? 's' : '' }}</span>
         </p>
       </article>
 
@@ -80,12 +92,13 @@ const maxCount = computed(() => Math.max(1, ...(j.value?.bySize ?? []).map((z) =
         </div>
       </article>
 
-      <!-- les pièces -->
+      <!-- les pièces : trois chiffres, sans le détail de leur origine -->
       <article class="card coins">
         <h2>Pièces</h2>
         <div class="purse">
-          <div><b data-test="coins-earned">{{ j ? j.coinsEarned : '…' }}</b><span>gagnées en jouant</span></div>
-          <div><b><CoinIcon size="0.8em" /> {{ j ? j.coins : '…' }}</b><span>dans ta poche</span></div>
+          <div><span>En poche</span><b data-test="coins-now"><CoinIcon size="0.8em" /> {{ j ? j.coins : '…' }}</b></div>
+          <div><span>Dépensées</span><b data-test="coins-spent">{{ j ? spent : '…' }}</b></div>
+          <div><span>Gagnées au total</span><b data-test="coins-earned">{{ j ? j.coinsEarned : '…' }}</b></div>
         </div>
       </article>
 
@@ -219,53 +232,64 @@ h2 {
   color: var(--muted);
   font-weight: 600;
 }
-.line {
-  position: relative;
-  height: 3.2rem;
-  margin: 0.3rem 0.4rem 0;
-}
-.rails {
-  position: absolute;
-  left: 0;
-  right: 0;
-  /* la voie continue au-delà et s'efface : pas de bout visible */
-  mask-image: linear-gradient(90deg, #000 70%, transparent);
-  top: 2.15rem;
-  height: 0.5rem;
-  border-top: 3px solid #6b7280;
-  border-bottom: 3px solid #6b7280;
-  background: repeating-linear-gradient(90deg, #7a4e2d 0 5px, transparent 5px 12px);
-}
-.segs {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 1.5rem;
+.frieze {
   display: flex;
-  gap: 3px;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding: 0.3rem 0.2rem 0.5rem;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  /* à gauche, le passé s'estompe : on devine qu'on peut remonter */
+  mask-image: linear-gradient(90deg, transparent, #000 3rem);
 }
-.seg {
-  flex: 1;
-  height: 0.45rem;
-  border-radius: 999px;
-  background: var(--c);
-  opacity: 0.35;
+.frieze:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
 }
-.seg.done {
-  opacity: 1;
+/* un environnement : un bandeau de paysage (ciel en haut, sol et collines en bas) qui englobe ses niveaux */
+.env {
+  flex: none;
+  display: flex;
+  padding: 0.55rem 0.35rem 1.35rem;
+  border-radius: 0.9rem;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(30, 64, 175, 0.15);
+  /* des collines rondes sur l'horizon (deux rangs décalés), le sol, le ciel */
+  background:
+    radial-gradient(circle at 50% 100%, var(--g2) 0 60%, transparent 61%) 0.8rem 100% / 3.4rem 1.5rem repeat-x,
+    radial-gradient(circle at 50% 100%, var(--g1) 0 60%, transparent 61%) 0 calc(100% - 0.7rem) / 4.6rem 1.9rem repeat-x,
+    linear-gradient(var(--s1), var(--s2) 55%, var(--g1) 55%, var(--g2));
 }
-.seg.ahead {
-  opacity: var(--f);
+.lvl {
+  position: relative;
+  flex: none;
+  /* à l'ouverture, les 10 niveaux d'avant et le niveau en cours remplissent la largeur */
+  width: max(2.6rem, calc((min(100vw, 96rem) - 6rem) / 11));
+  display: grid;
+  place-items: center;
 }
-.seg.here {
-  opacity: 1;
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--gold);
+.num {
+  display: grid;
+  place-items: center;
+  width: calc(100% - 0.45rem);
+  max-width: 4.2rem;
+  height: 2.1rem;
+  border-radius: 0.55rem;
+  background: rgba(255, 255, 255, 0.92);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--navy);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
-.train {
+.lvl.here .num {
+  background: var(--navy);
+  color: #fff;
+  box-shadow: 0 0 0 3px var(--gold);
+}
+.loco {
   position: absolute;
-  top: 0;
-  width: 2.2rem;
-  transition: left 0.6s ease;
+  bottom: -1.3rem;
+  width: 1.8rem;
 }
 .place {
   margin: 0;
@@ -345,7 +369,9 @@ h2 {
 }
 .purse div {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
   padding: 0.6rem 0.9rem;
   border-radius: 0.8rem;
   background: #fffbeb;
@@ -357,8 +383,11 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 .purse span {
-  color: var(--muted);
-  font-size: 0.85rem;
+  color: #92400e;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* par taille */
@@ -458,8 +487,8 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 @media (prefers-reduced-motion: reduce) {
-  .train {
-    transition: none;
+  .frieze {
+    scroll-behavior: auto;
   }
 }
 </style>
