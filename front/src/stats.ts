@@ -41,8 +41,23 @@ export interface BoardData {
   board: BoardId
   date?: string
   entries: BoardEntry[]
-  me: { rank: number; value: number; pseudo: string; avatar: string } | null // ma ligne, montrée sous les 10 premiers si je n'y suis pas
+  me: { rank: number; value: number; pseudo: string; avatar: string } | null // ma ligne, toujours en bas de l'écran
+  around?: BoardEntry[] // hors du top 10 : 2 joueurs devant moi, moi, 2 derrière
   total: number
+}
+
+const plural = (n: number, one: string, many = one + 's') => `${n} ${n > 1 ? many : one}`
+/** Ce qu'il me manque pour gagner une place (null : pas classé). Premier : on le dit. */
+export function boardGoal(d: BoardData): string | null {
+  const me = d.me
+  if (!me) return null
+  if (me.rank === 1) return d.board === 'voyage' ? 'Tu es premier du Voyage !' : d.board === 'jour' ? 'Meilleur temps du jour !' : 'Meilleure série de tous !'
+  // le plus proche devant moi (rang strictement meilleur)
+  const ahead = [...d.entries, ...(d.around ?? [])].filter((e) => e.rank < me.rank).sort((a, b) => b.rank - a.rank)[0]
+  if (!ahead) return null
+  if (d.board === 'voyage') return `Encore ${plural(ahead.value - me.value + 1, 'niveau', 'niveaux')} pour passer ${ahead.pseudo}`
+  if (d.board === 'jour') return `Il te manquait ${plural(Math.max(1, Math.ceil((me.value - ahead.value) / 1000)), 'seconde')} pour passer ${ahead.pseudo}`
+  return `Encore ${plural(ahead.value - me.value + 1, 'jour')} de suite pour passer ${ahead.pseudo}`
 }
 export async function fetchBoard(board: BoardId): Promise<BoardData | null> {
   const r = await api('GET', `/api/leaderboard?board=${board}`)

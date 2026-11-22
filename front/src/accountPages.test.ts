@@ -161,16 +161,28 @@ describe('page Statistiques', () => {
 })
 
 describe('page Classement', () => {
-  const board = (extra: object = {}) => ({ board: 'voyage', entries: [{ rank: 1, pseudo: 'Zoé', value: 120, me: false }, { rank: 2, pseudo: 'Alice', value: 90, me: true }, { rank: 3, pseudo: 'Bob', value: 12, me: false }], me: { rank: 2, value: 90 }, total: 3, ...extra })
+  const board = (extra: object = {}) => ({ board: 'voyage', entries: [{ rank: 1, pseudo: 'Zoé', value: 120, me: false }, { rank: 2, pseudo: 'Alice', value: 90, me: true }, { rank: 3, pseudo: 'Bob', value: 12, me: false }], me: { rank: 2, value: 90, pseudo: 'Alice', avatar: 'chat' }, total: 3, ...extra })
 
-  it('Voyage : rangs, pseudos, niveaux ; ma ligne est repérée ; ma place', async () => {
+  it('Voyage : les 3 premiers sur le podium ; ma ligne est repérée ; ma place en bas, avec ce qu\'il manque', async () => {
     mockFetch({ status: 200, body: board() })
     const w = mount(RankingView)
     await flushPromises()
-    const rows = w.findAll('[data-test=ranking-row]')
-    expect(rows.map((r) => r.text())).toEqual(['1ZoéNiveau 120', '2AliceNiveau 90', '3BobNiveau 12'])
+    const rows = w.findAll('[data-test=ranking-podium] [data-test=ranking-row]')
+    expect(rows.map((r) => r.text())).toEqual(['ZoéNiveau 1201', 'AliceNiveau 902', 'BobNiveau 123'])
     expect(rows[1].classes()).toContain('me')
-    expect(w.find('[data-test=ranking-me]').exists()).toBe(false) // déjà dans les 10 premiers : pas de ligne en plus
+    expect(w.find('[data-test=ranking-sub]').text()).toBe('Le niveau le plus loin atteint')
+    expect(w.find('[data-test=ranking-me]').text()).toBe('2AliceNiveau 90')
+    expect(w.find('[data-test=ranking-goal]').text()).toBe('Encore 31 niveaux pour passer Zoé') // 121 pour passer devant (à égalité, le premier arrivé reste devant)
+  })
+  it('hors du top 10 : « Autour de toi », les joueurs juste devant et derrière', async () => {
+    const top = Array.from({ length: 10 }, (_, i) => ({ rank: i + 1, pseudo: 'J' + (i + 1), value: 200 - i, me: false }))
+    const around = [{ rank: 25, pseudo: 'Inès', value: 42, me: false }, { rank: 26, pseudo: 'Tom', value: 41, me: false }, { rank: 27, pseudo: 'Alice', value: 40, me: true }, { rank: 28, pseudo: 'Zoé', value: 38, me: false }]
+    mockFetch({ status: 200, body: board({ entries: top, around, me: { rank: 27, value: 40, pseudo: 'Alice', avatar: 'chat' }, total: 28 }) })
+    const w = mount(RankingView)
+    await flushPromises()
+    expect(w.findAll('[data-test=ranking-around] li').map((r) => r.text())).toEqual(['25InèsNiveau 42', '26TomNiveau 41', '27AliceNiveau 40', '28ZoéNiveau 38'])
+    expect(w.find('[data-test=ranking-around] li.me').text()).toContain('Alice')
+    expect(w.find('[data-test=ranking-goal]').text()).toBe('Encore 2 niveaux pour passer Tom')
   })
   it('hors des 10 premiers : ma ligne, avec ma place, juste sous les 10', async () => {
     const top = Array.from({ length: 10 }, (_, i) => ({ rank: i + 1, pseudo: 'J' + (i + 1), value: 200 - i, me: false }))
@@ -180,6 +192,7 @@ describe('page Classement', () => {
     expect(w.findAll('[data-test=ranking-row]')).toHaveLength(10)
     expect(w.find('[data-test=ranking-me]').text()).toBe('27AliceNiveau 40')
     expect(w.find('[data-test=ranking-me] li').classes()).toContain('me')
+    expect(w.find('[data-test=ranking-goal]').text()).toBe('Encore 152 niveaux pour passer J10')
   })
   it('onglets Du jour (temps) et Séries (jours), avec le bon appel', async () => {
     const calls = mockFetch({ status: 200, body: board() }, { status: 200, body: board({ board: 'jour', entries: [{ rank: 1, pseudo: 'Bob', value: 61_000, me: false }], me: null, total: 1 }) }, { status: 200, body: board({ board: 'serie', entries: [{ rank: 1, pseudo: 'Zoé', value: 5, me: false }], me: null, total: 1 }) })

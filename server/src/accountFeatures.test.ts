@@ -173,6 +173,23 @@ describe('statistiques et classements', () => {
     expect((await post('/api/account/leaderboard', { visible: 'oui' }, a)).statusCode).toBe(400)
     expect((await get('/api/leaderboard?board=nimporte')).statusCode).toBe(400)
   })
+  it('hors du top 10 : les 2 joueurs juste devant moi et les 2 juste derrière, jamais ceux déjà dans le top', async () => {
+    const { get, account, play } = await setup()
+    const ps: string[] = []
+    for (let k = 0; k < 14; k++) {
+      const p = await account('Joueur' + k, `j${k}@x.fr`)
+      await play(p, [1]) // tous au niveau 1 : départagés par l'heure d'arrivée, Joueur0 premier
+      ps.push(p)
+    }
+    const names = (b: { around: { pseudo: string; rank: number; me: boolean }[] }) => b.around.map((e) => [e.rank, e.pseudo, e.me])
+    const far = (await get('/api/leaderboard?board=voyage', ps[12]!)).json()
+    expect(far.entries).toHaveLength(10)
+    expect(names(far)).toEqual([[11, 'Joueur10', false], [12, 'Joueur11', false], [13, 'Joueur12', true], [14, 'Joueur13', false]])
+    const edge = (await get('/api/leaderboard?board=voyage', ps[10]!)).json()
+    expect(names(edge)).toEqual([[11, 'Joueur10', true], [12, 'Joueur11', false], [13, 'Joueur12', false]])
+    expect((await get('/api/leaderboard?board=voyage', ps[3]!)).json().around).toEqual([]) // dans le top 10
+    expect((await get('/api/leaderboard?board=voyage')).json().around).toEqual([]) // pas connecté
+  })
   it('classement du jour : les temps du jour, du plus rapide au plus lent ; série en cours', async () => {
     const { get, post, account, clock, db } = await setup()
     const a = await account('Alice', 'alice@x.fr')
