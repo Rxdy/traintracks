@@ -84,7 +84,7 @@ Stock plafonné à 3 par type ; une aide de chaque type par niveau ; aucune aide
 jour ; un niveau où une aide payante a servi ne donne pas les étoiles de rapidité (issue #6).
 
 ## Wagons à collectionner (machine Wagon surprise)
-- Un tirage : 50 pièces, un wagon au hasard parmi ceux qu'on a moins de 6 fois ; on gagne toujours.
+- Un tirage : 40 pièces, 2 chances sur 3 de gagner (tirage fait par le serveur). Perdu : rien, les 3 rouleaux s'arrêtent sur des wagons différents. Gagné : un wagon au hasard parmi ceux qu'on a moins de 6 fois ; un wagon qu'on a 6 fois ne sort plus jamais pour ce joueur.
 - 37 wagons (courts et fret), 6 exemplaires au plus de chacun : 222 à collectionner.
 - Les wagons ne servent qu'au Trajet (et à l'accueil, au chargement) ; le futur mode Livraison n'en dépend pas.
 - Catalogue : shared/wagons.ts ; serveur : server/src/wagons.ts.

@@ -63,7 +63,9 @@ export const wagonDef = (id: unknown): WagonDef | undefined => (typeof id === 's
 
 /** Le train de départ : ambre, vert, violet. Ces trois wagons sont donnés à tout le monde. */
 export const STARTER_TRAIN: readonly string[] = ['ambre', 'vert', 'violet']
-export const DRAW_PRICE = 50 // pièces pour un tirage de la machine « Wagon surprise »
+export const DRAW_PRICE = 40 // pièces pour un tirage de la machine « Wagon surprise »
+/** Chance de gagner à un tirage : 2 sur 3. Perdu : on ne gagne rien (les 3 rouleaux s'arrêtent sur des wagons différents). */
+export const DRAW_WIN = { in: 2, of: 3 } as const
 export const MAX_PER_WAGON = 6 // jusqu'à 6 exemplaires de chaque wagon : de quoi faire un train d'une seule sorte
 export const TRAIN_SLOTS = 6 // places derrière la locomotive, toutes ouvertes dès le départ
 export const COLLECTION_TOTAL = WAGON_DEFS.length * MAX_PER_WAGON
