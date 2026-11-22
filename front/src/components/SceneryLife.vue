@@ -11,7 +11,9 @@ import { sound } from '../sound/director'
 // Le décor qui vit AU-DESSUS des rails : voitures et barrières du passage à niveau, animaux, oiseaux, feuilles ou
 // neige qui tombent. Les voitures s'arrêtent quand le train approche (`trainNear`) et repartent après son passage.
 // Même repère que le train : 1 case = 1×1, la grille occupe 0..size (le reste, c'est la colonne et la rangée des indices, à gauche et en haut : -1..0).
-const props = withDefaults(defineProps<{ scenery: Scenery; trainNear: boolean; start?: boolean }>(), { start: true })
+// in3d : les voitures et la barrière du fond sont dessinées par la scène 3D (Scenery3D), où roule le train : il passe devant
+// la barrière du fond et les voitures arrêtées. Ici on garde la barrière du devant, par-dessus.
+const props = withDefaults(defineProps<{ scenery: Scenery; trainNear: boolean; start?: boolean; in3d?: boolean }>(), { start: true, in3d: false })
 const emit = defineEmits<{ (e: 'frame', f: LandFrame): void }>()
 const cols = computed(() => props.scenery.cols)
 const board = computed(() => props.scenery.rows - props.scenery.margin.y - props.scenery.margin.b) // taille de la grille de jeu : le repère de la page
@@ -69,7 +71,7 @@ const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, 
     <g clip-path="url(#life-clip)" :mask="elapsed < REVEAL_END ? 'url(#life-mask)' : undefined">
       <!-- route : voitures et barrières -->
       <g v-if="scenery.road" :transform="roadFrame">
-        <g v-for="c in frame.cars" :key="c.id" :transform="`translate(${c.lane} ${c.u}) rotate(${c.dir > 0 ? 90 : -90})`">
+        <g v-for="c in in3d ? [] : frame.cars" :key="c.id" :transform="`translate(${c.lane} ${c.u}) rotate(${c.dir > 0 ? 90 : -90})`">
           <template v-if="c.kind === 1">
             <rect x="-0.24" y="-0.1" width="0.3" height="0.2" rx="0.02" fill="#e5e7eb" stroke="#00000033" stroke-width="0.01" />
             <rect x="0.07" y="-0.1" width="0.15" height="0.2" rx="0.03" :fill="c.color" />
@@ -84,7 +86,7 @@ const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, 
           </template>
         </g>
         <template v-if="scenery.road.crossing">
-          <g :transform="`translate(-0.42 ${uc - 0.3})`" data-test="barrier">
+          <g v-if="!in3d" :transform="`translate(-0.42 ${uc - 0.3})`" data-test="barrier">
             <circle r="0.045" fill="#374151" />
             <g :transform="`rotate(${armA})`">
               <rect x="-0.02" y="-0.025" width="0.62" height="0.05" fill="#fff" stroke="#00000033" stroke-width="0.008" />
@@ -92,7 +94,7 @@ const BIG: Record<string, number> = { campfire: 1.8, gondola: 1.7, skater: 1.5, 
             </g>
             <circle cx="0" cy="-0.1" r="0.04" :fill="frame.lights ? '#ef4444' : '#7f1d1d'" />
           </g>
-          <g :transform="`translate(0.42 ${uc + 0.3})`">
+          <g :transform="`translate(0.42 ${uc + 0.3})`" :data-test="in3d ? 'barrier' : undefined">
             <circle r="0.045" fill="#374151" />
             <g :transform="`rotate(${armB})`">
               <rect x="-0.02" y="-0.025" width="0.62" height="0.05" fill="#fff" stroke="#00000033" stroke-width="0.008" />
