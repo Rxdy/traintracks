@@ -77,15 +77,23 @@ function quit(): void {
 
     <!-- En jeu : plus de menu -->
     <template v-else-if="playing && puzzle">
+      <!-- même barre que le Voyage : le titre et le temps au milieu, le son et les pièces à droite -->
       <div class="bar">
         <QuitButton data-test="quit" @click="quit" />
-        <span class="title" :class="{ gone: won }">Puzzle du jour</span>
-        <CoinBadge class="coins-hud" :class="{ gone: won }" />
+        <div class="hud-mid" :class="{ gone: won }">
+          <span class="title">Puzzle du jour</span>
+          <span id="hud-timer" class="hud-slot"></span>
+        </div>
+        <div class="hud-right">
+          <span id="hud-sound" class="hud-slot"></span>
+          <CoinBadge class="coins-hud" :class="{ gone: won }" />
+        </div>
       </div>
       <div class="play-area">
         <TrackGrid
           ref="grid"
           :key="date"
+          :hud="{ timer: '#hud-timer', sound: '#hud-sound' }"
           :puzzle="puzzle"
           :validate="validate"
           :official-ms="outcome?.timeMs ?? null"
@@ -223,6 +231,23 @@ h2 {
 .bar .quit {
   justify-self: start;
 }
+.hud-mid,
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.3rem, 1.2vw, 0.5rem);
+}
+.hud-mid {
+  justify-self: center;
+  transition: opacity 0.5s ease;
+}
+.hud-right {
+  justify-self: end;
+}
+.hud-slot {
+  display: contents;
+}
+.hud-mid.gone,
 .title.gone,
 .coins-hud.gone {
   opacity: 0;
@@ -262,5 +287,34 @@ h2 {
   text-align: center;
   font-size: 0.9rem;
   color: #4b5563;
+}
+/* Comme le Voyage (la référence) : en paysage, les bandes de part et d'autre de la grille ont la même mesure. */
+@media (min-aspect-ratio: 1/1) {
+  .play-area {
+    --band: clamp(1.25rem, calc((100vw - min(100dvh - 11rem, 62vw, 820px) - 13rem) / 2), 15rem);
+  }
+}
+/* Téléphone couché : la barre du haut flotte par-dessus, la grille prend toute la hauteur, les outils au bord gauche. */
+@media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  .play-area {
+    --band: clamp(1rem, calc((100vw - 100dvh - 10rem) / 2), 11rem);
+    box-sizing: border-box;
+    padding: 2.9rem 0 0 4.6rem;
+  }
+  .bar {
+    position: absolute;
+    top: 0.5rem;
+    left: 0;
+    right: 0;
+    grid-template-columns: auto 1fr auto;
+    pointer-events: none;
+  }
+  .bar > * {
+    pointer-events: auto;
+  }
+  .bar .hud-mid {
+    justify-self: start;
+    margin-left: 0.6rem;
+  }
 }
 </style>
