@@ -4,7 +4,7 @@ import AuthPanel from '../components/AuthPanel.vue'
 import CoinIcon from '../components/CoinIcon.vue'
 import { user } from '../auth'
 import { fetchStats, formatLong, formatTime, type StatsData } from '../stats'
-import { PAL, THEME_NAMES, THEMES, LEVELS_PER_THEME, themeForLevel } from '../scenery'
+import { PAL, THEME_NAMES, LEVELS_PER_THEME, themeForLevel } from '../scenery'
 
 // Statistiques, dans l'esprit du jeu : le voyage dessiné comme une ligne de chemin de fer (une gare par environnement,
 // le train là où on en est), les temps sur des billets, les tailles de grille en barres, le puzzle du jour et sa série.
@@ -19,19 +19,24 @@ watch(user, refresh)
 
 const j = computed(() => s.value?.journey ?? null)
 const d = computed(() => s.value?.daily ?? null)
-// la ligne du tour en cours : 15 environnements de 25 niveaux, dans l'ordre de ce tour
+// La ligne du voyage : les environnements traversés, celui en cours, puis la voie qui continue et s'efface.
+// Le joueur ne voit jamais de fin (ni nombre total de niveaux, ni nombre d'environnements) : le voyage paraît sans fin.
+const SHOWN_BEHIND = 6 // environnements traversés montrés au plus (les plus récents)
+const AHEAD = 4 // tronçons à venir, de plus en plus pâles, sans nom
 const line = computed(() => {
   const level = j.value?.level ?? 1
   const per = LEVELS_PER_THEME
-  const tour = Math.floor((level - 1) / (per * THEMES.length))
-  const first = tour * per * THEMES.length + 1
-  const chapter = Math.floor((level - first) / per) // environnements déjà traversés dans ce tour
-  const stops = THEMES.map((_, k) => {
-    const t = themeForLevel(first + k * per)
-    return { theme: t, name: THEME_NAMES[t], color: PAL[t].a, done: k < chapter, here: k === chapter }
-  })
-  const progress = (level - first) / (per * THEMES.length) // 0 à 1 le long de la ligne
-  return { stops, chapter, progress, current: THEME_NAMES[themeForLevel(level)], tour: tour + 1 }
+  const crossed = Math.floor((level - 1) / per) // environnements traversés depuis le début
+  const from = Math.max(0, crossed - SHOWN_BEHIND)
+  const stops: { name: string; color: string; done: boolean; here: boolean; fade: number }[] = []
+  for (let k = from; k <= crossed; k++) {
+    const t = themeForLevel(k * per + 1)
+    stops.push({ name: THEME_NAMES[t], color: PAL[t].a, done: k < crossed, here: k === crossed, fade: 1 })
+  }
+  for (let a = 1; a <= AHEAD; a++) stops.push({ name: '', color: '#cbd5e1', done: false, here: false, fade: 1 - a / (AHEAD + 1) })
+  const inChapter = ((level - 1) % per) / per // où en est le train dans l'environnement en cours
+  const progress = (crossed - from + inChapter) / stops.length
+  return { stops, crossed, progress, current: THEME_NAMES[themeForLevel(level)] }
 })
 const maxCount = computed(() => Math.max(1, ...(j.value?.bySize ?? []).map((z) => z.count)))
 </script>
@@ -47,21 +52,20 @@ const maxCount = computed(() => Math.max(1, ...(j.value?.bySize ?? []).map((z) =
             <p class="eyebrow">Voyage de {{ user.name }}</p>
             <p class="level">Niveau <b data-test="highest">{{ j ? j.level : '…' }}</b></p>
           </div>
-          <p class="sub"><span data-test="solved">{{ j ? j.solved : '…' }}</span> niveau{{ j && j.solved > 1 ? 'x' : '' }} terminé{{ j && j.solved > 1 ? 's' : '' }}<template v-if="j"> sur {{ j.total }}</template></p>
+          <p class="sub"><span data-test="solved">{{ j ? j.solved : '…' }}</span> niveau{{ j && j.solved > 1 ? 'x' : '' }} terminé{{ j && j.solved > 1 ? 's' : '' }}</p>
         </header>
         <div class="line" aria-hidden="true">
           <div class="rails" />
           <div class="segs">
-            <span v-for="(st, k) in line.stops" :key="k" class="seg" :class="{ done: st.done, here: st.here }" :style="{ '--c': st.color }" :title="st.name" />
+            <span v-for="(st, k) in line.stops" :key="k" class="seg" :class="{ done: st.done, here: st.here, ahead: !st.name }" :style="{ '--c': st.color, '--f': st.fade }" :title="st.name || undefined" />
           </div>
           <span class="train" :style="{ left: `calc(${line.progress * 100}% - 0.9rem)` }">
             <svg viewBox="0 0 36 22"><rect x="2" y="7" width="20" height="10" rx="3" fill="#dc2626" /><rect x="15" y="2" width="9" height="15" rx="2" fill="#991b1b" /><rect x="5" y="3" width="4" height="6" rx="1" fill="#1f2937" /><circle cx="8" cy="18" r="3" fill="#1f2937" /><circle cx="19" cy="18" r="3" fill="#1f2937" /><rect x="26" y="9" width="9" height="8" rx="2" fill="#f59e0b" /><circle cx="30.5" cy="18.5" r="2.4" fill="#1f2937" /></svg>
           </span>
         </div>
         <p class="place" data-test="place">
-          <b>{{ line.current }}</b> · environnement {{ line.chapter + 1 }} sur {{ line.stops.length }}
-          <span v-if="line.tour > 1"> · tour {{ line.tour }}</span>
-          <span class="crossed">{{ line.chapter }} traversé{{ line.chapter > 1 ? 's' : '' }}</span>
+          <b>{{ line.current }}</b> · l'environnement que tu traverses
+          <span class="crossed">{{ line.crossed }} environnement{{ line.crossed > 1 ? 's' : '' }} traversé{{ line.crossed > 1 ? 's' : '' }}</span>
         </p>
       </article>
 
@@ -224,6 +228,8 @@ h2 {
   position: absolute;
   left: 0;
   right: 0;
+  /* la voie continue au-delà et s'efface : pas de bout visible */
+  mask-image: linear-gradient(90deg, #000 70%, transparent);
   top: 2.15rem;
   height: 0.5rem;
   border-top: 3px solid #6b7280;
@@ -247,6 +253,9 @@ h2 {
 }
 .seg.done {
   opacity: 1;
+}
+.seg.ahead {
+  opacity: var(--f);
 }
 .seg.here {
   opacity: 1;
