@@ -10,6 +10,8 @@ import AccountView from './views/AccountView.vue'
 import DepotPage from './views/DepotPage.vue'
 import TrainEditView from './views/TrainEditView.vue'
 import CollectionView from './views/CollectionView.vue'
+import SettingsView from './views/SettingsView.vue'
+import { reducedPref } from './settings'
 import LegalView from './views/LegalView.vue'
 import LandscapeBg from './components/LandscapeBg.vue'
 import InstallButton from './components/InstallButton.vue'
@@ -28,7 +30,7 @@ import { sound, soundOn, suspend, unlock } from './sound/director'
 
 // Accueil = le Voyage (mode principal). Les autres écrans s'ouvrent depuis
 // les petits cubes de l'accueil.
-type View = 'home' | 'daily' | 'tuto' | 'stats' | 'ranking' | 'account' | 'train' | 'trainEdit' | 'collection' | 'legal'
+type View = 'home' | 'daily' | 'tuto' | 'stats' | 'ranking' | 'account' | 'train' | 'trainEdit' | 'collection' | 'settings' | 'legal'
 const TITLES: Record<View, string> = {
   home: '',
   daily: 'Puzzle du jour',
@@ -39,6 +41,7 @@ const TITLES: Record<View, string> = {
   train: 'Mon train',
   trainEdit: '',
   collection: 'Ma collection',
+  settings: 'Paramètres',
   legal: 'Mentions légales',
 }
 
@@ -59,6 +62,8 @@ const view = ref<View>('home')
 const playing = ref(false)
 // En partie (chargement, grille, Trajet) : la page ne défile plus et ne déborde plus (style.css, `lock-screen`).
 watch(playing, (v) => document.documentElement.classList.toggle('lock-screen', v), { immediate: true })
+// Paramètres, « Animations réduites » : tout le site passe en simples changements (style.css)
+watch(reducedPref, (v) => document.documentElement.classList.toggle('reduce-motion', v), { immediate: true })
 // Le paysage suit tous les écrans de menu ; seule une partie en cours reste blanche.
 const scenery = computed(() => !playing.value)
 const panel = computed(() => view.value !== 'home' && !playing.value)
@@ -126,6 +131,13 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
           </svg>
         </button>
         <InstallButton v-if="view === 'home'" />
+        <!-- Paramètres : l'engrenage, sur l'accueil seulement -->
+        <button v-if="view === 'home'" type="button" class="gear" data-test="nav-settings" aria-label="Paramètres" title="Paramètres" @click="go('settings')">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+            <path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.5 7.5 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.5 7.5 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.5 7.5 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.5 7.5 0 0 0 2.6-1.5l2.4 1 2-3.4Z" />
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -134,7 +146,7 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
     <p v-if="notice" class="notice" data-test="notice" role="status" @click="notice = ''">{{ notice }}</p>
 
     <main class="board-area" :class="{ top: panel }">
-      <div class="content" :class="{ panel, wide: view === 'train' || view === 'trainEdit' || view === 'collection' }" data-test="content">
+      <div class="content" :class="{ panel, wide: view === 'train' || view === 'trainEdit' || view === 'collection' || view === 'settings' }" data-test="content">
         <JourneyView v-if="view === 'home'" @playing="playing = $event" @navigate="go" />
         <DailyView v-else-if="view === 'daily'" @playing="playing = $event" />
         <TutorialView v-else-if="view === 'tuto'" />
@@ -144,6 +156,7 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
         <DepotPage v-else-if="view === 'train'" />
         <TrainEditView v-else-if="view === 'trainEdit'" :slot="trainSlot" />
         <CollectionView v-else-if="view === 'collection'" />
+        <SettingsView v-else-if="view === 'settings'" />
         <AccountView v-else />
       </div>
     </main>
@@ -155,6 +168,30 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
 </template>
 
 <style scoped>
+/* Paramètres : l'engrenage, sur l'accueil */
+.gear {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+.gear svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  fill: none;
+  stroke: #1f2937;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+.gear:hover svg {
+  transform: rotate(30deg);
+}
 /* bouton de la machine Wagon surprise, à côté des pièces sur l'accueil : l'icône seule */
 .surprise {
   display: grid;

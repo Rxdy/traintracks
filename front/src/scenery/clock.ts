@@ -1,3 +1,4 @@
+import { reducedMotion } from '../settings'
 import { onMounted, onUnmounted } from 'vue'
 
 // Horloge d'animation d'un composant : appelle `tick(dt, t)` à chaque image. Elle s'arrête avec le composant et ne
@@ -15,7 +16,7 @@ export function useClock(tick: (dt: number, t: number) => void): void {
   }
   onMounted(() => {
     tick(0, 0)
-    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+    const reduce = reducedMotion()
     if (reduce || typeof requestAnimationFrame !== 'function') return
     last = performance.now()
     raf = requestAnimationFrame(loop)

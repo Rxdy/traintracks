@@ -2,6 +2,7 @@
 // et ses nuages, et au premier plan une voie où un petit train passe de temps en temps, dans un sens puis dans l'autre.
 // Mêmes objets, mêmes textures et même lumière que le décor des niveaux (world.ts) : le menu et le jeu se ressemblent.
 // Économe : 30 images par seconde au plus, rien quand l'onglet est caché, image fixe si l'on préfère moins d'animations.
+import { reducedMotion } from '../settings'
 import { CHIMNEY, makeCar, makeSteam, makeWagon } from './trainModel'
 import { carOffsets, STARTER, type WagonStyle } from '../trainStyle'
 import * as THREE from 'three'
@@ -26,7 +27,7 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
   const params = PARAMS[theme]
   const night = NIGHT.has(theme)
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-  renderer.shadowMap.enabled = true
+  renderer.shadowMap.enabled = !reducedMotion() // animations réduites : pas d'ombres, plus léger
   renderer.shadowMap.type = THREE.PCFShadowMap
   const fin = finish(renderer)
   const scene = new THREE.Scene()
@@ -227,7 +228,7 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
   fit()
 
   await groundReady
-  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const still = reducedMotion()
   const t0 = performance.now()
   let raf = 0
   let prevK = -1

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { reducedMotion } from '../settings'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { Scenery } from '../scenery'
 import { pointAt, type Route } from '../trainRoute'
@@ -55,7 +56,7 @@ onMounted(async () => {
     train.visible = false
     const unTrain = world.add(train)
     // fumée de la locomotive (rien si le joueur a demandé moins d'animations)
-    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    const still = reducedMotion()
     const steam = makeSteam()
     const unSteam = world.add(steam.group)
     const chimney = new THREE.Vector3()

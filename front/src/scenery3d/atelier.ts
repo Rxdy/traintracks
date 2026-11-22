@@ -3,6 +3,7 @@
 // dans le train, ou hors de la scène), fait de la place pour le wagon tenu et le fait suivre le doigt (`hold`).
 // Les wagons glissent vers leur place : le train reste toujours attelé. Pour ranger un wagon, on le glisse hors de la
 // scène, vers « Tes wagons » (la page s'en occupe).
+import { reducedMotion } from '../settings'
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { makeCar, makeWagon } from './trainModel'
@@ -24,7 +25,7 @@ const LEFT = -0.9, RIGHT = 0.62 / 2 + TRAIN_LONGEST + 0.9 // la voie : de quoi t
 export function createAtelier(canvas: HTMLCanvasElement): Atelier {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
-  renderer.shadowMap.enabled = true
+  renderer.shadowMap.enabled = !reducedMotion() // animations réduites : pas d'ombres, plus léger
   const scene = new THREE.Scene()
   scene.add(new THREE.HemisphereLight('#ffffff', '#8fb36b', 1.55))
   const sun = new THREE.DirectionalLight('#fff4dc', 2.3)
@@ -187,7 +188,7 @@ export function createAtelier(canvas: HTMLCanvasElement): Atelier {
     layout()
   }
 
-  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const still = reducedMotion()
   let raf = 0
   let last = performance.now()
   const loop = (now: number) => {
