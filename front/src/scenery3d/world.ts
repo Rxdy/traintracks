@@ -12,7 +12,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { PAL, rng, type Scenery, type Tile } from '../scenery'
 import { riverD, sample } from '../scenery/motion'
 import type { Pal } from '../scenery/themes'
-import { offBoardBridges } from './bridgeRails'
+import { bridgesWithRails } from './bridgeRails'
 import { buildForest, buildMassif, buildVillage, components } from './clusters'
 import { revealDelay } from '../scenery/reveal'
 import { pointAt, type Route } from '../trainRoute'
@@ -714,11 +714,12 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     world.add(deck)
   }
 
-  // Rails sur les ponts hors de la grille, en vue du dessus (voir bridgeRails.ts) : la voie y est peinte sur le sol, sous
-  // l'eau et le tablier ; on repose rails et traverses sur le tablier, avec la géométrie des rails de la grille.
+  // Rails sur tous les ponts, dans la grille comme hors de la grille (voir bridgeRails.ts) : en 3D la voie est peinte sur le sol,
+  // sous l'eau et le tablier, et les rails des cases s'effacent ; on repose rails et traverses sur le tablier, avec la
+  // géométrie des rails de la grille.
   const bridgeRails = new THREE.Group()
   world.add(bridgeRails)
-  for (const { r, c, axis } of offBoardBridges(sc)) {
+  for (const { r, c, axis } of bridgesWithRails(sc)) {
     const g = new THREE.Group()
     // la vue cavalière remonte ce qui a de la hauteur (z − SHEAR·y) : on compense, la voie reste dans l'alignement de celle du sol
     g.position.set(c + 0.5, DECK_TOP, r + 0.5 + SHEAR * (DECK_TOP + 0.016))
