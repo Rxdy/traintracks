@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { range, railVariant, isLocked, isRock, type Given, type Puzzle } from '../puzzle'
 import type { CellMark } from '../cell'
 import {
@@ -24,6 +24,7 @@ import { buildScenery, distanceNear, PAL, sceneryMargin, seedOf, timing, type Sc
 import TrainRun from './TrainRun.vue'
 import SceneryLayer from './SceneryLayer.vue'
 import Scenery3D from './Scenery3D.vue'
+import type { LandFrame } from '../scenery/motion'
 import { webglAvailable } from '../decor'
 import SceneryLife from './SceneryLife.vue'
 import { sound, soundOn } from '../sound/director'
@@ -133,6 +134,8 @@ const decorId = ref(0)
 const decorReady = ref(false) // le décor 3D est prêt : la vague d'apparition part de là, pour tout ce qui vit dessus
 const glideY = ref(0) // de combien la grille glisse (px) vers le milieu de l'écran quand le paysage apparaît
 const failed3d = ref(false) // le décor 3D n'a pas pu s'afficher : décor classique jusqu'à la fin de la visite
+// la vie du décor (voitures, passage à niveau) : les voitures et la barrière du fond sont dessinées par la scène 3D, sous le train qui passe
+const life = shallowRef<LandFrame | null>(null)
 const use3d = computed(() => !failed3d.value && webglAvailable())
 // Le décor 3D est prêt : le train roule dans la scène 3D (caché par les arbres devant la voie) et la voie de la grille y est peinte.
 const train3d = computed(() => use3d.value && decorReady.value)
@@ -687,7 +690,7 @@ onMounted(() => {
     >
       <!-- Décor : en 3D si le joueur le veut et que l'appareil sait le faire ; sinon (ou en cas d'échec) le décor classique en SVG. -->
       <Transition name="decor">
-        <Scenery3D v-if="scenery && use3d" :key="'3d-' + decorId" :scenery="scenery" :route="sceneryRoute" :train="route && trainS >= 0 ? { route, s: trainS } : null" @fail="failed3d = true" @ready="decorReady = true" />
+        <Scenery3D v-if="scenery && use3d" :key="'3d-' + decorId" :scenery="scenery" :route="sceneryRoute" :train="route && trainS >= 0 ? { route, s: trainS } : null" :life="life" @fail="failed3d = true" @ready="decorReady = true" />
         <SceneryLayer v-else-if="scenery" :scenery="scenery" :route="sceneryRoute" />
       </Transition>
 
@@ -729,7 +732,7 @@ onMounted(() => {
 
       <div class="corner" style="grid-row: 1; grid-column: 1"></div>
 
-      <SceneryLife v-if="scenery" :key="'life-' + decorId" :scenery="scenery" :train-near="trainNear" :start="!use3d || decorReady" />
+      <SceneryLife v-if="scenery" :key="'life-' + decorId" :scenery="scenery" :train-near="trainNear" :start="!use3d || decorReady" :in3d="use3d" @frame="(f) => (life = f)" />
 
       <TrainRun v-if="route" :ghost="train3d" :route="route" :size="puzzle.size" :clip="trainClip" :speed="SPEEDS[speed]" @progress="onTrainProgress" @done="trainDone = true" />
     </div>
