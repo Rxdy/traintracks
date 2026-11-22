@@ -100,7 +100,7 @@ describe('la machine « Wagon surprise »', () => {
     for (let k = 0; k < 4; k++) {
       const r = await drawWagon(db, owner, ctx.now(), () => 0) // toujours le premier de la liste encore possible
       if (!r.ok) throw new Error(r.code)
-      got.push(r.wagon)
+      got.push(r.wagon!)
       expect(r.added).toBe(k < 3) // 3 wagons de départ + 3 places libres
     }
     expect(got).toEqual(['ambre', 'ambre', 'ambre', 'ambre'])
@@ -111,6 +111,20 @@ describe('la machine « Wagon surprise »', () => {
     expect(r.ok && r.wagon).toBe('ambre') // le 6e
     const r2 = await drawWagon(db, owner, ctx.now(), () => 0)
     expect(r2.ok && r2.wagon).toBe('vert') // l'ambre est complet : il ne sort plus
+  })
+
+  it('perdu (1 fois sur 3) : les pièces sont prises, aucun wagon n\'est donné', async () => {
+    const { db, ctx, donner } = await setup()
+    const owner = 'a:perdu'
+    await donner(owner, DRAW_PRICE)
+    const before = await trainState(db, owner)
+    const r = await drawWagon(db, owner, ctx.now(), (n) => n - 1) // le dernier tirage possible : perdu
+    expect(r.ok && r.wagon).toBe(null)
+    expect(r.ok && r.added).toBe(false)
+    expect(await balance(db, owner)).toBe(0)
+    const st = await trainState(db, owner)
+    expect(st.owned).toEqual(before.owned)
+    expect(st.left).toBe(before.left)
   })
 
   it('collection complète : la machine le dit et ne prend pas de pièces', async () => {

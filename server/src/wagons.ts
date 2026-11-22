@@ -1,7 +1,7 @@
 // Wagons : la collection, le tirage de la machine « Wagon surprise » et l'ordre du train. Le serveur fait foi
 // (prix, hasard, possession) : le navigateur ne fait qu'afficher et demander.
 import { randomInt } from 'node:crypto'
-import { DRAW_PRICE, drawPool, leftToWin, STARTER_TRAIN, validTrain } from '../../shared/wagons.js'
+import { DRAW_PRICE, DRAW_WIN, drawPool, leftToWin, STARTER_TRAIN, validTrain } from '../../shared/wagons.js'
 import type { Db } from './db.js'
 import { balance, spend } from './wallet.js'
 
@@ -50,11 +50,12 @@ export async function trainState(db: Db, owner: string | null): Promise<TrainSta
   return { owned, train, presets, active: row?.active ?? 0, left: leftToWin(owned), price: DRAW_PRICE, coins: await balance(db, owner) }
 }
 
-export type DrawResult = { ok: true; wagon: string; added: boolean; state: TrainState } | { ok: false; code: 'poor' | 'complete' }
+export type DrawResult = { ok: true; wagon: string | null; added: boolean; state: TrainState } | { ok: false; code: 'poor' | 'complete' }
 
 /**
- * Un tirage : 50 pièces, un wagon au hasard parmi ceux qu'on a moins de 6 fois. On gagne toujours.
- * Le wagon gagné prend la première place libre du train s'il en reste une (`added`).
+ * Un tirage : 40 pièces, 2 chances sur 3 de gagner (le serveur décide). Perdu : `wagon` est null, rien n'est donné.
+ * Gagné : un wagon au hasard parmi ceux qu'on a moins de 6 fois (un wagon qu'on a 6 fois ne sort plus jamais) ;
+ * il prend la première place libre du train s'il en reste une (`added`).
  */
 export async function drawWagon(db: Db, owner: string, now: Date, rng: Rng = cryptoRng): Promise<DrawResult> {
   return db.tx(async (t) => {
@@ -66,6 +67,7 @@ export async function drawWagon(db: Db, owner: string, now: Date, rng: Rng = cry
     const pool = drawPool(owned)
     if (!pool.length) return { ok: false, code: 'complete' } as const
     if (!(await spend(t, owner, DRAW_PRICE))) return { ok: false, code: 'poor' } as const
+    if (rng(DRAW_WIN.of) >= DRAW_WIN.in) return { ok: true, wagon: null, added: false, state: await trainState(t, owner) } as const
     const wagon = pool[rng(pool.length)]!
     await t.query(
       'INSERT INTO wagons_owned (owner, wagon, qty) VALUES ($1,$2,1) ON CONFLICT (owner, wagon) DO UPDATE SET qty = wagons_owned.qty + 1',

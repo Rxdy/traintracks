@@ -8,23 +8,34 @@ import { sound } from '../sound/director'
 import CoinIcon from './CoinIcon.vue'
 import WagonThumb from './WagonThumb.vue'
 
-// La machine « Wagon surprise » : on tire la manette, trois rouleaux défilent et s'arrêtent un à un, de gauche à droite,
-// tous sur le même wagon (le serveur l'a tiré au sort) : on gagne à chaque fois. Chaque rouleau montre 3 wagons ;
-// seule la ligne du milieu compte, ceux du dessus et du dessous sont là pour donner envie.
+// La machine « Wagon surprise » : on tire la manette, trois rouleaux défilent longtemps et s'arrêtent un à un, de gauche
+// à droite. Le serveur décide (2 chances sur 3) : gagné, les trois s'arrêtent sur le même wagon, un wagon qu'on a moins
+// de 6 fois ; perdu, ils s'arrêtent sur des wagons différents (souvent les deux premiers pareils : presque !).
+// Chaque rouleau montre 3 wagons ; seule la ligne du milieu compte.
 const emit = defineEmits<{ (e: 'close'): void; (e: 'myTrain'): void }>()
 
-type Phase = 'idle' | 'spinning' | 'won'
+type Phase = 'idle' | 'spinning' | 'won' | 'lost'
 const phase = ref<Phase>('idle')
 const prize = ref<string | null>(null)
 const added = ref(false)
 const message = ref('')
 const pulled = ref(false)
 
-const DURATIONS = [1.5, 2.1, 2.7] // s : les rouleaux s'arrêtent un à un
+const DURATIONS = [2.2, 3.5, 5.0] // s : les rouleaux s'arrêtent un à un, le dernier se fait attendre
 const pick = () => WAGON_IDS[Math.floor(Math.random() * WAGON_IDS.length)]!
 const randomStrip = (n: number) => Array.from({ length: n }, pick)
 // chaque rouleau : sa bande de wagons, sa position (en wagons) et la durée de son arrêt
 const reels = ref(DURATIONS.map(() => ({ items: randomStrip(3), at: 0, dur: 0 })))
+const stopped = ref(0) // rouleaux déjà arrêtés (0 à 3)
+// perdu : trois wagons qui ne sont pas tous pareils ; une fois sur deux, les deux premiers le sont
+function losing(): string[] {
+  const a = pick()
+  const b = Math.random() < 0.5 ? a : pick()
+  let c = pick()
+  while (c === a) c = pick() // le troisième n'est jamais le premier : jamais trois pareils
+  return [a, b, c]
+}
+let stopTimers: number[] = []
 
 const price = computed(() => myTrain.value.price)
 const left = computed(() => myTrain.value.left)
@@ -57,10 +68,12 @@ async function pull(): Promise<void> {
   }
   prize.value = out.wagon
   added.value = out.added
-  // les bandes : du hasard, puis [voisin, GAIN, voisin] à l'arrêt ; on repart du haut sans animation
+  const mids = out.wagon ? [out.wagon, out.wagon, out.wagon] : losing()
+  stopped.value = 0
+  // les bandes : du hasard, puis [voisin, ARRÊT, voisin] ; on repart du haut sans animation
   reels.value = DURATIONS.map((_d, k) => {
-    const n = 18 + k * 6
-    const items = [...randomStrip(n), pick(), out.wagon, pick()]
+    const n = 30 + k * 14
+    const items = [...randomStrip(n), pick(), mids[k]!, pick()]
     return { items, at: 0, dur: 0 }
   })
   await nextTick()
@@ -69,11 +82,16 @@ async function pull(): Promise<void> {
       reels.value = reels.value.map((r, k) => ({ ...r, at: r.items.length - 3, dur: DURATIONS[k]! }))
     }),
   )
-  DURATIONS.forEach((d, k) => window.setTimeout(() => sound.sfx('pose'), d * 1000 + 30 * k))
+  stopTimers = DURATIONS.map((d, k) =>
+    window.setTimeout(() => {
+      stopped.value = k + 1
+      sound.sfx('pose')
+    }, d * 1000 + 30 * k),
+  )
   stopTimer = window.setTimeout(() => {
-    phase.value = 'won'
-    sound.sfx('reveal')
-  }, DURATIONS[DURATIONS.length - 1]! * 1000 + 120)
+    phase.value = out.wagon ? 'won' : 'lost'
+    sound.sfx(out.wagon ? 'reveal' : 'error')
+  }, DURATIONS[DURATIONS.length - 1]! * 1000 + 200)
 }
 let stopTimer = 0
 
@@ -82,6 +100,7 @@ onMounted(() => window.addEventListener('keydown', onKey))
 onUnmounted(() => {
   window.removeEventListener('keydown', onKey)
   clearTimeout(stopTimer)
+  stopTimers.forEach(clearTimeout)
 })
 </script>
 
@@ -99,7 +118,7 @@ onUnmounted(() => {
           </div>
           <div class="cabinet">
             <div class="reels">
-              <div v-for="(r, k) in reels" :key="k" class="reel" :class="{ blur: phase === 'spinning' && r.dur > 0 }" data-test="reel">
+              <div v-for="(r, k) in reels" :key="k" class="reel" :class="{ blur: phase === 'spinning' && r.dur > 0 && stopped <= k, stop: stopped > k && phase === 'spinning' }" data-test="reel">
                 <div class="strip" :style="{ transform: `translateY(calc(var(--item) * ${-r.at}))`, transition: r.dur ? `transform ${r.dur}s cubic-bezier(.12,.62,.2,1)` : 'none' }">
                   <span v-for="(id, j) in r.items" :key="j" class="cell" :class="{ mid: j === r.at + 1 }" :data-test="j === r.at + 1 ? 'reel-mid' : undefined" :data-wagon="id"><WagonThumb :id="id" /></span>
                 </div>
@@ -108,6 +127,7 @@ onUnmounted(() => {
             </div>
             <p class="plate" data-test="machine-plate">
               <template v-if="phase === 'won' && prizeStyle">Gagné !</template>
+              <template v-else-if="phase === 'lost'">Perdu</template>
               <template v-else-if="phase === 'spinning'">Ça tourne…</template>
               <template v-else>{{ price }} <CoinIcon /> le tirage</template>
             </p>
@@ -124,10 +144,14 @@ onUnmounted(() => {
             <strong data-test="machine-prize">{{ wagonLabel(prize!) }} !</strong>
             <span>Tu en as {{ prizeCount }}/{{ MAX_PER_WAGON }}. {{ added ? 'Il roule déjà dans ton train.' : 'Ton train est plein : choisis sa place dans Mon train.' }}</span>
           </template>
+          <template v-else-if="phase === 'lost'">
+            <strong data-test="machine-lost">Pas de wagon cette fois.</strong>
+            <span>Il faut trois wagons pareils.</span>
+          </template>
           <span v-else-if="message" class="err" data-test="machine-msg">{{ message }}</span>
-          <span v-else-if="phase === 'idle'">Tire la manette : on gagne à chaque fois.</span>
+          <span v-else-if="phase === 'idle'">Trois wagons pareils : il est à toi. Deux chances sur trois.</span>
           <div v-if="phase !== 'spinning'" class="actions">
-            <button type="button" class="btn btn--small" data-test="machine-again" :disabled="left === 0" @click="pull">{{ phase === 'won' ? 'Encore' : 'Tirer' }} · {{ price }} <CoinIcon /></button>
+            <button type="button" class="btn btn--small" data-test="machine-again" :disabled="left === 0" @click="pull">{{ phase === 'won' || phase === 'lost' ? 'Encore' : 'Tirer' }} · {{ price }} <CoinIcon /></button>
             <button v-if="phase === 'won'" type="button" class="btn btn--ghost btn--small" data-test="machine-my-train" @click="emit('myTrain')">Ma collection</button>
           </div>
         </div>
@@ -265,6 +289,17 @@ onUnmounted(() => {
 }
 .strip {
   will-change: transform;
+}
+/* un rouleau qui vient de s'arrêter : un petit rebond, son cadre s'éclaire */
+.reel.stop {
+  animation: reel-stop 0.35s ease-out;
+  box-shadow: 0 0 0 3px #fbbf24;
+}
+@keyframes reel-stop {
+  40% { transform: translateY(4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reel.stop { animation: none; }
 }
 .reel.blur .strip {
   filter: blur(1.5px);

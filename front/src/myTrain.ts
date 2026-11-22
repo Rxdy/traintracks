@@ -46,15 +46,15 @@ export async function loadTrain(): Promise<void> {
   if (r?.status === 200) take(r.data)
 }
 
-export type DrawOutcome = { ok: true; wagon: string; added: boolean } | { ok: false; error: string; code?: 'poor' | 'complete' }
+export type DrawOutcome = { ok: true; wagon: string | null; added: boolean } | { ok: false; error: string; code?: 'poor' | 'complete' }
 
-/** Un tirage de la machine : on gagne toujours un wagon (le serveur choisit). */
+/** Un tirage de la machine : le serveur décide (2 chances sur 3) ; perdu, `wagon` est null. */
 export async function drawWagon(): Promise<DrawOutcome> {
   const r = await api('POST', '/api/train/draw', {})
   if (!r) return { ok: false, error: 'Serveur injoignable : vérifie ta connexion.' }
   if (r.status === 200) {
     take(r.data.state as Record<string, unknown>)
-    return { ok: true, wagon: String(r.data.wagon), added: !!r.data.added }
+    return { ok: true, wagon: typeof r.data.wagon === 'string' ? r.data.wagon : null, added: !!r.data.added }
   }
   if (r.data.error === 'complete') return { ok: false, code: 'complete', error: 'Tu as déjà tous les wagons !' }
   if (r.data.error === 'poor') return { ok: false, code: 'poor', error: `Il faut ${myTrain.value.price} pièces pour un tirage.` }
