@@ -167,7 +167,7 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (p: DepotPick) =>
   type Train = { group: THREE.Group; tail: number; x: number; target: number; steam: ReturnType<typeof makeSteam> }
   const trains: (Train | null)[] = [null, null, null]
   let active = 0
-  const parkedX = (tail: number) => GARAGE_X + 0.35 - tail // la queue entre un peu dans le garage
+  const parkedX = (tail: number) => GARAGE_X - 0.1 - tail // juste devant la porte : le train garé se voit en entier, même le plus long
   const targetOf = (k: number, tail: number) => (k === active ? QUAI_X : Math.max(QUAI_X + 2.6, parkedX(tail)))
 
   function disposeGroup(g: THREE.Object3D): void {
