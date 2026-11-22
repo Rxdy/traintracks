@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { TRAIN_SLOTS, WAGON_DEFS } from '../../../shared/wagons.js'
 import { freeCount, loadTrain, myTrain, selectPreset, setTrain } from '../myTrain'
 import { styleOf, wagonLabel } from '../trainStyle'
 import WagonThumb from '../components/WagonThumb.vue'
+import { webglAvailable } from '../decor'
+import type { Atelier } from '../scenery3d/atelier'
 
-// Personnaliser un train (un des 3 du dépôt, ouvert en touchant son garage) : le train en grand sur sa voie, tes wagons dessous.
-// Glisser-déposer : un wagon de la collection vers une place du train ; un wagon du train vers une autre place ;
-// un wagon du train vers la collection pour le ranger. Au toucher : un wagon du train puis une autre place les échange,
-// un wagon de la collection va au bout du train.
+// Personnaliser un train (un des 3 du dépôt, ouvert en touchant son garage) : l'atelier en 3D (le train attelé sur sa voie),
+// tes wagons dessous. Glisser-déposer : un de tes wagons dans le train, à la place voulue ; un wagon du train vers une
+// autre place ; un wagon du train vers tes wagons pour le ranger. Toucher un de tes wagons l'ajoute au bout.
+// Sans 3D : la même chose sur une bande de vignettes (avec des croix pour ranger).
 const props = defineProps<{ slot: number }>()
 const editing = computed(() => props.slot) // le train personnalisé (pas forcément celui qui roule)
 const cars = computed(() => myTrain.value.presets[editing.value] ?? [])
@@ -19,6 +21,34 @@ const picked = ref<number | null>(null)
 const msg = ref('')
 
 onMounted(() => void loadTrain())
+
+// --- l'atelier en 3D ---------------------------------------------------------------------------------------
+const use3d = ref(webglAvailable())
+const atelierCanvas = ref<HTMLCanvasElement | null>(null)
+let atelier: Atelier | null = null
+let gone = false
+onMounted(async () => {
+  if (!use3d.value) return
+  try {
+    const { createAtelier } = await import('../scenery3d/atelier')
+    if (gone || !atelierCanvas.value) return
+    atelier = createAtelier(atelierCanvas.value)
+    atelier.setCars(cars.value)
+  } catch {
+    use3d.value = false
+  }
+})
+watch(cars, (c) => atelier?.setCars(c))
+onUnmounted(() => {
+  gone = true
+  atelier?.dispose()
+})
+// commencer à tirer un wagon du train dans la scène
+function downIn3d(e: PointerEvent): void {
+  if (!atelier || e.button !== 0) return
+  const p = atelier.probe(e.clientX, e.clientY)
+  if (p.kind === 'car' && p.index >= 0) down(e, { kind: 'car', index: p.index, id: cars.value[p.index]! })
+}
 
 async function save(next: string[]): Promise<void> {
   msg.value = ''
@@ -90,7 +120,9 @@ function move(e: PointerEvent): void {
     picked.value = null
   }
   e.preventDefault()
-  drag.value = { ...drag.value, x: e.clientX, y: e.clientY, over: targetAt(e.clientX, e.clientY) }
+  const in3d = atelier ? atelier.probe(e.clientX, e.clientY).kind !== 'none' : false
+  drag.value = { ...drag.value, x: e.clientX, y: e.clientY, over: in3d ? 'atelier' : targetAt(e.clientX, e.clientY) }
+  atelier?.hold({ id: drag.value.src.id, from: drag.value.src.kind === 'car' ? drag.value.src.index : null, clientX: e.clientX, clientY: e.clientY })
 }
 function up(e: PointerEvent): void {
   if (!start || e.pointerId !== start.pointer) return
@@ -100,6 +132,16 @@ function up(e: PointerEvent): void {
   if (!d) return
   swallowClick = true // le relâcher d'un glisser n'est pas un toucher
   window.setTimeout(() => (swallowClick = false), 0)
+  if (atelier) {
+    const p = atelier.probe(e.clientX, e.clientY)
+    atelier.hold(null)
+    if (p.kind === 'car') {
+      if (d.src.kind === 'car') {
+        if (p.at !== d.src.index) moveCar(d.src.index, p.at)
+      } else insertWagon(d.src.id, cars.value.length >= TRAIN_SLOTS && p.index >= 0 ? p.index : p.at)
+      return
+    }
+  }
   const over = targetAt(e.clientX, e.clientY)
   if (!over) return
   if (over === 'collection') {
@@ -134,8 +176,12 @@ const dragId = computed(() => drag.value?.src.id ?? null)
       <button v-else type="button" class="btn btn--small" data-test="preset-roll" @click="rollThis">Faire rouler ce train</button>
     </div>
 
-    <!-- le train, en grand, sur sa voie -->
-    <div class="track card" data-test="train-row">
+    <!-- l'atelier en 3D : le train attelé sur sa voie -->
+    <div v-if="use3d" class="atelier card" :class="{ over: drag?.over === 'atelier' }" data-test="atelier">
+      <canvas ref="atelierCanvas" role="img" :aria-label="'Le train : ' + cars.map(wagonLabel).join(', ')" @pointerdown="downIn3d" />
+    </div>
+    <!-- sans 3D : le train en vignettes -->
+    <div v-else class="track card" data-test="train-row">
       <span class="car loco"><WagonThumb id="loco" /></span>
       <template v-for="(id, k) in slots" :key="k">
         <span
@@ -164,6 +210,7 @@ const dragId = computed(() => drag.value?.src.id ?? null)
     </div>
     <p class="hint">
       <template v-if="picked !== null">Touche une autre place pour l'y mettre.</template>
+      <template v-else-if="use3d">Glisse un de tes wagons dans le train, ou un wagon du train vers une autre place. Glisse-le vers tes wagons pour le ranger.</template>
       <template v-else>Glisse un de tes wagons sur une place, ou un wagon du train vers une autre place. Glisse-le vers tes wagons pour le ranger.</template>
       <b>{{ cars.length }}/{{ TRAIN_SLOTS }}</b>
     </p>
@@ -196,7 +243,7 @@ const dragId = computed(() => drag.value?.src.id ?? null)
     </div>
 
     <!-- le wagon qui suit le doigt pendant un glisser -->
-    <div v-if="drag" class="ghost" :style="{ left: drag.x + 'px', top: drag.y + 'px', '--len': styleOf(drag.src.id).length }" aria-hidden="true">
+    <div v-if="drag && drag.over !== 'atelier'" class="ghost" :style="{ left: drag.x + 'px', top: drag.y + 'px', '--len': styleOf(drag.src.id).length }" aria-hidden="true">
       <WagonThumb :id="drag.src.id" />
     </div>
   </section>
@@ -227,6 +274,21 @@ const dragId = computed(() => drag.value?.src.id ?? null)
   background: #16a34a;
   color: #fff;
   font-size: 0.75rem;
+}
+.atelier {
+  position: relative;
+  overflow: hidden;
+  background: #a8d48a;
+}
+.atelier canvas {
+  display: block;
+  width: 100%;
+  height: clamp(10rem, 22vw, 19rem);
+  touch-action: none;
+  cursor: grab;
+}
+.atelier.over {
+  border-color: #2563eb;
 }
 .track {
   display: flex;

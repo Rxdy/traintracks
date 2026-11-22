@@ -37,15 +37,21 @@ export function wagonThumb(id: string): string {
   const car = style ? makeWagon(style) : makeCar(0)
   car.rotation.y = Math.PI + 0.55 // tourné vers la gauche : dans Mon train, la locomotive est à gauche et tire le train
   scene.add(car)
-  // cadrage : un wagon long recule la caméra pour tenir entier
-  const len = style ? style.length : 1
-  const span = 0.52 + (len - 1) * 0.62
+  // cadrage : la boîte du wagon vue par la caméra, avec une marge ; rien n'est coupé, wagon court ou long
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 50)
-  const half = Math.max(0.42, span * 0.62)
-  Object.assign(cam, { left: -half, right: half, top: (half * H) / W + 0.12, bottom: (-half * H) / W + 0.12 })
-  cam.updateProjectionMatrix()
   cam.position.set(0, 2.2, 3.2)
   cam.lookAt(0, 0.2, 0)
+  cam.updateMatrixWorld()
+  car.updateMatrixWorld(true)
+  const box = new THREE.Box3().setFromObject(car)
+  const view = new THREE.Box3()
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) view.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(cam.matrixWorldInverse))
+  const cx = (view.min.x + view.max.x) / 2, cy = (view.min.y + view.max.y) / 2
+  let hw = ((view.max.x - view.min.x) / 2) * 1.08, hh = ((view.max.y - view.min.y) / 2) * 1.08
+  if (hw / hh > W / H) hh = (hw * H) / W
+  else hw = (hh * W) / H
+  Object.assign(cam, { left: cx - hw, right: cx + hw, top: cy + hh, bottom: cy - hh })
+  cam.updateProjectionMatrix()
   renderer.render(scene, cam)
   const url = renderer.domElement.toDataURL('image/png')
   scene.remove(car)
