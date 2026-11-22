@@ -89,7 +89,7 @@ describe('tutoriel : exercices à une seule action', () => {
     const w = mount(TutorialView, { attachTo: document.body })
     const lit = w.findAll('.seq')
     expect(lit).toHaveLength(4)
-    expect(lit.map((c) => c.attributes('style'))).toEqual(['--i: 0;', '--i: 1;', '--i: 2;', '--i: 3;'])
+    expect(lit.map((c) => (c.element as HTMLElement).style.getPropertyValue('--i'))).toEqual(['0', '1', '2', '3'])
     expect(w.find('.start').attributes('data-c')).toBe('0') // la première case est marquée comme départ
     expect(text(w)).not.toMatch(/souris|doigt/i)
     w.unmount()

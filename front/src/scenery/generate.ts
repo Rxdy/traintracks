@@ -15,12 +15,29 @@ import { PARAMS, THEMES, type Theme } from './themes'
 export { THEMES, themeForLevel, LEVELS_PER_THEME, timing, type Theme } from './themes'
 
 
-export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'windmill' | 'cactus' | 'palm' | 'crater' | 'obsidian' | 'vent' | 'deadtree' | 'skull' | 'building' | 'mesa' | 'dune'
+export type TileKind = 'rail' | 'grass' | 'tree' | 'pine' | 'house' | 'field' | 'mountain' | 'boulder' | 'snowman' | 'road' | 'path' | 'clear' | 'windmill' | 'cactus' | 'palm' | 'crater' | 'obsidian' | 'vent' | 'deadtree' | 'skull' | 'building' | 'mesa' | 'dune'
 
 export interface Tile {
   kind: TileKind
   v: number // variante (couleur, forme) : 0..n
   dir?: 'h' | 'v' // sens des sillons d'un champ
+}
+// Décors fixes posés sur une case dégagée : cabane et tas de bois (forêt), champignons géants, chalet (montagne), pylônes du téléphérique.
+export type PropKind = 'cabin' | 'woodpile' | 'mushroom' | 'chalet' | 'pylon'
+export interface Prop {
+  kind: PropKind
+  x: number // centre, en unités de case
+  y: number
+  v: number // variante
+}
+// Gare de départ ou d'arrivée, sur le prolongement de la voie, dans le décor : le train y démarre ou s'y arrête à quai.
+// (Plus utilisée dans le trajet : elle servira au mécanisme des gares numérotées des niveaux à venir.)
+export interface Station {
+  x: number // centre du quai, en unités de case
+  y: number
+  angle: number // sens de marche du train, en degrés
+  side: 1 | -1 // côté du quai où se tient le bâtiment (par rapport au sens de marche)
+  loco: number // distance, depuis le bord de la grille, où s'arrête la locomotive
 }
 export interface Pt {
   x: number
@@ -48,6 +65,9 @@ export interface Scenery {
   river: Pt[] | null // ligne de la rivière, en unités de case (hors grille aux deux bouts)
   pond: [number, number][] // étang de repli quand aucune rivière ne passe
   bridges: Map<string, 'h' | 'v'> // cases de voie posées sur la rivière → axe de la voie (le pont la porte)
+  props: Prop[] // décors fixes (cabane, chalet…)
+  cable: [Pt, Pt] | null // câble du téléphérique (montagne) : entre deux pylônes
+  paths: Pt[][] // sentiers de terre (maisons et moulin vers la route ou un autre sentier), en unités de case ; tuiles « path »
 }
 
 type Cell = [number, number]
@@ -247,16 +267,24 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
 
   // --- Étang de repli : deux cases voisines libres ---
   const pond: Cell[] = []
-  if (!river && wantsRiver) {
+  if (!river && (wantsRiver || th === 'hiver')) { // l'hiver a toujours un étang quand il n'y a pas de rivière
     const free: Cell[] = []
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (isFree(r, c)) free.push([r, c])
     const pairs: Cell[][] = []
     free.forEach(([r, c]) => {
       if (isFree(r, c + 1)) pairs.push([[r, c], [r, c + 1]])
       if (isFree(r + 1, c)) pairs.push([[r, c], [r + 1, c]])
+      // l'hiver a des étangs de tailles différentes : 1 case, 2 cases, un carré de 2×2 ou de 3×3
+      if (th === 'hiver' && isFree(r, c + 1) && isFree(r + 1, c) && isFree(r + 1, c + 1)) pairs.push([[r, c], [r, c + 1], [r + 1, c], [r + 1, c + 1]])
+      // …ou un grand étang de neuf (3×3)
+      if (th === 'hiver' && [0, 1, 2].every((i) => [0, 1, 2].every((j) => isFree(r + i, c + j)))) pairs.push([0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => [r + i, c + j] as Cell)))
     })
+    if (th === 'hiver') free.forEach((x) => pairs.push([x]))
     if (pairs.length >= 1 && free.length >= 5) {
-      const p = pairs[Math.floor(rand() * pairs.length)]
+      // l'hiver tire d'abord une TAILLE (sinon les étangs d'une case, bien plus nombreux, l'emporteraient toujours), puis un emplacement
+      const sizes = [...new Set(pairs.map((x) => x.length))].sort((x, y) => x - y)
+      const pool = th === 'hiver' ? pairs.filter((x) => x.length === sizes[Math.floor(rand() * sizes.length)]) : pairs
+      const p = pool[Math.floor(rand() * pool.length)]
       p.forEach(([r, c]) => {
         pond.push([r, c])
         water.add(key(r, c))
@@ -319,12 +347,13 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
   const houses: Cell[] = []
   const touchesHouse = (r: number, c: number) => [-1, 0, 1].some((dr) => [-1, 0, 1].some((dc) => houses.some(([a, b]) => a === r + dr && b === c + dc)))
   for (let guard = 0; houses.length < houseCount && guard < 60; guard++) {
-    // Hameaux de 1 à 3 maisons (la ville : quartiers de 9) ; deux hameaux ne se touchent jamais, sinon les maisons « se suivent ».
+    // Villages (la ville : quartiers de 9) ; deux villages ne se touchent jamais, sinon les maisons « se suivent ».
     const seeds = freeCells.filter(([r, c]) => free(r, c) && (dense || !touchesHouse(r, c)))
     if (!seeds.length) break
     const cluster: Cell[] = [seeds[Math.floor(rand() * seeds.length)]]
     const roll = rand()
-    const perHamlet = dense ? 9 : roll < 0.4 ? 1 : roll < 0.75 ? 2 : 3
+    // une maison seule reste possible, mais le plus souvent c'est un village (3 à 6 maisons) ; la ville : quartiers de 9
+    const perHamlet = dense ? 9 : roll < 0.25 ? 1 : roll < 0.55 ? 3 : roll < 0.85 ? 4 : 6
     const want = Math.min(perHamlet, houseCount - houses.length)
     while (cluster.length < want) {
       const around = cluster.flatMap(([r, c]) => DIRS.map(([dr, dc]) => [r + dr, c + dc] as Cell)).filter(([r, c]) => free(r, c) && (dense || !touchesHouse(r, c)) && !cluster.some(([a, b]) => a === r && b === c))
@@ -362,7 +391,7 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
     const dir: 'h' | 'v' = rand() < 0.5 ? 'h' : 'v'
     const group: Cell[] = [[sr, sc]]
     taken.add(key(sr, sc))
-    const want = 2 + Math.floor(rand() * 2)
+    const want = (th === 'plaine' ? 3 : 2) + Math.floor(rand() * 2) // la plaine a de grands champs : de la place pour le tracteur
     while (group.length < want) {
       const nb: Cell[] = []
       group.forEach(([r, c]) => DIRS.forEach(([dr, dc]) => free(r + dr, c + dc) && !touchesField(r + dr, c + dc) && nb.push([r + dr, c + dc])))
@@ -424,5 +453,170 @@ export function buildScenery(puzzle: Puzzle, smallPath: Cell[], theme?: Theme, s
     }
   }
 
-  return { seed, road, margin: mg, frame, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges }
+  // Une montagne seule rend mal (un petit tas isolé) : elle s'adjoint une case voisine (herbe ou arbre, loin de la voie) pour former un
+  // petit massif de deux sommets ; sans place, elle devient un rocher (ou de l'herbe, si un rocher est déjà à côté). Les dunes et les mesas ne sont pas concernées.
+  if (peakKind === 'mountain')
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++) {
+        if (tiles[r][c].kind !== 'mountain') continue
+        if (DIRS.some(([dr, dc]) => tiles[r + dr]?.[c + dc]?.kind === 'mountain')) continue
+        const room = DIRS.map(([dr, dc]) => [r + dr, c + dc] as Cell).filter(
+          ([a, b]) => ['grass', 'tree', 'pine'].includes(tiles[a]?.[b]?.kind ?? '') && !taken.has(key(a, b)) && !water.has(key(a, b)) && (!nearPath(a, b) || P.peaks >= 0.3),
+        )
+        if (room.length) {
+          const [a, b] = room[Math.floor(rand() * room.length)]
+          tiles[a][b] = { kind: 'mountain', v: tiles[r][c].v }
+        } else if (!rocks.has(key(r, c))) tiles[r][c] = { kind: touchesBoulder(r, c) ? 'grass' : 'boulder', v: tiles[r][c].v } // jamais deux pierres collées
+        // (un rocher de la grille reste une montagne : c'est un obstacle du puzzle)
+      }
+
+  const paths = P.paths ? makePaths(seed, tiles, rows, cols) : []
+  const { props, cable } = makeProps(th, seed, tiles, water, rows, cols)
+  return { seed, road, margin: mg, frame, ext, size: rows, rows, cols, theme: th, tiles, water, river, pond, bridges, paths, props, cable }
 }
+
+// --- Sentiers : chaque maison et chaque moulin est relié à la route (ou à un sentier déjà tracé, ou à une autre maison) par un chemin de terre qui
+// ne traverse que de l'herbe ou des arbres (abattus sur son passage) : jamais un champ, la voie ou l'eau. Un sentier trop long (plus de 9 cases) n'est pas tracé.
+// Tirés d'une graine à part : ajouter les sentiers ne change rien au reste du décor.
+function makePaths(seed: number, tiles: Tile[][], rows: number, cols: number): Pt[][] {
+  const pr = rng(seed ^ 0x7a11e5)
+  const out: Pt[][] = []
+  const isHome = (t: Tile | undefined) => !!t && (t.kind === 'house' || t.kind === 'windmill' || t.kind === 'building')
+  const goal = (r: number, c: number) => tiles[r][c].kind === 'road' || tiles[r][c].kind === 'path' || isHome(tiles[r][c])
+  const homes: Cell[] = []
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (isHome(tiles[r][c])) homes.push([r, c])
+  for (const [hr, hc] of shuffle(homes, pr)) {
+    // parcours en largeur depuis la maison, par l'herbe, jusqu'à la route ou à un sentier
+    const prev = new Map<string, Cell | null>([[key(hr, hc), null]])
+    const queue: Cell[] = [[hr, hc]]
+    let end: Cell | null = null
+    for (let i = 0; i < queue.length && !end; i++) {
+      const [r, c] = queue[i]
+      for (const [dr, dc] of shuffle(DIRS, pr)) {
+        const nr = r + dr, nc = c + dc
+        if (nr < 0 || nc < 0 || nr >= rows || nc >= cols || prev.has(key(nr, nc))) continue
+        if (goal(nr, nc)) { prev.set(key(nr, nc), [r, c]); end = [nr, nc]; break }
+        if (!['grass', 'tree', 'pine'].includes(tiles[nr][nc].kind)) continue // les arbres sur le tracé sont abattus
+        prev.set(key(nr, nc), [r, c])
+        queue.push([nr, nc])
+      }
+    }
+    if (!end) continue
+    const cells: Cell[] = []
+    for (let cur: Cell | null = end; cur; cur = prev.get(key(cur[0], cur[1])) ?? null) cells.unshift(cur)
+    if (cells.length > 10) continue
+    for (const [r, c] of cells) if (['grass', 'tree', 'pine'].includes(tiles[r][c].kind)) tiles[r][c] = { kind: 'path', v: 0 }
+    out.push(cells.map(([r, c]) => ({ x: c + 0.5, y: r + 0.5 })))
+  }
+  return out
+}
+
+// --- Décors fixes par environnement. Tirés d'une graine à part : le reste du décor ne change pas.
+//   forêt : une cabane de bûcheron avec son tas de bois, des champignons géants ;
+//   montagne : un chalet, et deux pylônes sur des sommets (le téléphérique : câble et cabine, voir motion.ts).
+// Chaque décor se pose sur une case d'herbe loin de la voie, qui devient « clear » (plus d'herbe dessinée dessus).
+function makeProps(th: Theme, seed: number, tiles: Tile[][], water: Set<string>, rows: number, cols: number): { props: Prop[]; cable: [Pt, Pt] | null } {
+  const props: Prop[] = []
+  let cable: [Pt, Pt] | null = null
+  if (th !== 'foret' && th !== 'montagne') return { props, cable }
+  const pr = rng(seed ^ 0x5eed0b)
+  const nearRail = (r: number, c: number) => [-1, 0, 1].some((dr) => [-1, 0, 1].some((dc) => tiles[r + dr]?.[c + dc]?.kind === 'rail'))
+  const spots = (): Cell[] => {
+    const out: Cell[] = []
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (tiles[r][c].kind === 'grass' && !water.has(key(r, c)) && !nearRail(r, c)) out.push([r, c])
+    return shuffle(out, pr)
+  }
+  const put = (kind: PropKind, [r, c]: Cell, v = 0, dx = 0.5, dy = 0.55) => {
+    tiles[r][c] = { kind: 'clear', v: 0 }
+    props.push({ kind, x: c + dx, y: r + dy, v })
+  }
+  const free = spots()
+  if (th === 'foret') {
+    // cabane + tas de bois sur la case voisine
+    const home = free.find(([r, c]) => DIRS.some(([dr, dc]) => tiles[r + dr]?.[c + dc]?.kind === 'grass' && !water.has(key(r + dr, c + dc)) && !nearRail(r + dr, c + dc)))
+    if (home) {
+      const [r, c] = home
+      const side = DIRS.find(([dr, dc]) => tiles[r + dr]?.[c + dc]?.kind === 'grass' && !water.has(key(r + dr, c + dc)) && !nearRail(r + dr, c + dc))!
+      put('cabin', home)
+      put('woodpile', [r + side[0], c + side[1]])
+    }
+    free.filter(([r, c]) => tiles[r][c].kind === 'grass').slice(0, 3).forEach((cell, i) => put('mushroom', cell, i % 2, 0.35 + pr() * 0.3, 0.5 + pr() * 0.2))
+  } else {
+    const home = free.find(([r, c]) => tiles[r][c].kind === 'grass')
+    if (home) put('chalet', home)
+    // téléphérique : deux sommets distants de 3 à 7 cases
+    const peaks: Cell[] = []
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (tiles[r][c].kind === 'mountain') peaks.push([r, c])
+    const pairs: [Cell, Cell][] = []
+    for (const a of peaks) for (const b of peaks) {
+      const d = Math.hypot(a[0] - b[0], a[1] - b[1])
+      if (a < b && d >= 3 && d <= 7) pairs.push([a, b])
+    }
+    if (pairs.length) {
+      const [a, b] = pairs[Math.floor(pr() * pairs.length)]
+      props.push({ kind: 'pylon', x: a[1] + 0.5, y: a[0] + 0.35, v: 0 }, { kind: 'pylon', x: b[1] + 0.5, y: b[0] + 0.35, v: 0 })
+      cable = [{ x: a[1] + 0.5, y: a[0] + 0.2 }, { x: b[1] + 0.5, y: b[0] + 0.2 }]
+    }
+  }
+  return { props, cable }
+}
+
+// --- Gares : une au bout de la voie d'entrée, une au bout de la voie de sortie, quand le décor laisse au moins 4,6 cases. Le quai
+// longe la voie, le bâtiment est de l'autre côté du quai (du côté où il y a le plus de place). Les arbres du quai sont abattus.
+// La locomotive s'arrête à `loco` cases du bord de la grille : tout le train tient entre la grille et le bord du décor.
+export const TRAIN_SPAN = 2.4 // longueur du train (locomotive + wagons), en cases
+export function makeStations(puzzle: Puzzle, shifted: Cell[], mg: { x: number; y: number; b: number }, visibleRows: number, tiles: Tile[][], water: Set<string>): { entry: Station | null; exit: Station | null } {
+  const OUTV: Record<string, Cell> = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] }
+  const N = puzzle.size
+  const reach = (dir: string) => (dir === 'left' || dir === 'right' ? mg.x : dir === 'up' ? mg.y : visibleRows - mg.y - N) // cases visibles au bout de la voie
+  const build = (cell: Cell, dir: string, arriving: boolean): Station | null => {
+    const L = reach(dir)
+    if (L < TRAIN_SPAN + 2.2) return null // pas la place : pas de gare
+    const o = OUTV[dir]
+    const u = { x: o[1], y: o[0] } // vers l'extérieur de la grille
+    const A = { x: cell[1] + 0.5 + u.x * 0.5, y: cell[0] + 0.5 + u.y * 0.5 } // bord de la grille, au bout de la voie
+    const dirSign = arriving ? 1 : -1 // arrivée : le train va vers l'extérieur ; départ : vers la grille
+    const heading = { x: u.x * dirSign, y: u.y * dirSign }
+    const normal = { x: -heading.y, y: heading.x }
+    const at = (P: Pt, a: number, side: number, b: number) => {
+      const r = Math.floor(P.y + u.y * a + normal.y * side * b), c = Math.floor(P.x + u.x * a + normal.x * side * b)
+      return { r, c, t: tiles[r]?.[c] }
+    }
+    // La locomotive s'arrête un peu en retrait du bord du décor (le quai se voit à l'écran même quand le bord est juste hors champ).
+    // Si la route, la voie ou l'eau coupent le quai, on le décale le long de la voie.
+    const base = arriving ? L - 2.2 : L - TRAIN_SPAN - 1.0
+    const lo = arriving ? TRAIN_SPAN + 0.1 : 1.2
+    const hi = arriving ? L - 1.0 : L - TRAIN_SPAN
+    let chosen: { loco: number; P: Pt; side: 1 | -1 } | null = null
+    for (const shift of [0, -1.5, 1.5, -3, 3]) {
+      const loco = base + shift
+      if (loco < lo || loco > hi) continue
+      const d = arriving ? loco - 0.9 : loco + 0.9 // milieu du quai : le train s'arrête le long
+      const P = { x: A.x + u.x * d, y: A.y + u.y * d }
+      const room = (side: 1 | -1) => {
+        let n = 0, bad = 0
+        for (let a = -1.4; a <= 1.4; a += 0.7) for (let b = 0.4; b <= 1.6; b += 0.6) {
+          const { r, c, t } = at(P, a, side, b)
+          // (la case de la voie elle-même est une case « rail » : seul le côté du quai compte)
+          if (!t || water.has(`${r},${c}`) || ['road', 'house', 'windmill', 'field', 'path'].includes(t.kind) || (t.kind === 'rail' && b >= 0.6)) bad++
+          else if (['grass', 'tree', 'pine', 'clear', 'path'].includes(t.kind)) n++
+        }
+        return bad ? -1 : n
+      }
+      const side: 1 | -1 = room(1) >= room(-1) ? 1 : -1
+      if (room(side) < 0) continue
+      chosen = { loco, P, side }
+      break
+    }
+    if (!chosen) return null
+    const { loco, P, side } = chosen
+    for (let a = -1.5; a <= 1.5; a += 0.5) for (let b = 0.3; b <= 1.6; b += 0.4) {
+      const { r, c, t } = at(P, a, side, b)
+      if (t && !water.has(`${r},${c}`) && !['rail', 'road', 'house', 'windmill', 'field', 'path'].includes(t.kind)) tiles[r][c] = { kind: 'clear', v: 0 } // tout ce qui gêne le quai est enlevé (arbres, immeubles, rochers…)
+    }
+    return { x: P.x, y: P.y, angle: (Math.atan2(heading.y, heading.x) * 180) / Math.PI, side, loco }
+  }
+  if (!shifted.length) return { entry: null, exit: null }
+  return { entry: build(shifted[0], puzzle.entry.dir, false), exit: build(shifted[shifted.length - 1], puzzle.exit.dir, true) }
+}
+

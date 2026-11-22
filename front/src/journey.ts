@@ -35,16 +35,17 @@ export async function startLevel(): Promise<StartedLevel | { done: true } | null
 
 export type SubmitOutcome =
   | { ok: true; timeMs: number; next: JourneyStatus; earned: { base: number; bonus: number }; coins: number }
-  | { ok: false; reason: 'wrong' | 'stale' | 'network' }
+  | { ok: false; reason: 'wrong' | 'not_started' | 'not_current' | 'network' | 'server' }
 
-// Envoie le tracé ; seule la réponse « juste » du serveur débloque la suite.
+// Envoie le tracé ; seule la réponse « juste » du serveur débloque la suite. Chaque refus a sa raison (le message affiché en dépend) :
+// « hors ligne » n'est dit que quand le serveur n'a vraiment pas répondu.
 export async function submitLevel(level: number, edges: string[]): Promise<SubmitOutcome> {
   const r = await api('POST', '/api/journey/submit', { level, edges })
   if (!r) return { ok: false, reason: 'network' }
   if (r.status === 200) return r.data as unknown as SubmitOutcome
   if (r.status === 422) return { ok: false, reason: 'wrong' }
-  if (r.status === 409) return { ok: false, reason: 'stale' }
-  return { ok: false, reason: 'network' }
+  if (r.status === 409) return { ok: false, reason: r.data.error === 'not_started' ? 'not_started' : 'not_current' }
+  return { ok: false, reason: 'server' }
 }
 
 // Prévient le serveur du premier geste du joueur : le temps compte à partir de là (pas du temps de lecture de la grille).

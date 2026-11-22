@@ -2,10 +2,13 @@
 // et ses nuages, et au premier plan une voie où un petit train passe de temps en temps, dans un sens puis dans l'autre.
 // Mêmes objets, mêmes textures et même lumière que le décor des niveaux (world.ts) : le menu et le jeu se ressemblent.
 // Économe : 30 images par seconde au plus, rien quand l'onglet est caché, image fixe si l'on préfère moins d'animations.
+import { reducedMotion } from '../settings'
+import { CHIMNEY, makeCar, makeSteam, makeWagon } from './trainModel'
+import { carOffsets, STARTER, type WagonStyle } from '../trainStyle'
 import * as THREE from 'three'
 import { PAL, PARAMS, rng, type Scenery, type Theme, type TileKind } from '../scenery'
 import { SKY } from '../scenery/sky'
-import { build, canvasTex, finish, dark, groundSvg, light, loadSvgTexture, makeKit, makeTextures, tickAnims, type Anim } from './world'
+import { build, canvasTex, finish, dark, groundSvg, loadSvgTexture, makeKit, makeTextures, tickAnims, type Anim } from './world'
 
 const NIGHT = new Set<Theme>(['lune', 'neon'])
 const HOT = new Set<Theme>(['volcan', 'enfer'])
@@ -14,15 +17,17 @@ const CYCLE = 30 // s : le train traverse dans un sens, la voie reste vide, puis
 
 export interface Home3D {
   dispose(): void
+  /** Le joueur a changé son train (Mon train, machine) : on remplace les wagons, sans refaire le décor. */
+  setWagons(wagons: readonly WagonStyle[]): void
 }
 
-export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass?: (dir: 1 | -1) => void): Promise<Home3D> {
+export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass?: (dir: 1 | -1) => void, wagons: readonly WagonStyle[] = STARTER): Promise<Home3D> {
   const pal = PAL[theme] ?? PAL.plaine
   const sky = SKY[theme] ?? SKY.plaine
   const params = PARAMS[theme]
   const night = NIGHT.has(theme)
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-  renderer.shadowMap.enabled = true
+  renderer.shadowMap.enabled = !reducedMotion() // animations réduites : pas d'ombres, plus léger
   renderer.shadowMap.type = THREE.PCFShadowMap
   const fin = finish(renderer)
   const scene = new THREE.Scene()
@@ -174,22 +179,35 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
     scene.add(rail)
   }
 
-  // le train : locomotive rouge et trois voitures, vu de côté sur la voie
+  // le train du joueur (Mon train) : la locomotive rouge et ses wagons, vu de côté sur la voie
   const train = new THREE.Group()
-  ;['#dc2626', '#2563eb', '#f59e0b', '#16a34a'].forEach((c, i) => {
-    const g = new THREE.Group()
-    g.position.x = -i * 0.62
-    kit.mesh(kit.geo('carbody', () => new THREE.BoxGeometry(0.52, 0.22, 0.32)), kit.mat(c, texs.plaster, { roughness: 0.5 }), 0, 0.2, 0, g)
-    if (i === 0) {
-      kit.mesh(kit.geo('cabin', () => new THREE.BoxGeometry(0.2, 0.18, 0.32)), kit.mat(dark(c, 0.3)), -0.16, 0.4, 0, g)
-      kit.mesh(kit.geo('chimney', () => new THREE.CylinderGeometry(0.045, 0.045, 0.14, 10)), kit.mat('#1f2937'), 0.16, 0.38, 0, g)
-      kit.mesh(kit.geo('lamp', () => new THREE.SphereGeometry(0.04, 8, 6)), new THREE.MeshBasicMaterial({ color: '#fde68a' }), 0.27, 0.24, 0, g)
-    } else kit.mesh(kit.geo('carroof', () => new THREE.BoxGeometry(0.5, 0.03, 0.3)), kit.mat(light(c, 0.3)), 0, 0.325, 0, g)
-    for (const x of [-0.16, 0.16]) for (const z of [-0.17, 0.17]) kit.mesh(kit.geo('wheel', () => new THREE.CylinderGeometry(0.07, 0.07, 0.03, 14).rotateX(Math.PI / 2)), kit.mat('#1f2937'), x, 0.09, z, g)
-    train.add(g)
-  })
+  let tail = 2 // longueur du train derrière la locomotive : un train de fret sort entièrement du champ
+  const fill = (list: readonly WagonStyle[]) => {
+    for (const old of [...train.children]) {
+      train.remove(old)
+      old.traverse((o) => {
+        const m = o as THREE.Mesh
+        if (!m.isMesh) return
+        m.geometry.dispose()
+        ;([] as THREE.Material[]).concat(m.material).forEach((x) => x.dispose())
+      })
+    }
+    const offsets = carOffsets(list)
+    tail = offsets[offsets.length - 1]! + 0.6
+    ;[makeCar(0), ...list.map(makeWagon)].forEach((car, i) => {
+      car.position.x = -offsets[i]!
+      train.add(car)
+    })
+  }
+  fill(wagons)
   train.position.set(-40, 0, TRACK_Z)
   scene.add(train)
+  // fumée de la locomotive, comme pendant le Trajet (scenery3d/trainModel.ts)
+  const steam = makeSteam()
+  scene.add(steam.group)
+  disposables.push(steam)
+  const chimney = new THREE.Vector3()
+  let lastX = train.position.x
 
   // caméra : au ras du sol, devant la voie ; plus ouverte en portrait (téléphone) pour garder du paysage sur les côtés
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 120)
@@ -210,12 +228,12 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
   fit()
 
   await groundReady
-  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const still = reducedMotion()
   const t0 = performance.now()
   let raf = 0
   let prevK = -1
   let last = 0
-  const span = 26 // de -13 à +13 : hors champ aux deux bouts
+  const SPAN = 26 // de -13 à +13 : hors champ aux deux bouts (plus la longueur du train)
   const loop = (now: number) => {
     raf = requestAnimationFrame(loop)
     if (document.hidden || now - last < 32) return // 30 images par seconde suffisent pour un fond
@@ -223,6 +241,7 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
     last = now
     const t = now - t0
     tickAnims(anims, t, dt, still)
+    const span = SPAN + 2 * tail
     if (!still) {
       clouds.children.forEach((c) => {
         c.position.x += dt * (c.userData.speed as number)
@@ -243,11 +262,17 @@ export async function createHome(canvas: HTMLCanvasElement, theme: Theme, onPass
         train.position.x = span / 2 - go(0.6) * span
       }
     } else train.position.x = -40
+    // la fumée sort tant que le train roule dans le champ
+    const rolling = !still && train.position.x !== lastX && Math.abs(train.position.x) < span / 2 + 1
+    lastX = train.position.x
+    train.updateMatrixWorld()
+    steam.update(dt, train.children[0]!.localToWorld(chimney.copy(CHIMNEY)), rolling)
     fin.draw(scene, camera)
   }
   raf = requestAnimationFrame(loop)
 
   return {
+    setWagons: fill,
     dispose() {
       cancelAnimationFrame(raf)
       ro.disconnect()

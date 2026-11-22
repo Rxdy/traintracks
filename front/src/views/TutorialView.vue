@@ -24,7 +24,8 @@ function measure(): void {
   const top = wrap.value?.getBoundingClientRect().top
   if (top === undefined) return
   const footer = document.querySelector<HTMLElement>('.footer')
-  const below = (footer?.offsetHeight ?? 0) + 64 // pied de page, écart et marge du bas
+  const nav = document.querySelector<HTMLElement>('.tuto .nav')
+  const below = (footer?.offsetHeight ?? 0) + (nav?.offsetHeight ?? 0) + 80 // pied de page, navigation sous la grille, écarts et marge du bas
   avail.value = Math.max(0, Math.floor(window.innerHeight - top - below))
 }
 onMounted(() => {
@@ -84,15 +85,9 @@ function restart(): void {
         <p v-else class="small">…</p>
       </template>
 
-      <!-- Une seule zone de hauteur fixe pour le message d'erreur, les boutons et la note : rien ne bouge, rien ne fait défiler. -->
+      <!-- Une zone de hauteur fixe pour le message d'erreur et la note : rien ne bouge, rien ne fait défiler. -->
       <div class="slot">
         <p v-if="hint && !done" class="hint" data-test="hint">{{ hint }}</p>
-        <button v-else-if="step?.action.type === 'info'" type="button" class="btn btn--small" data-test="ok" @click="si++">Compris</button>
-        <button v-else-if="done && !isLast" type="button" class="btn btn--small" data-test="next" @click="next">Exercice suivant</button>
-        <div v-else-if="done && isLast" class="end">
-          <button type="button" class="btn btn--small" data-test="restart" @click="restart">Rejouer</button>
-          <button type="button" class="btn btn--small btn--ghost" data-test="leave" @click="go('home')">Quitter</button>
-        </div>
         <p v-else-if="at === 0 && si === 0" class="small">Terminer le tutoriel rapporte {{ TUTORIAL_REWARD }} pièces, une seule fois.</p>
       </div>
     </div>
@@ -100,6 +95,17 @@ function restart(): void {
     <div ref="wrap" class="gridwrap">
       <TutorialGrid :key="lesson.id" :lesson="lesson" :action="step?.action ?? null" :avail-height="avail" @advance="advance" @refuse="refuse" />
     </div>
+
+    <!-- Navigation du tutoriel, sous la grille. Aux étapes où le joueur doit agir, pas de bouton : il pratique sur la grille pour avancer. -->
+    <nav class="nav" aria-label="Navigation du tutoriel" data-test="tuto-nav">
+      <button v-if="step?.action.type === 'info'" type="button" class="btn" data-test="ok" @click="si++">Compris</button>
+      <button v-else-if="done && !isLast" type="button" class="btn" data-test="next" @click="next">Exercice suivant</button>
+      <template v-else-if="done && isLast">
+        <button type="button" class="btn" data-test="restart" @click="restart">Rejouer</button>
+        <button type="button" class="btn btn--ghost" data-test="leave" @click="go('home')">Quitter</button>
+      </template>
+      <p v-else class="todo" data-test="todo">À toi : fais-le sur la grille.</p>
+    </nav>
   </section>
 </template>
 
@@ -182,9 +188,21 @@ function restart(): void {
   height: 3.1rem; /* deux lignes de message */
   margin-top: 0.5rem;
 }
-.end {
+.nav {
   display: flex;
   gap: 0.6rem;
+  align-items: center;
+  justify-content: center;
+  height: 3.2rem; /* toujours la même hauteur : la grille ne bouge pas d'une étape à l'autre */
+}
+.todo {
+  margin: 0;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 .hint {
   width: 100%;

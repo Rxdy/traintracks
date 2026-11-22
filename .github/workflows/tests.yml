@@ -1,14 +1,36 @@
 # Vérifie chaque push et chaque demande de fusion : types puis tests, côté front et côté serveur.
 name: Tests
 
+# Pas de déclencheur « push » sur les branches de travail : chaque branche a sa demande de fusion, qui lance déjà les tests
+# (avant, chaque poussée les lançait deux fois). dev : images.yml rappelle ces tests avant le build ; staging et main ne font que promouvoir.
 on:
-  push:
-    branches-ignore: [dev, staging, main] # dev : images.yml rappelle ces tests avant le build ; staging et main ne font que promouvoir
   pull_request:
   workflow_call:
 
 jobs:
+  # Quels dossiers ce changement touche-t-il ? Une demande qui ne touche que le front ne relance pas les tests du serveur (et inversement).
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      front: ${{ steps.d.outputs.front }}
+      server: ${{ steps.d.outputs.server }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: d
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "front=true" >> "$GITHUB_OUTPUT"; echo "server=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
+          # les tests du front relisent les niveaux du serveur (server/data) ; le workflow lui-même relance tout
+          echo "$files" | grep -qE '^(front/|server/data/|\.github/)' && echo "front=true" >> "$GITHUB_OUTPUT" || echo "front=false" >> "$GITHUB_OUTPUT"
+          echo "$files" | grep -qE '^(server/|\.github/)' && echo "server=true" >> "$GITHUB_OUTPUT" || echo "server=false" >> "$GITHUB_OUTPUT"
+
   front:
+    needs: changes
+    if: needs.changes.outputs.front == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -27,6 +49,8 @@ jobs:
       - run: npm run build
 
   server:
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:

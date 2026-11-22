@@ -12,6 +12,8 @@ const emit = defineEmits<{
   (e: 'reveal', givens: Given[], crosses: { row: number; col: number }[]): void
   (e: 'picking', value: boolean): void
   (e: 'colors'): void // les indicateurs de couleur sont activés sur ce niveau
+  (e: 'forced', value: boolean): void // vrai tant que le joueur doit essayer le pouvoir offert avant de jouer
+  (e: 'pickingLine', value: boolean): void // « Une ligne » attend que le joueur touche un compteur de la grille
 }>()
 
 const LABEL: Record<AidId, string> = { colors: 'Couleurs', cell: 'Une case', cannon: 'Canon', line: 'Une ligne' }
@@ -31,6 +33,11 @@ const slots = computed(() => aids.value)
 // Le niveau où un pouvoir se débloque : on le présente (ce qu'il fait, et l'essai offert), une seule fois par niveau.
 const dismissed = ref(false)
 const fresh = computed(() => (props.level ? slots.value.find((a) => a.unlocked && a.unlockLevel === props.level) : undefined))
+// Niveau de déblocage : tant que l'essai offert n'a pas servi, le joueur ne peut que l'essayer (la grille refuse les tracés).
+// C'est le tutoriel du pouvoir : il apprend à s'en servir en le faisant.
+const forced = computed(() => !!fresh.value && fresh.value.demoPending && !fresh.value.usedThisLevel)
+watch(forced, (v) => emit('forced', v), { immediate: true })
+onBeforeUnmount(() => emit('forced', false))
 const mode = ref<{ aid: AidInfo; step: 'buy' | 'pick' | 'line' } | null>(null)
 const message = ref('')
 // Le message s'efface tout seul (4 s) ou au toucher : il ne doit jamais rester sur l'écran de jeu.
@@ -45,6 +52,7 @@ const busy = ref(false)
 function cancel(): void {
   mode.value = null
   emit('picking', false)
+  emit('pickingLine', false)
 }
 
 function choose(a: AidInfo): void {
@@ -54,8 +62,13 @@ function choose(a: AidInfo): void {
     message.value = `Ce pouvoir se débloque au niveau ${a.unlockLevel}.`
     return
   }
+  lastAid.value = a.id
   if (mode.value?.aid.id === a.id) return cancel()
   cancel()
+  if (forced.value && a.id !== fresh.value!.id) {
+    message.value = `Essaie d'abord ton nouveau pouvoir : ${LABEL[fresh.value!.id]}.`
+    return
+  }
   if (a.usedThisLevel) {
     message.value = 'Déjà utilisée sur ce niveau.'
     return
@@ -68,7 +81,10 @@ function choose(a: AidInfo): void {
   else if (a.id === 'cell') {
     mode.value = { aid: a, step: 'pick' }
     emit('picking', true)
-  } else mode.value = { aid: a, step: a.id }
+  } else {
+    mode.value = { aid: a, step: 'line' }
+    emit('pickingLine', true) // on touche directement un compteur de la grille
+  }
 }
 
 async function run(a: AidInfo, target: AidTarget): Promise<void> {
@@ -97,6 +113,18 @@ async function run(a: AidInfo, target: AidTarget): Promise<void> {
 function onPick(row: number, col: number): void {
   if (mode.value?.step === 'pick') void run(mode.value.aid, { row, col })
 }
+// Appelé par la grille quand le joueur touche un compteur pendant « Une ligne ».
+function onPickLine(axis: 'row' | 'col', index: number): void {
+  if (mode.value?.step === 'line') void run(mode.value.aid, { axis, index })
+}
+// Les bulles (détail, message, achat, consigne) s'ouvrent en face du pouvoir concerné : son rang dans la colonne.
+const lastAid = ref<AidId | null>(null)
+watch(mode, (m) => m && (lastAid.value = m.aid.id))
+const rankOf = (id: AidId | null | undefined): number => Math.max(0, slots.value.findIndex((a) => a.id === id))
+const bubbleRank = computed(() => rankOf(mode.value?.aid.id ?? lastAid.value))
+const freshRank = computed(() => rankOf(fresh.value?.id))
+// En paysage, une bulle d'un pouvoir du bas de la colonne s'ancre par le bas (--j : rang compté depuis le bas).
+const placeAt = (rank: number) => ({ style: { '--i': rank, '--j': slots.value.length - 1 - rank }, low: rank >= slots.value.length / 2 })
 
 async function confirmBuy(): Promise<void> {
   if (!mode.value) return
@@ -107,37 +135,32 @@ async function confirmBuy(): Promise<void> {
   mode.value = null
 }
 
-defineExpose({ onPick })
+defineExpose({ onPick, onPickLine })
 </script>
 
 <template>
   <div v-if="slots.length" class="aids" data-test="aids">
-    <p v-if="message" class="msg" data-test="aid-message" role="status" title="Toucher pour fermer" @click="message = ''">{{ message }}</p>
+    <p v-if="message" class="msg" :class="{ low: placeAt(bubbleRank).low }" :style="placeAt(bubbleRank).style" data-test="aid-message" role="status" title="Toucher pour fermer" @click="message = ''">{{ message }}</p>
 
-    <div v-if="mode" class="panel" data-test="aid-panel">
+    <div v-if="mode" class="panel" :class="{ low: placeAt(bubbleRank).low }" :style="placeAt(bubbleRank).style" data-test="aid-panel">
       <strong>{{ LABEL[mode.aid.id] }}</strong>
       <template v-if="mode.step === 'buy'">
         <span>{{ mode.aid.price }} <CoinIcon /> pour en racheter une.</span>
         <button type="button" class="btn btn--small" data-test="aid-confirm" :disabled="busy" @click="confirmBuy">Confirmer</button>
       </template>
       <span v-else-if="mode.step === 'pick'" data-test="aid-hint">Touche la case à révéler.</span>
-      <template v-else>
-        <span>Ligne :</span>
-        <button v-for="i in props.size" :key="'r' + i" type="button" class="btn btn--small n" :data-test="'aid-row-' + (i - 1)" @click="run(mode.aid, { axis: 'row', index: i - 1 })">{{ i }}</button>
-        <span>Colonne :</span>
-        <button v-for="i in props.size" :key="'c' + i" type="button" class="btn btn--small n" :data-test="'aid-col-' + (i - 1)" @click="run(mode.aid, { axis: 'col', index: i - 1 })">{{ i }}</button>
-      </template>
+      <span v-else data-test="aid-hint">Touche un chiffre bleu de la grille : toute sa ligne ou sa colonne se révèle.</span>
       <button type="button" class="btn btn--ghost btn--small" data-test="aid-cancel" @click="cancel">Annuler</button>
     </div>
 
-    <!-- Les pouvoirs : un rond avec une image, un compteur qui baisse à chaque usage. -->
+    <!-- Les pouvoirs : un rectangle arrondi avec une image, un compteur qui baisse à chaque usage. -->
     <div class="row">
       <button
         v-for="a in slots"
         :key="a.id"
         type="button"
         class="aid"
-        :class="{ locked: !a.unlocked, demo: a.unlocked && a.demoPending && !a.usedThisLevel, empty: a.unlocked && count(a) === 0, used: a.usedThisLevel, active: mode?.aid.id === a.id, fresh: a.unlocked && a.unlockLevel === props.level && !dismissed }"
+        :class="{ locked: !a.unlocked, demo: a.unlocked && a.demoPending && !a.usedThisLevel, empty: a.unlocked && count(a) === 0, used: a.usedThisLevel, active: mode?.aid.id === a.id, fresh: a.unlocked && a.unlockLevel === props.level && !dismissed, pulse: forced && a.id === fresh?.id }"
         :data-test="'aid-' + a.id"
         :disabled="busy"
         :title="a.unlocked ? LABEL[a.id] + ' : ' + HELP[a.id] : 'Emplacement vide : se débloque au niveau ' + a.unlockLevel"
@@ -155,13 +178,14 @@ defineExpose({ onPick })
       </button>
     </div>
 
-    <div v-if="fresh && !dismissed" class="fresh" data-test="aid-new" role="status">
+    <div v-if="fresh && (forced || !dismissed) && !mode" class="fresh" :class="{ low: placeAt(freshRank).low }" :style="placeAt(freshRank).style" data-test="aid-new" role="status">
       <span class="icon"><AidIcon :name="fresh.id" /></span>
       <div class="txt">
         <strong>Nouveau pouvoir : {{ LABEL[fresh.id] }}</strong>
-        <span>{{ HELP[fresh.id] }} Tu en as {{ count(fresh) }} pour commencer (le rond au-dessus de la grille, avec son compteur) ; une fois épuisées, tu peux en racheter avec tes pièces.</span>
+        <span v-if="forced" data-test="aid-try">{{ HELP[fresh.id] }} Essaie-le maintenant, celui-ci est offert : touche le bouton qui clignote. La grille se débloque ensuite.</span>
+        <span v-else>{{ HELP[fresh.id] }} Il t'en reste {{ count(fresh) }} ; une fois épuisés, tu peux en racheter avec tes pièces.</span>
       </div>
-      <button type="button" class="btn btn--ghost btn--small" data-test="aid-new-ok" @click="dismissed = true">OK</button>
+      <button v-if="!forced" type="button" class="btn btn--ghost btn--small" data-test="aid-new-ok" @click="dismissed = true">OK</button>
     </div>
   </div>
 </template>
@@ -183,11 +207,11 @@ defineExpose({ onPick })
   position: relative;
   display: grid;
   place-items: center;
-  width: 3.4rem;
-  height: 3.4rem;
+  width: 3.8rem;
+  height: 3.8rem; /* un carré aux angles arrondis */
   padding: 0;
   border: 3px solid #fff;
-  border-radius: 50%;
+  border-radius: 0.85rem; /* un rectangle aux angles légèrement arrondis, pas un rond */
   background: linear-gradient(#ffffff, #e8f1fb);
   box-shadow: var(--shadow);
   color: #1d4ed8;
@@ -207,7 +231,7 @@ defineExpose({ onPick })
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: 0.5rem;
   background: #1f2937;
   color: #fff;
   font-size: 0.8rem;
@@ -275,6 +299,21 @@ defineExpose({ onPick })
 .aid.locked .icon {
   width: 1.3rem;
   height: 1.3rem;
+}
+.aid.pulse {
+  animation: aid-pulse 1.1s ease-in-out infinite;
+}
+@keyframes aid-pulse {
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 0.35rem rgba(37, 99, 235, 0.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aid.pulse {
+    animation: none;
+    box-shadow: 0 0 0 0.3rem rgba(37, 99, 235, 0.45);
+  }
 }
 .aid.used {
   opacity: 0.45;

@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import TrackGrid from '../components/TrackGrid.vue'
 import AuthPanel from '../components/AuthPanel.vue'
 import CoinBadge from '../components/CoinBadge.vue'
+import QuitButton from '../components/QuitButton.vue'
 import WinReceipt from '../components/WinReceipt.vue'
-import CabinFrame from '../components/CabinFrame.vue'
-import type { Route } from '../trainRoute'
-import type { Scenery } from '../scenery/generate'
-import type { LandFrame } from '../scenery/motion'
+import FinishDialog from '../components/FinishDialog.vue'
 import type { Puzzle } from '../puzzle'
 import { user, logout } from '../auth'
 import { beginDaily, fetchDaily, startDaily, submitDaily, type DailyResult, type DailyStatus } from '../daily'
@@ -29,9 +27,8 @@ const loading = ref(false)
 const error = ref('')
 // Cabine : comme au Voyage, le pare-brise suit le train et le store porte le récapitulatif à l'arrivée.
 const trainRunning = ref(false)
-const trainS = ref(0)
-const landFrame = shallowRef<LandFrame | null>(null)
-const cabScene = ref<{ route: Route; scenery: Scenery; rails: Route | null } | null>(null)
+const grid = ref<InstanceType<typeof TrackGrid> | null>(null)
+const won = ref(false) // tracé validé : la cabine monte
 const finished = ref(false)
 const storeDown = computed(() => finished.value && !trainRunning.value)
 
@@ -53,11 +50,9 @@ async function start(): Promise<void> {
   puzzle.value = r.puzzle
   date.value = r.date
   outcome.value = null
+  won.value = false
   finished.value = false
   trainRunning.value = false
-  trainS.value = 0
-  cabScene.value = null
-  landFrame.value = null
   playing.value = true
 }
 
@@ -82,47 +77,43 @@ function quit(): void {
 
     <!-- En jeu : plus de menu -->
     <template v-else-if="playing && puzzle">
+      <!-- même barre que le Voyage : le titre et le temps au milieu, le son et les pièces à droite -->
       <div class="bar">
-        <button type="button" class="btn btn--ghost btn--small" data-test="quit" @click="quit">← Quitter</button>
-        <span class="title">Puzzle du jour</span>
-        <CoinBadge />
+        <QuitButton data-test="quit" @click="quit" />
+        <div class="hud-mid" :class="{ gone: won }">
+          <span class="title">Puzzle du jour</span>
+          <span id="hud-timer" class="hud-slot"></span>
+        </div>
+        <div class="hud-right">
+          <span id="hud-sound" class="hud-slot"></span>
+          <CoinBadge class="coins-hud" :class="{ gone: won }" />
+        </div>
       </div>
       <div class="play-area">
         <TrackGrid
+          ref="grid"
           :key="date"
+          :hud="{ timer: '#hud-timer', sound: '#hud-sound' }"
           :puzzle="puzzle"
           :validate="validate"
           :official-ms="outcome?.timeMs ?? null"
           external-recap
+          @solved="won = true"
           @begin="beginDaily()"
           @finish="finished = true"
           @train="trainRunning = $event"
-          @progress="trainS = $event"
-          @scene="cabScene = $event"
-          @land="landFrame = $event"
         />
-        <CabinFrame :scene="cabScene" :land="landFrame" :progress="trainS" :running="trainRunning" :store-down="storeDown">
-          <template #store>
-            <div v-if="finished" class="finish" data-test="finish">
-              <template v-if="outcome && outcome.counted">
-                <div class="head">
-                  <p class="win" data-test="win">Niveau terminé</p>
-                  <p class="time" data-test="result-time"><span>Temps</span> {{ formatTime(outcome.timeMs) }}</p>
-                </div>
-                <p class="note" data-test="saved">Temps enregistré<template v-if="outcome.streak > 1"> · série de {{ outcome.streak }} jours</template></p>
-                <WinReceipt :lines="[{ label: 'Puzzle du jour', amount: outcome.earned.base }, { label: 'Série de ' + outcome.streak + ' jours', amount: outcome.earned.streakBonus }]" />
-              </template>
-              <template v-else-if="outcome">
-                <div class="head">
-                  <p class="win" data-test="win">Niveau terminé</p>
-                  <p class="time" data-test="result-time"><span>Temps</span> {{ formatTime(outcome.timeMs) }}</p>
-                </div>
-                <p class="note" data-test="not-counted">Temps non retenu : seul le premier essai du jour compte.</p>
-              </template>
-              <button type="button" class="btn cta next" data-test="quit-end" @click="quit">Retour</button>
-            </div>
+        <!-- À l'arrivée du train : le récapitulatif au centre de l'écran. « Suivant » ramène au salon. -->
+        <FinishDialog :open="storeDown" next-label="Retour" @replay="grid?.replayTrain()" @next="quit">
+          <template v-if="outcome">
+            <p class="time" data-test="result-time"><span>Temps</span> {{ formatTime(outcome.timeMs) }}</p>
+            <template v-if="outcome.counted">
+              <p class="note" data-test="saved">Temps enregistré<template v-if="outcome.streak > 1"> · série de {{ outcome.streak }} jours</template></p>
+              <WinReceipt :lines="[{ label: 'Puzzle du jour', amount: outcome.earned.base }]" />
+            </template>
+            <p v-else class="note" data-test="not-counted">Temps non retenu : seul le premier essai du jour compte.</p>
           </template>
-        </CabinFrame>
+        </FinishDialog>
       </div>
     </template>
 
@@ -232,10 +223,39 @@ h2 {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  width: min(92vw, 560px);
+  width: 100%; /* pleine largeur : Quitter au bord gauche de l'écran, pièces au bord droit */
+  padding: 0 0.75rem;
+  box-sizing: border-box;
 }
-.bar .btn {
+.bar .btn,
+.bar .quit {
   justify-self: start;
+}
+.hud-mid,
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.3rem, 1.2vw, 0.5rem);
+}
+.hud-mid {
+  justify-self: center;
+  transition: opacity 0.5s ease;
+}
+.hud-right {
+  justify-self: end;
+}
+.hud-slot {
+  display: contents;
+}
+.hud-mid.gone,
+.title.gone,
+.coins-hud.gone {
+  opacity: 0;
+  pointer-events: none;
+}
+.title,
+.coins-hud {
+  transition: opacity 0.5s ease;
 }
 .title {
   justify-self: center;
@@ -247,69 +267,54 @@ h2 {
   font-weight: 800;
   color: #374151;
 }
-/* Récapitulatif sur le store de la cabine (même présentation qu'au Voyage). */
-.finish {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  width: min(100%, 22rem);
-  padding: 0.45rem 0.8rem 0.5rem;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
-  text-align: center;
-}
-.head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.8rem;
-  width: 100%;
-}
-.win {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: #15803d;
-}
+/* Corps de la fenêtre de fin : le temps, la série, la facture. */
 .time {
-  font-size: 1.1rem;
+  margin: 0;
+  text-align: center;
+  font-size: 1.5rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: #1f2937;
 }
 .time span {
-  margin-right: 0.25rem;
-  font-size: 0.8rem;
+  margin-right: 0.35rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #6b7280;
 }
 .note {
-  font-size: 0.8rem;
+  margin: 0;
+  text-align: center;
+  font-size: 0.9rem;
   color: #4b5563;
 }
-.finish :deep(.receipt) {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.6rem;
-  width: 100%;
-  padding-top: 0;
+/* Comme le Voyage (la référence) : en paysage, les bandes de part et d'autre de la grille ont la même mesure. */
+@media (min-aspect-ratio: 1/1) {
+  .play-area {
+    --band: clamp(1.25rem, calc((100vw - min(100dvh - 11rem, 62vw, 820px) - 13rem) / 2), 15rem);
+  }
 }
-.finish :deep(.receipt .row) {
-  flex: none;
-  gap: 0.3rem;
-  font-size: 0.8rem;
-}
-.finish :deep(.receipt .total) {
-  font-size: 0.85rem;
-}
-.finish :deep(.receipt .fill),
-.finish :deep(.receipt .rule) {
-  display: none;
-}
-.next {
-  width: 100%;
-  margin-top: 0.35rem;
-  padding: 0.45rem 0;
+/* Téléphone couché : la barre du haut flotte par-dessus, la grille prend toute la hauteur, les outils au bord gauche. */
+@media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  .play-area {
+    --band: clamp(1rem, calc((100vw - 100dvh - 10rem) / 2), 11rem);
+    box-sizing: border-box;
+    padding: 2.9rem 0 0 4.6rem;
+  }
+  .bar {
+    position: absolute;
+    top: 0.5rem;
+    left: 0;
+    right: 0;
+    grid-template-columns: auto 1fr auto;
+    pointer-events: none;
+  }
+  .bar > * {
+    pointer-events: auto;
+  }
+  .bar .hud-mid {
+    justify-self: start;
+    margin-left: 0.6rem;
+  }
 }
 </style>

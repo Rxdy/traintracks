@@ -3,7 +3,7 @@ import type { Db } from './db.js'
 
 // Toutes les tables dont les lignes appartiennent à un joueur (colonne « owner »). Un test vérifie qu'aucune table
 // avec une colonne « owner » ne manque ici : sinon une suppression de compte laisserait des données.
-export const OWNER_TABLES = ['progress', 'level_runs', 'wallets', 'rewards', 'aid_stock', 'aid_gifts', 'daily_runs', 'daily_results'] as const
+export const OWNER_TABLES = ['progress', 'level_runs', 'wallets', 'rewards', 'aid_stock', 'aid_gifts', 'daily_runs', 'daily_results', 'wagons_owned', 'train_layout'] as const
 
 // Durée de conservation des sauvegardes (docs/sauvegardes.md : 35 jours) : le registre n'a pas besoin de remonter plus loin.
 export const REGISTRY_TTL_MS = 35 * 24 * 3600_000

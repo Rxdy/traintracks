@@ -52,9 +52,11 @@ export interface Leaderboard {
   date?: string
   entries: Entry[] // les 10 premiers
   me: { rank: number; value: number; pseudo: string; avatar: string } | null // ma place, même hors du top 10 (null : pas classé ou masqué)
+  around: Entry[] // hors du top 10 : les 2 joueurs juste devant moi, moi, les 2 juste derrière (vide sinon)
   total: number // nombre de joueurs classés
 }
-const TOP = 10 // les 10 premiers ; ma propre ligne s'ajoute dessous si je n'y suis pas
+const TOP = 10 // les 10 premiers
+const AROUND = 2 // autour de ma place, quand je ne suis pas dans les 10 premiers
 
 // Seuls les comptes qui ont choisi d'apparaître (par défaut oui) sont classés ; on ne montre que le pseudo.
 export async function leaderboard(db: Db, board: Board, today: string, viewer: string | null): Promise<Leaderboard> {
@@ -82,14 +84,19 @@ export async function leaderboard(db: Db, board: Board, today: string, viewer: s
   }
   // rang « à la compétition » : deux joueurs à égalité ont le même rang (sauf voyage : départagé par l'heure d'arrivée)
   const ranked = rows.map((r, i) => ({ ...r, rank: board === 'voyage' ? i + 1 : (rows.findIndex((x) => x.value === r.value) + 1) }))
-  const mine = viewer ? ranked.find((r) => r.id === viewer) : undefined
+  const at = viewer ? ranked.findIndex((r) => r.id === viewer) : -1
+  const mine = at >= 0 ? ranked[at] : undefined
   const top = ranked.slice(0, TOP)
-  const avatars = new Map((await db.query<{ id: string; avatar: string }>('SELECT id, avatar FROM users WHERE id = ANY($1::uuid[])', [[...top.map((r) => r.id), ...(mine ? [mine.id] : [])]])).rows.map((r) => [r.id, r.avatar]))
+  const near = at >= TOP ? ranked.slice(Math.max(TOP, at - AROUND), at + AROUND + 1) : []
+  const ids = [...new Set([...top, ...near, ...(mine ? [mine] : [])].map((r) => r.id))]
+  const avatars = new Map((await db.query<{ id: string; avatar: string }>('SELECT id, avatar FROM users WHERE id = ANY($1::uuid[])', [ids])).rows.map((r) => [r.id, r.avatar]))
+  const entry = (r: (typeof ranked)[number]): Entry => ({ rank: r.rank, pseudo: r.pseudo, avatar: avatars.get(r.id) ?? DEFAULT_AVATAR, value: r.value, me: r.id === viewer })
   return {
     board,
     date: board === 'jour' || board === 'serie' ? today : undefined,
-    entries: top.map((r) => ({ rank: r.rank, pseudo: r.pseudo, avatar: avatars.get(r.id) ?? DEFAULT_AVATAR, value: r.value, me: r.id === viewer })),
+    entries: top.map(entry),
     me: mine ? { rank: mine.rank, value: mine.value, pseudo: mine.pseudo, avatar: avatars.get(mine.id) ?? DEFAULT_AVATAR } : null,
+    around: near.map(entry),
     total: ranked.length,
   }
 }

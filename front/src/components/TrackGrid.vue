@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { range, railVariant, isLocked, isRock, type Given, type Puzzle } from '../puzzle'
 import type { CellMark } from '../cell'
 import {
@@ -12,6 +12,7 @@ import {
   isSolved,
   tracePath,
   lockedEdges,
+  edgesInGrid,
   incidentEdges,
   edgeKey,
   cellKey,
@@ -23,13 +24,14 @@ import { buildScenery, distanceNear, PAL, sceneryMargin, seedOf, timing, type Sc
 import TrainRun from './TrainRun.vue'
 import SceneryLayer from './SceneryLayer.vue'
 import Scenery3D from './Scenery3D.vue'
-import { webglAvailable } from '../decor'
-import { isTouch } from '../platform'
-import SceneryLife from './SceneryLife.vue'
 import type { LandFrame } from '../scenery/motion'
+import { webglAvailable } from '../decor'
+import SceneryLife from './SceneryLife.vue'
 import { sound, soundOn } from '../sound/director'
+import { setWheelGuard } from '../noZoom'
 import TrackCell from './TrackCell.vue'
 import ClueNumber from './ClueNumber.vue'
+import SpeedControl, { type Speed } from './SpeedControl.vue'
 
 const props = defineProps<{
   puzzle: Puzzle
@@ -44,11 +46,19 @@ const props = defineProps<{
   // Environnement du décor révélé à la victoire (saison / paysage) ; tiré du puzzle si absent.
   theme?: Theme
   // Si fournie, la victoire n'est acquise que quand elle répond vrai (le serveur a vérifié le tracé).
-  validate?: (ms: number, edges: string[]) => Promise<boolean>
+  // Réponse : vrai, ou le message d'erreur à afficher (faux : message générique).
+  validate?: (ms: number, edges: string[]) => Promise<boolean | string>
   // Vrai : le récapitulatif de victoire n'est pas dessiné ici, l'écran de jeu l'affiche ailleurs (store de la cabine).
   externalRecap?: boolean
+  // Barre du haut de la page : où poser le minuteur et le bouton du son (sélecteurs CSS). Absente : ils restent à côté des outils.
+  hud?: { timer: string; sound: string }
+  // Vrai : la grille refuse tout tracé (le joueur doit d'abord essayer le pouvoir qu'il vient de recevoir) ; les aides qui
+  // attendent une case (picking) marchent toujours.
+  locked?: boolean
+  // Pouvoir « Une ligne » en attente : les compteurs se touchent pour choisir la ligne ou la colonne (événement pickLine).
+  pickingLine?: boolean
 }>()
-const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void; (e: 'train', running: boolean): void; (e: 'progress', s: number): void; (e: 'scene', v: { route: Route; scenery: Scenery; rails: Route | null } | null): void; (e: 'land', f: LandFrame): void }>()
+const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void; (e: 'train', running: boolean): void; (e: 'pickLine', axis: 'row' | 'col', index: number): void }>()
 
 // Puzzle « effectif » : le puzzle + les rails révélés par les aides, qui se comportent comme des rails imposés
 // (verrouillés, dans le bon sens).
@@ -118,33 +128,49 @@ const elapsed = ref(0)
 const route = ref<Route | null>(null)
 // Décor : d'abord il se dévoile (voie posée), PUIS le train démarre.
 const scenery = ref<Scenery | null>(null)
+// Numéro du décor : il change à chaque décor refait (écran tourné puis « Revoir le trajet »). Les couches qui calculent à leur création
+// (3D, voitures et barrières, animaux) sont recréées, sinon elles gardent l'ancien décor (barrières décalées de la voie, par exemple).
+const decorId = ref(0)
+const decorReady = ref(false) // le décor 3D est prêt : la vague d'apparition part de là, pour tout ce qui vit dessus
+const glideY = ref(0) // de combien la grille glisse (px) vers le milieu de l'écran quand le paysage apparaît
 const failed3d = ref(false) // le décor 3D n'a pas pu s'afficher : décor classique jusqu'à la fin de la visite
+// la vie du décor (voitures, passage à niveau) : les voitures et la barrière du fond sont dessinées par la scène 3D, sous le train qui passe
+const life = shallowRef<LandFrame | null>(null)
 const use3d = computed(() => !failed3d.value && webglAvailable())
+// Le décor 3D est prêt : le train roule dans la scène 3D (caché par les arbres devant la voie) et la voie de la grille y est peinte.
+const train3d = computed(() => use3d.value && decorReady.value)
+// Les rails des cases restent visibles pendant que le décor 3D apparaît en fondu (1,2 s), puis s'effacent : la voie peinte dans la
+// scène a pris le relais. Sans ça, ils disparaissaient d'un coup alors que le décor était encore invisible.
+const railsGone = ref(false)
+let railsTimer = 0
+watch(train3d, (v) => {
+  clearTimeout(railsTimer)
+  if (!v) return void (railsGone.value = false)
+  railsTimer = window.setTimeout(() => (railsGone.value = true), 1300)
+})
+onUnmounted(() => clearTimeout(railsTimer))
 const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
 const trainDone = ref(false)
-// Vitesse du train (cases/s) : tranquille pour apprécier le décor, et un bouton à côté de « Relancer » pour passer la cinématique.
-const CRUISE_SPEED = 1.9
-const FAST_SPEED = 7.6
-const fast = ref(false)
-watch(trainDone, (v) => v && (fast.value = false)) // la prochaine fois, on repart tranquillement
+// Vitesse du train (cases/s) : trois crans en haut à droite (lent, normal, rapide). Normal par défaut ; le choix reste d'un trajet à l'autre.
+import { speed } from '../speedPref' // le choix est gardé d'un niveau à l'autre
+const SPEEDS: Record<Speed, number> = { slow: 1.9, normal: 4.5, fast: 9 } // cases par seconde en ligne droite
 // Sons : la fin du trajet laisse la place au décor ; la barrière du passage à niveau a ses propres sons.
 watch(trainDone, (v) => v && sound.trainEnd())
-// L'écran de jeu suit le train (vue de la cabine) : il roule dès que sa route existe, jusqu'à son arrivée.
-// ... et la cabine montre la VRAIE carte vue du train : elle reçoit le trajet, le décor et la position de la locomotive.
-watch([route, scenery], () => emit('scene', route.value && scenery.value ? { route: route.value, scenery: scenery.value, rails: sceneryRoute.value } : null))
+// Trajet : plus d'écouteur de molette, sinon Firefox fige l'animation quand on défile au pavé tactile (voir noZoom.ts)
+watch(solved, (v) => setWheelGuard(!v))
+onUnmounted(() => setWheelGuard(true))
 function onTrainProgress(s: number): void {
   trainS.value = s
-  // La cabine s'arrête quand la locomotive sort du décor : au-delà, le pare-brise ne montrerait plus que du vide (la voie dépasse
-  // le bord de la longueur du train, pour que les wagons sortent aussi).
-  emit('progress', route.value ? Math.min(s, route.value.length - exitLead.value) : s)
 }
 
 // Zone où le train est visible : exactement celle du décor (en cases de la grille de jeu).
 const trainClip = computed(() => {
   const sc = scenery.value
-  return sc ? { x: -sc.margin.x, y: -sc.margin.y, w: sc.cols, h: sc.frame.visibleRows } : undefined
+  if (!sc) return undefined
+  const r = { x: -sc.margin.x, y: -sc.margin.y, w: sc.cols, h: sc.frame.visibleRows }
+  return r
 })
 
 // Position de la locomotive sur son trajet : les barrières du passage à niveau se baissent quand elle approche.
@@ -175,7 +201,6 @@ watch([trainDone, locoOut], ([done, out]) => {
   }
 })
 const boardEl = ref<HTMLElement | null>(null)
-const toolbarEl = ref<HTMLElement | null>(null)
 let startedAt = 0
 let clock = 0
 
@@ -197,15 +222,15 @@ async function checkWin(): Promise<void> {
   if (props.validate) {
     verifying.value = true
     verifyError.value = ''
-    let ok = false
+    let ok: boolean | string = false
     try {
-      ok = await props.validate(ms, [...connections.value])
+      ok = await props.validate(ms, edgesInGrid(connections.value, puz.value.size)) // jamais de liaison hors grille (voir edgesInGrid)
     } catch {
       ok = false
     }
     verifying.value = false
-    if (!ok) {
-      verifyError.value = "Le serveur n'a pas validé ce tracé. Vérifie ta connexion, puis réessaie."
+    if (ok !== true) {
+      verifyError.value = typeof ok === 'string' ? ok : "Le serveur n'a pas validé ce tracé. Réessaie."
       sound.sfx('error')
       return
     }
@@ -219,34 +244,58 @@ async function checkWin(): Promise<void> {
 }
 // La voie prend l'allure de l'environnement : traverses grises sous la neige, acier plus sombre en forêt…
 const railStyle = computed(() => (scenery.value ? { '--won-rail': PAL[scenery.value.theme].rail.rail, '--won-tie': PAL[scenery.value.theme].rail.tie } : {}))
-// Marges de paysage autour de la grille : en hauteur, de quoi faire ~10 cases.
-//   - téléphone et tablette (les appareils visés), ou fenêtre étroite : le décor couvre TOUT l'écran autour de la grille, sans
-//     bande vide : toute la largeur, jusque sous la barre d'outils (qui reste libre, sans décor derrière) et jusqu'à la cabine ;
-//   - ordinateur : autant sur les côtés qu'en hauteur, le décor est recadré (il ne s'étale pas sur tout un grand écran).
-const FULL_MAX_WIDTH = 1100 // px : au-delà, et sans écran tactile, c'est un ordinateur
-function sceneryMargins(): { x: number; y: number; top?: number; below?: number } {
+// Marges de paysage autour de la grille : le décor couvre TOUT l'écran (toute la largeur, du haut au bas de l'écran), sur tous les appareils.
+// La grille telle qu'elle est posée au Plateau : à la victoire elle rétrécit et glisse (transform), ce qui fausserait la mesure
+// si le décor devait être refait pendant le Trajet (rotation de l'écran). On coupe donc le transform le temps de mesurer.
+function boardRect(): DOMRect | undefined {
+  const el = boardEl.value
+  if (!el) return undefined
+  const { transform, transition } = el.style
+  el.style.transition = 'none'
+  el.style.transform = 'none'
+  const r = el.getBoundingClientRect()
+  el.style.transform = transform
+  void el.offsetWidth // applique la mesure avant de rendre la transition
+  el.style.transition = transition
+  return r
+}
+const isLandscape = (): boolean => window.innerWidth >= window.innerHeight
+let sceneLandscape = isLandscape() // forme d'écran pour laquelle le décor a été généré
+function sceneryMargins(): { x: number; y: number; top?: number; below?: number; dy?: number } {
   const n = puz.value.size
   const y = sceneryMargin(n)
-  if (!isTouch() && window.innerWidth > FULL_MAX_WIDTH) return { x: y, y }
-  const rect = boardEl.value?.getBoundingClientRect()
+  const rect = boardRect()
   if (!rect || !(rect.width > 0)) return { x: y, y }
   const k = n / (n + 2 * y) // échelle de la grille à la victoire (voir buildScenery)
   const cell = rect.width / (n + 1) // taille d'une case à l'écran avant le rétrécissement (px)
   const unit = cell * k // une case du décor à l'écran, après le rétrécissement (px)
-  const visible = window.innerWidth / unit // cases de décor qu'il faut pour couvrir la largeur
-  const x = Math.min(28, Math.max(y, Math.ceil((visible - n) / 2) + 1))
+  // La grille n'est pas toujours au milieu de l'écran (en paysage, les bonus sont à sa droite) : le décor doit couvrir le côté le plus éloigné.
+  const cx = rect.left + cell + (n / 2) * cell // les indices sont à gauche et en haut : les cases commencent une case plus loin
+  const farthest = Math.max(cx, window.innerWidth - cx) // distance du centre des cases au bord de l'écran le plus loin (px)
+  const x = Math.min(40, Math.max(y, Math.ceil(farthest / unit - n / 2) + 1))
   // La grille rétrécit autour du centre de sa zone de jeu (sans la rangée des indices) : on situe à l'écran le haut et le bas
   // du décor qu'on aurait sans complément. Le bas tombe pile sur le bas d'origine de la grille (rangée des indices comprise).
-  const oy = rect.top + (n / 2) * cell
+  // À la victoire la grille glisse aussi vers le milieu de l'écran (dy) : le paysage se calcule depuis sa place d'arrivée.
+  const dy = Math.round(window.innerHeight / 2 - (rect.top + cell + (n / 2) * cell))
+  const oy = rect.top + cell + dy + (n / 2) * cell
   const decorTop = oy - (y + n / 2) * unit
-  const decorBottom = rect.bottom
-  const cabin = document.querySelector<HTMLElement>('[data-test=cabin]')?.getBoundingClientRect().top
-  // Le décor ne monte que jusque sous la barre d'outils : Quitter, Niveau, pièces, Relancer le train… restent sur le fond de la page,
-  // jamais posés sur le décor (issue #17). Sans barre d'outils mesurable, on garde le bord de la grille.
-  const limit = toolbarEl.value?.getBoundingClientRect().bottom ?? rect.top
-  const top = Math.max(0, (decorTop - Math.max(0, limit) - 4) / unit)
-  const below = cabin !== undefined && cabin > decorBottom ? (cabin - decorBottom) / unit + 0.05 : 0 // jusqu'à la cabine
-  return { x, y, top, below }
+  const decorBottom = rect.bottom + dy
+  // Le Trajet est un paysage plein écran : le décor monte jusqu'en haut de l'écran (la barre du haut, le bouton Quitter et les
+  // réglages flottent par-dessus) et descend jusqu'en bas (la cabine, en fenêtre, se pose par-dessus).
+  const top = Math.max(0, decorTop / unit + 0.05)
+  const below = Math.max(0, (window.innerHeight - decorBottom) / unit + 0.05)
+  return { x, y, top, below, dy }
+}
+function buildDecor(path: [number, number][]): void {
+  decorReady.value = false
+  sceneLandscape = isLandscape()
+  const mg = sceneryMargins()
+  glideY.value = mg.dy ?? 0
+  scenery.value = buildScenery(puz.value, path, props.theme, seedOf(puz.value), mg)
+  decorId.value++
+  const horiz = (d: string) => d === 'left' || d === 'right'
+  const sm = scenery.value.margin // marges réelles (avec le complément du haut) : la voie va jusqu'au bord du décor
+  sceneryRoute.value = buildRoute(path, puz.value, { entry: horiz(puz.value.entry.dir) ? sm.x : puz.value.entry.dir === 'up' ? sm.y : sm.b, exit: horiz(puz.value.exit.dir) ? sm.x : puz.value.exit.dir === 'up' ? sm.y : sm.b })
 }
 function revealScenery(): void {
   const path = tracePath(connections.value, puz.value)
@@ -264,18 +313,19 @@ function revealScenery(): void {
   connections.value = keep
   rails.value = new Set()
   crosses.value = new Set()
-  const mg = sceneryMargins()
-  scenery.value = buildScenery(puz.value, path, props.theme, seedOf(puz.value), mg)
-  sound.reveal(scenery.value)
-  const horiz = (d: string) => d === 'left' || d === 'right'
-  const sm = scenery.value.margin // marges réelles (avec le complément du haut) : la voie va jusqu'au bord du décor
-  sceneryRoute.value = buildRoute(path, puz.value, { entry: horiz(puz.value.entry.dir) ? sm.x : puz.value.entry.dir === 'up' ? sm.y : sm.b, exit: horiz(puz.value.exit.dir) ? sm.x : puz.value.exit.dir === 'up' ? sm.y : sm.b })
+  buildDecor(path)
+  if (scenery.value) sound.reveal(scenery.value)
   if (timing.revealMs > 0) trainTimer = window.setTimeout(runTrain, timing.revealMs)
   else runTrain()
 }
 function replayTrain(): void {
   trainDone.value = false
   route.value = null
+  // Écran tourné depuis la victoire : le décor est refait pour la nouvelle forme (pendant un trajet on garde celle de départ).
+  if (scenery.value && sceneLandscape !== isLandscape()) {
+    const path = tracePath(connections.value, puz.value)
+    if (path) buildDecor(path)
+  }
   void nextTick(runTrain)
 }
 function runTrain(): void {
@@ -363,6 +413,21 @@ function redo(): void {
     updateFlags()
   }
 }
+// Effacer tout se confirme : le premier toucher arme le bouton (rouge, « Toucher encore »), le second efface. Sans second
+// toucher dans les 3 s, rien ne se passe.
+const clearArmed = ref(false)
+let clearTimer = 0
+function askClear(): void {
+  if (solved.value) return
+  if (clearArmed.value) {
+    clearTimeout(clearTimer)
+    clearArmed.value = false
+    clearAll()
+    return
+  }
+  clearArmed.value = true
+  clearTimer = window.setTimeout(() => (clearArmed.value = false), 3000)
+}
 function clearAll(): void {
   if (solved.value) return
   touch()
@@ -411,6 +476,7 @@ function onDown(ev: PointerEvent, r: number, c: number): void {
   // que poser une croix (via contextmenu), sans passer pour un clic normal.
   if (ev.button > 0) return
   if (solved.value || verifying.value) return
+  if (props.locked) return sound.sfx('error')
   startClock()
   active = true
   moved = false
@@ -454,6 +520,7 @@ function onUp(): void {
 }
 
 function onContext(r: number, c: number): void {
+  if (props.locked) return
   if (Date.now() - longFiredAt < 1500) return // déjà traité par l'appui long
   onCross(r, c)
 }
@@ -547,12 +614,12 @@ function reveal(givens: Given[], crossCells: { row: number; col: number }[]): vo
 }
 // Ce que le serveur doit connaître pour le canon : liaisons tracées et croix posées.
 function snapshotForAid(): { edges: string[]; crosses: string[]; marks: number } {
-  const edges = [...connections.value].filter((e) => /^[hv]:/.test(e))
+  const edges = edgesInGrid(connections.value, puz.value.size)
   const fixed = lockedEdges(puz.value)
   // marks : ce que le joueur a posé lui-même (ni rails imposés, ni rails révélés).
   return { edges, crosses: [...crosses.value], marks: edges.filter((e) => !fixed.has(e)).length + crosses.value.size }
 }
-defineExpose({ reveal, snapshotForAid })
+defineExpose({ reveal, snapshotForAid, replayTrain })
 onMounted(() => {
   if (props.initial && (props.initial.givens.length || props.initial.crosses.length)) reveal(props.initial.givens, props.initial.crosses)
 })
@@ -560,7 +627,7 @@ onMounted(() => {
 
 <template>
   <div class="track">
-    <div ref="toolbarEl" class="toolbar">
+    <div class="toolbar" :class="{ gone: solved }" :aria-hidden="solved">
       <template v-if="!solved">
         <button type="button" class="btn btn--ghost tool" data-test="undo" @click="undo" :disabled="!canUndo" aria-label="Annuler" title="Annuler (Ctrl+Z)">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" /></svg>
@@ -568,42 +635,64 @@ onMounted(() => {
         <button type="button" class="btn btn--ghost tool" data-test="redo" @click="redo" :disabled="!canRedo" aria-label="Rétablir" title="Rétablir (Ctrl+Maj+Z)">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3" /></svg>
         </button>
-        <button type="button" class="btn btn--ghost tool clear" @click="clearAll" aria-label="Effacer tout" title="Effacer tout">
+        <button type="button" class="btn btn--ghost tool clear" :class="{ armed: clearArmed }" data-test="clear" @click="askClear" :aria-label="clearArmed ? 'Toucher encore pour tout effacer' : 'Effacer tout'" :title="clearArmed ? 'Toucher encore pour tout effacer' : 'Effacer tout'">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
         </button>
       </template>
-      <!-- fin de partie : revoir le train (les deux autres places restent vides : rien ne bouge) -->
-      <template v-else>
-        <button type="button" class="btn btn--ghost tool" data-test="replay" @click="replayTrain" :disabled="!trainDone" aria-label="Relancer le train" title="Relancer le train">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z" /></svg>
+      <!-- Minuteur et son : dans la barre du haut de l'écran quand la page en prévoit une (`hud`), séparés des outils de tracé ;
+           sinon ici, à la suite des outils. Fin de partie : la vitesse et le son passent en haut à droite (voir plus bas). -->
+      <Teleport :to="hud?.timer" :disabled="!hud" defer>
+        <span v-if="!solved" class="timer" data-test="timer">⏱ {{ fmt(elapsed) }}</span>
+      </Teleport>
+      <Teleport :to="hud?.sound" :disabled="!hud" defer>
+        <button v-if="!solved || !hud" type="button" class="btn btn--ghost tool sound" data-test="sound" :aria-pressed="soundOn" :aria-label="soundOn ? 'Couper le son' : 'Activer le son'" :title="soundOn ? 'Couper le son' : 'Activer le son'" @click="sound.setOn(!soundOn)">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9v6h4l5 4V5L8 9z" />
+            <path v-if="soundOn" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" />
+            <path v-else d="m17 9 4 6M21 9l-4 6" />
+          </svg>
         </button>
-        <button type="button" class="btn btn--ghost tool" :class="{ on: fast }" data-test="fast" :disabled="trainDone" :aria-pressed="fast" aria-label="Accélérer le train" :title="fast ? 'Vitesse normale' : 'Accélérer le train'" @click="fast = !fast">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14l8-7zM12 5v14l8-7z" /></svg>
-        </button>
-      </template>
-      <span v-if="solved" class="tool ghost" aria-hidden="true"></span>
-      <button type="button" class="btn btn--ghost tool sound" data-test="sound" :aria-pressed="soundOn" :aria-label="soundOn ? 'Couper le son' : 'Activer le son'" :title="soundOn ? 'Couper le son' : 'Activer le son'" @click="sound.setOn(!soundOn)">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 9v6h4l5 4V5L8 9z" />
-          <path v-if="soundOn" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" />
-          <path v-else d="m17 9 4 6M21 9l-4 6" />
-        </svg>
-      </button>
-      <span class="timer" data-test="timer">⏱ {{ fmt(elapsed) }}</span>
+      </Teleport>
+    </div>
+
+    <SpeedControl v-if="solved" v-model="speed" />
+    <!-- Trajet : la barre d'outils part, mais le son reste réglable (à gauche de la vitesse, en haut à droite) -->
+    <button v-if="solved" type="button" class="trip-sound" data-test="trip-sound" :aria-pressed="soundOn" :aria-label="soundOn ? 'Couper le son' : 'Activer le son'" :title="soundOn ? 'Couper le son' : 'Activer le son'" @click="sound.setOn(!soundOn)">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 9v6h4l5 4V5L8 9z" />
+        <path v-if="soundOn" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" />
+        <path v-else d="m17 9 4 6M21 9l-4 6" />
+      </svg>
+    </button>
+
+    <!-- Bande « partie » (entre les outils et la grille en paysage, au-dessus de la grille en portrait) : la nouveauté du niveau
+         en haut, la vérification et l'erreur du serveur en bas. Elle ne recouvre jamais la grille. -->
+    <div class="side" :class="{ gone: solved }" data-test="side">
+      <slot name="intro" />
+      <div v-if="verifying || verifyError" class="side-msg" :class="{ err: !!verifyError }" role="status">
+        <p v-if="verifying" class="wait" data-test="verifying">Vérification par le serveur…</p>
+        <template v-else>
+          <p class="wait err" data-test="verify-error">{{ verifyError }}</p>
+          <span class="kept">Ton tracé est gardé.</span>
+          <button type="button" class="btn btn--small retry" data-test="retry" @click="checkWin">Réessayer</button>
+        </template>
+      </div>
     </div>
 
     <div
       ref="boardEl"
       class="board"
-      :class="{ picking, 'board--won': scenery}"
-      :style="{ '--size': puzzle.size, '--k': scenery ? scenery.frame.k : 1, ...railStyle }"
+      :class="{ picking, 'board--won': scenery, 'rails-3d': railsGone }"
+      :style="{ '--size': puzzle.size, '--k': scenery ? scenery.frame.k : 1, '--dy': glideY + 'px', ...railStyle }"
       role="grid"
       aria-label="Grille de jeu"
       @pointermove="onMove"
     >
       <!-- Décor : en 3D si le joueur le veut et que l'appareil sait le faire ; sinon (ou en cas d'échec) le décor classique en SVG. -->
-      <Scenery3D v-if="scenery && use3d" :key="'3d-' + scenery.seed" :scenery="scenery" :route="sceneryRoute" @fail="failed3d = true" />
-      <SceneryLayer v-else-if="scenery" :scenery="scenery" :route="sceneryRoute" />
+      <Transition name="decor">
+        <Scenery3D v-if="scenery && use3d" :key="'3d-' + decorId" :scenery="scenery" :route="sceneryRoute" :train="route && trainS >= 0 ? { route, s: trainS } : null" :life="life" @fail="failed3d = true" @ready="decorReady = true" />
+        <SceneryLayer v-else-if="scenery" :scenery="scenery" :route="sceneryRoute" />
+      </Transition>
 
       <template v-for="r in indices" :key="'row-' + r">
         <TrackCell
@@ -611,6 +700,7 @@ onMounted(() => {
           :key="'cell-' + r + '-' + c"
           :data-r="r"
           :data-c="c"
+          :style="{ gridRow: r + 2, gridColumn: c + 2 }"
           :mark="markOf(r, c)"
           :sides="sidesGrid[r][c]"
           :variant="variantOf(r, c)"
@@ -620,8 +710,11 @@ onMounted(() => {
         />
 
         <ClueNumber
+          :style="{ gridRow: r + 2, gridColumn: 1 }"
           :value="puzzle.rowClues[r]"
           :status="statuses.rows[r]"
+          :pickable="pickingLine && !solved"
+          @pick="emit('pickLine', 'row', r)"
           orientation="row"
         />
       </template>
@@ -629,17 +722,21 @@ onMounted(() => {
       <ClueNumber
         v-for="c in indices"
         :key="'col-' + c"
+        :style="{ gridRow: 1, gridColumn: c + 2 }"
         :value="puzzle.colClues[c]"
         :status="statuses.cols[c]"
+        :pickable="pickingLine && !solved"
+        @pick="emit('pickLine', 'col', c)"
         orientation="col"
       />
 
-      <div class="corner"></div>
+      <div class="corner" style="grid-row: 1; grid-column: 1"></div>
 
-      <SceneryLife v-if="scenery" :scenery="scenery" :train-near="trainNear" @frame="emit('land', $event)" />
+      <SceneryLife v-if="scenery" :key="'life-' + decorId" :scenery="scenery" :train-near="trainNear" :start="!use3d || decorReady" :in3d="use3d" @frame="(f) => (life = f)" />
 
-      <TrainRun v-if="route" :route="route" :size="puzzle.size" :clip="trainClip" :speed="fast ? FAST_SPEED : CRUISE_SPEED" @progress="onTrainProgress" @done="trainDone = true" />
+      <TrainRun v-if="route" :ghost="train3d" :route="route" :size="puzzle.size" :clip="trainClip" :speed="SPEEDS[speed]" @progress="onTrainProgress" @done="trainDone = true" />
     </div>
+
 
     <!-- La victoire s'affiche par-dessus le décor (position absolue) : elle ne pousse rien. -->
     <div class="win-zone win-zone--compact" :class="{ on: solved }">
@@ -650,11 +747,6 @@ onMounted(() => {
         </div>
         <slot name="win" :ready="true" />
       </div>
-      <p v-if="verifying" class="wait" data-test="verifying">Vérification par le serveur…</p>
-      <template v-else-if="verifyError">
-        <p class="wait err" data-test="verify-error">{{ verifyError }}</p>
-        <button type="button" class="btn btn--small" data-test="retry" @click="checkWin">Réessayer</button>
-      </template>
     </div>
   </div>
 </template>
@@ -677,6 +769,43 @@ onMounted(() => {
   justify-content: center;
 }
 
+/* Trajet : bouton son flottant, même allure que la vitesse (pastille blanche), juste à sa gauche */
+.trip-sound {
+  position: fixed;
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: calc(max(0.75rem, env(safe-area-inset-right)) + 9.3rem);
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.7rem;
+  height: 2.7rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  color: #1f2937;
+  cursor: pointer;
+}
+.trip-sound svg {
+  width: 1.3rem;
+  height: 1.3rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.trip-sound[aria-pressed='false'] {
+  color: #9ca3af;
+}
+/* Trajet en 3D : la voie de la grille est peinte dans la scène (sous le train), celle des cases s'efface */
+.board.rails-3d :deep(.rail) {
+  visibility: hidden;
+}
+.toolbar.gone {
+  visibility: hidden; /* Trajet : plus d'outils sur le paysage (la place reste réservée, rien ne saute) */
+}
 .tool {
   width: 2.6rem;
   height: 2.6rem;
@@ -700,6 +829,11 @@ onMounted(() => {
 .toolbar .clear:hover:not(:disabled) {
   color: #dc2626;
 }
+.toolbar .clear.armed {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
 
 .tool.on {
   border-color: #2563eb;
@@ -707,6 +841,8 @@ onMounted(() => {
 }
 .timer {
   align-self: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
   padding: 0.25rem 0.7rem;
   border: 2px solid #fff;
   border-radius: 999px;
@@ -742,9 +878,16 @@ onMounted(() => {
   justify-content: flex-start;
   gap: 0.6rem;
 }
+/* « Réduire les animations » : pas de glissement ni de rétrécissement, le paysage apparaît en fondu. */
 @media (prefers-reduced-motion: reduce) {
   .board {
     transition: none;
+  }
+  .decor-enter-active {
+    transition: opacity 0.6s ease;
+  }
+  .decor-enter-from {
+    opacity: 0;
   }
 }
 @keyframes win-in {
@@ -869,15 +1012,17 @@ onMounted(() => {
   grid-template-columns: repeat(var(--track), 1fr);
   grid-auto-rows: 1fr;
 
-  /* Taille : limitée par la largeur ET la hauteur de l'écran. */
-  --w: min(80vw, 54vh, 560px);
+  /* Taille du Plateau : la grille (compteurs compris) prend presque tout l'écran, ni cabine ni paysage autour. Portrait : limitée par la
+     largeur, et par la hauteur moins la barre du haut, les outils et les bonus. Paysage : limitée par la hauteur, les bonus sont à droite. */
+  --shift: calc(-100% / (var(--size) + 1) / 2);
+  --w: min(calc((100vw - 1rem) * (var(--size) + 1) / (var(--size) + 2)), calc(100dvh - 18.5rem), 780px);
   width: var(--w);
   aspect-ratio: 1;
-  /* La colonne des compteurs est à droite : on décale VERS LA DROITE d'une demi-colonne pour
+  /* Les compteurs sont à gauche et en haut : on décale VERS LA GAUCHE d'une demi-colonne pour
      que les CASES (pas la grille + compteurs) soient centrées sur la page. */
   /* À la victoire, la grille rétrécit au centre d'un paysage plus grand (--k < 1) : le décor déborde autour. */
-  transform: translateX(calc(100% / (var(--size) + 1) / 2)) scale(var(--k, 1));
-  transform-origin: calc(50% * var(--size) / (var(--size) + 1)) calc(50% * var(--size) / (var(--size) + 1));
+  transform: translate(var(--shift), var(--dy, 0px)) scale(var(--k, 1));
+  transform-origin: calc(100% * (1 + var(--size) / 2) / (var(--size) + 1)) calc(100% * (1 + var(--size) / 2) / (var(--size) + 1));
   transition: transform 1.8s ease-in-out;
 
   /* Le glisser doit dessiner, pas faire défiler / sélectionner. */
@@ -891,5 +1036,113 @@ onMounted(() => {
 
 .corner {
   background: transparent;
+}
+
+/* Bande « partie » : portrait, au-dessus de la grille ; paysage, une colonne entre les outils et la grille (voir plus bas). */
+.side {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  width: min(92vw, 30rem);
+}
+.side:empty {
+  display: none;
+}
+.side.gone {
+  visibility: hidden;
+}
+.side-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.75rem;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+.side-msg.err {
+  background: #fef2f2;
+  border: 2px solid #fca5a5;
+  color: #7f1d1d;
+}
+.side-msg .wait {
+  margin: 0;
+  font-weight: 700;
+}
+.side-msg .kept {
+  font-size: 0.82rem;
+}
+.side-msg .retry {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+/* Paysage (option A) : les outils forment une colonne à gauche de la grille, en miroir des pouvoirs à droite ; annuler et
+   rétablir en haut, effacer en bas, à l'écart. */
+@media (min-aspect-ratio: 1/1) {
+  .track {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+  .toolbar {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-self: stretch;
+    padding: 0.6rem 0.45rem;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.75);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  }
+  .toolbar .clear {
+    margin-top: auto;
+  }
+  /* bande « partie » : aussi haute que la grille, la nouveauté en haut, les messages du serveur en bas */
+  .side {
+    width: var(--band, 12rem);
+    align-self: stretch;
+    justify-content: space-between;
+  }
+  .side:not(:empty) {
+    display: flex;
+  }
+  .tool {
+    width: 2.9rem;
+    height: 2.9rem;
+  }
+}
+@media (min-aspect-ratio: 1/1) {
+  .board {
+    --shift: 0px; /* les bonus sont à droite : la grille et ses compteurs restent groupés */
+    --w: min(calc(100dvh - 11rem), 62vw, 820px);
+  }
+}
+
+/* Téléphone couché (peu de hauteur) : la grille prend toute la hauteur, les outils passent en colonne sur le bord gauche. */
+@media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  .board {
+    --w: calc(100dvh - 4.1rem); /* sous la barre du haut, qui flotte (JourneyView) */
+  }
+  .toolbar {
+    position: fixed;
+    left: 0.75rem;
+    top: 4.25rem; /* sous Quitter */
+    bottom: 0.75rem;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  .win-zone {
+    min-height: 0;
+  }
 }
 </style>

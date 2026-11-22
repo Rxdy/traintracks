@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto'
 import { confirmEmailChange, exportData, importData, requestEmailChange, changePseudo, setLeaderboard } from './accountData.js'
 import { completeTutorial } from './tutorial.js'
 import { avatarState, buyAvatar, selectAvatar } from './avatars.js'
+import { drawWagon, selectPreset, setTrain, trainState } from './wagons.js'
 import { journeyStats, leaderboard, type Board } from './stats.js'
 
 const COOKIE = 'tt_session'
@@ -112,7 +113,8 @@ export function buildApp(opts: AppOptions): FastifyInstance {
       await mergeAnonymous(opts.db, anon, r.user.id)
       reply.clearCookie(ANON, { path: '/' })
     }
-    return reply.redirect(`${opts.appUrl}/`)
+    // Compte tout juste créé par Google : il a reçu un pseudo tiré au hasard, le site lui propose aussitôt d'en choisir un.
+    return reply.redirect(`${opts.appUrl}/${r.created ? '?bienvenue=1' : ''}`)
   })
 
   // Mot de passe oublié : la réponse est la même que l'adresse ait un compte ou non.
@@ -211,6 +213,31 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const r = await buyAid(opts.db, owner, ((req.body ?? {}) as Body).aid)
     if (r.ok) return r
     return reply.code(r.code === 'poor' ? 402 : r.code === 'invalid' ? 400 : r.code === 'locked' ? 403 : 409).send({ ok: false, error: r.code })
+  })
+
+  // --- Le train : collection de wagons, machine « Wagon surprise », ordre des wagons ---------------------------
+  app.get('/api/train', async (req, reply) => trainState(opts.db, await ownerOf(req, reply, false)))
+
+  app.post('/api/train/draw', async (req, reply) => {
+    const owner = (await ownerOf(req, reply, true))!
+    const r = await drawWagon(opts.db, owner, opts.now())
+    if (r.ok) return r
+    return reply.code(r.code === 'poor' ? 402 : 409).send({ ok: false, error: r.code })
+  })
+
+  app.post('/api/train/layout', async (req, reply) => {
+    const owner = (await ownerOf(req, reply, true))!
+    const b = (req.body ?? {}) as Body
+    const r = await setTrain(opts.db, owner, b.cars, opts.now(), b.slot)
+    if (r.ok) return r
+    return reply.code(400).send({ ok: false, error: r.code })
+  })
+
+  app.post('/api/train/active', async (req, reply) => {
+    const owner = (await ownerOf(req, reply, true))!
+    const r = await selectPreset(opts.db, owner, ((req.body ?? {}) as Body).slot, opts.now())
+    if (r.ok) return r
+    return reply.code(400).send({ ok: false, error: r.code })
   })
 
   app.post('/api/journey/aid', async (req, reply) => {

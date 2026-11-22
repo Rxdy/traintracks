@@ -49,10 +49,11 @@ retirait la croix qu'il venait de poser ; et un geste interrompu par le système
 un tracé « en cours ». Non testé sur un vrai téléphone, seulement par tests automatiques.
 
 ## Pièces
-- Niveau du Voyage gagné : 10 (4×4), 15 (5×5), 20 (6×6), 25 (7×7), 30 (8×8). Le Voyage est linéaire : un
+- Niveau du Voyage gagné : 10, quelle que soit la taille de la grille (fixé le 2026-11-21 : les wagons doivent se
+  mériter). Le Voyage est linéaire : un
   niveau ne se rejoue pas, donc rien à bloquer ; le serveur refuse de créditer deux fois le même niveau.
 - Niveau gagné **sans aucune aide** (hors démonstration offerte) : +5.
-- Puzzle du jour : 20, plus un supplément pour une série de jours ; seul le premier temps du jour compte.
+- Puzzle du jour : 20, sans bonus de série ; seul le premier temps du jour compte.
 - **Inscription : 100 pièces, versées à la confirmation de l'e-mail** (Google est déjà confirmé : versées
   à la création du compte). Évite les faux comptes.
 - **Affichage** : le solde est visible sur l'accueil **et pendant une partie**.
@@ -82,8 +83,14 @@ un tracé « en cours ». Non testé sur un vrai téléphone, seulement par test
 Stock plafonné à 3 par type ; une aide de chaque type par niveau ; aucune aide pendant le puzzle du
 jour ; un niveau où une aide payante a servi ne donne pas les étoiles de rapidité (issue #6).
 
+## Wagons à collectionner (machine Wagon surprise)
+- Un tirage : 40 pièces, 2 chances sur 3 de gagner (tirage fait par le serveur). Perdu : rien, les 3 rouleaux s'arrêtent sur des wagons différents. Gagné : un wagon au hasard parmi ceux qu'on a moins de 6 fois ; un wagon qu'on a 6 fois ne sort plus jamais pour ce joueur.
+- 37 wagons (courts et fret), 6 exemplaires au plus de chacun : 222 à collectionner.
+- Les wagons ne servent qu'au Trajet (et à l'accueil, au chargement) ; le futur mode Livraison n'en dépend pas.
+- Catalogue : shared/wagons.ts ; serveur : server/src/wagons.ts.
+
 ## Achat des aides (pas de boutique)
-Pas d'écran Boutique ni de cosmétiques. Quand le stock d'une aide est vide, on la rachète avec les pièces
+Pas d'écran Boutique (les wagons s'obtiennent par la machine, jamais contre de l'argent réel). Quand le stock d'une aide est vide, on la rachète avec les pièces
 gagnées en jouant, directement depuis le bouton de l'aide (jusqu'au plafond de 3). Pas d'argent réel.
 
 ## État d'avancement
@@ -96,7 +103,7 @@ gagnées en jouant, directement depuis le bouton de l'aide (jusqu'au plafond de 
   Les rails révélés se comportent comme des rails imposés (verrouillés, dans le bon sens).
 - Fait : générateur de puzzles à solution unique (shared/generator.ts) et puzzle du jour côté serveur : graine =
   date (fuseau Europe/Paris), toujours en 6×6, même grille pour tous,
-  sans aide, premier temps du jour seul compté, 20 pièces + 2 par jour de série (max +10), statistiques
+  sans aide, premier temps du jour seul compté, 20 pièces (plus de bonus de série), statistiques
   (nombre, moyenne, meilleur, pire, série) et reprise gardée par le serveur.
 - Reste : Google côté serveur, classement, étoiles de rapidité.
 - Les pouvoirs s'ouvrent aux niveaux 20, 50, 80 et 110 (un tous les 30 niveaux après le premier).

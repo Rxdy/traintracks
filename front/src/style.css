@@ -11,6 +11,27 @@ body,
   background: #ffffff;
 }
 
+/* Pas de zoom au double tap (le pincement est bloqué dans noZoom.ts), pas de taille de texte gonflée par le téléphone. */
+html {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Écrans de jeu (chargement, grille, Trajet) : tout tient dans l'écran, rien ne défile, pas de rebond.
+   Ce qui dépasse (le décor qui continue au-delà de l'écran) est coupé. Les autres écrans (compte, profil, choix
+   de l'avatar…) défilent normalement, et leurs fenêtres gèrent leur propre défilement. */
+html.lock-screen,
+html.lock-screen body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html.lock-screen .app {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 body {
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
     sans-serif;
@@ -112,4 +133,13 @@ body {
   padding: 0.25rem 0.8rem;
   border-radius: 12px;
   box-shadow: var(--shadow);
+}
+
+/* Paramètres, « Animations réduites » : plus de mouvements ni de transitions (de simples changements) */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001s !important;
 }
