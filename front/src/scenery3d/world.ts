@@ -272,6 +272,14 @@ export function loadSvgTexture(svg: string, w: number, h: number, maxSide: numbe
   })
 }
 
+// Échauffement : la toute première image SVG avec filtre décodée par le navigateur coûte ~1,4 s (puis ~30 ms), et c'est celle
+// du sol du premier décor, à la première victoire. On la fait faire à l'avance, avec un minuscule SVG du même genre.
+export function warmUp(): Promise<unknown> {
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs><filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="64" height="64"><feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="3" seed="1"/><feColorMatrix type="matrix" values="0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  1.8 0 0 0 -0.8"/></filter></defs><rect width="64" height="64" fill="#88cc88" filter="url(#f)"/></svg>'
+  return loadSvgTexture(svg, 64, 64, 64).then((t) => t.dispose())
+}
+
 // ---------- objets debout ----------
 export interface Anim {
   g: THREE.Object3D

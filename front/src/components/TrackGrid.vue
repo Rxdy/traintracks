@@ -136,6 +136,16 @@ const failed3d = ref(false) // le décor 3D n'a pas pu s'afficher : décor class
 const use3d = computed(() => !failed3d.value && webglAvailable())
 // Le décor 3D est prêt : le train roule dans la scène 3D (caché par les arbres devant la voie) et la voie de la grille y est peinte.
 const train3d = computed(() => use3d.value && decorReady.value)
+// Les rails des cases restent visibles pendant que le décor 3D apparaît en fondu (1,2 s), puis s'effacent : la voie peinte dans la
+// scène a pris le relais. Sans ça, ils disparaissaient d'un coup alors que le décor était encore invisible.
+const railsGone = ref(false)
+let railsTimer = 0
+watch(train3d, (v) => {
+  clearTimeout(railsTimer)
+  if (!v) return void (railsGone.value = false)
+  railsTimer = window.setTimeout(() => (railsGone.value = true), 1300)
+})
+onUnmounted(() => clearTimeout(railsTimer))
 const sceneryRoute = ref<Route | null>(null)
 let trainTimer = 0
 // Vrai quand l'animation du train est finie : c'est alors seulement qu'on propose la suite.
@@ -669,7 +679,7 @@ onMounted(() => {
     <div
       ref="boardEl"
       class="board"
-      :class="{ picking, 'board--won': scenery, 'rails-3d': train3d }"
+      :class="{ picking, 'board--won': scenery, 'rails-3d': railsGone }"
       :style="{ '--size': puzzle.size, '--k': scenery ? scenery.frame.k : 1, '--dy': glideY + 'px', ...railStyle }"
       role="grid"
       aria-label="Grille de jeu"
