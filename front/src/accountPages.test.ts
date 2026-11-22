@@ -141,6 +141,16 @@ describe('page Statistiques', () => {
     expect(w.find('[data-test=coins-earned]').text()).toBe('400')
     expect(w.findAll('[data-test=by-size] li').map((l) => l.text())).toEqual(['4×410 niveauxmoy. 0:20record 0:08', '5×520 niveauxmoy. 2:30record 0:40'])
     expect(w.find('[data-test=place]').text()).toContain('Forêt') // niveaux 26 à 50
+    // la frise : tous les niveaux parcourus, du 1 au niveau en cours, jamais au-delà ; aucun total affiché
+    const lvls = w.findAll('[data-test=frieze] .num').map((n) => n.text())
+    expect(lvls[0]).toBe('1')
+    expect(lvls.at(-1)).toBe('31')
+    expect(lvls).toHaveLength(31)
+    expect(w.find('[data-test=frieze-here] .num').text()).toBe('31')
+    expect(w.text()).not.toContain('299')
+    // les pièces : en poche, dépensées, gagnées au total
+    expect(w.find('[data-test=coins-now]').text()).toContain('250')
+    expect(w.find('[data-test=coins-spent]').text()).toBe('150')
     expect(w.find('[data-test=streak]').text()).toBe('2')
     expect(w.find('[data-test=best-streak]').text()).toBe('5')
   })
