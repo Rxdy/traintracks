@@ -487,13 +487,13 @@ function freightBody(kind: WagonStyle['kind'], c: string, len: number, { add, bo
       for (const sx of [-1, 1]) for (const x of [-len / 4, len / 4]) add(box(0.14, 0.12, 0.012, 0.02), glossy('#fde68a'), x, 0.36, sx * (SIDE + 0.001))
       break
     }
-    case 'blade': { // une pale d'éolienne, plus longue que le wagon, sur ses berceaux
+    case 'blade': { // une pale d'éolienne sur ses berceaux ; elle tient dans la longueur du wagon (attelés, deux wagons à pale ne se rentrent pas dedans)
       deck(c)
       for (const x of [-half + 0.15, half - 0.15]) add(box(0.06, 0.08, 0.26, 0.01), glossy('#1f2937'), x, TOP + 0.04, 0)
-      const L = len + 0.4
-      add(new THREE.CylinderGeometry(0.035, 0.1, L, 16).rotateZ(Math.PI / 2).scale(1, 1, 0.55), glossy('#f8fafc'), 0.2, TOP + 0.12, 0)
-      add(new THREE.CylinderGeometry(0.1, 0.1, 0.08, 18).rotateZ(Math.PI / 2), glossy('#e5e7eb'), 0.2 - L / 2, TOP + 0.12, 0)
-      add(new THREE.CylinderGeometry(0.035, 0.035, 0.05, 12).rotateZ(Math.PI / 2), glossy('#ef4444'), 0.2 + L / 2, TOP + 0.12, 0)
+      const L = len - 0.16 // le moyeu et la pointe dépassent de 0,04 chacun : le tout reste dans le wagon
+      add(new THREE.CylinderGeometry(0.035, 0.1, L, 16).rotateZ(Math.PI / 2).scale(1, 1, 0.55), glossy('#f8fafc'), 0, TOP + 0.12, 0)
+      add(new THREE.CylinderGeometry(0.1, 0.1, 0.08, 18).rotateZ(Math.PI / 2), glossy('#e5e7eb'), -L / 2, TOP + 0.12, 0)
+      add(new THREE.CylinderGeometry(0.035, 0.035, 0.05, 12).rotateZ(Math.PI / 2), glossy('#ef4444'), L / 2, TOP + 0.12, 0)
       break
     }
     case 'digger': { // wagon de chantier : une pelleteuse jaune sanglée sur le plateau, le bras replié
