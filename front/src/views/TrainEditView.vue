@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { TRAIN_SLOTS, WAGON_DEFS } from '../../../shared/wagons.js'
-import { freeCount, loadTrain, myTrain, selectPreset, setTrain } from '../myTrain'
+import { freeCount, loadTrain, myTrain, setTrain } from '../myTrain'
 import { styleOf, wagonLabel } from '../trainStyle'
 import WagonThumb from '../components/WagonThumb.vue'
 import { webglAvailable } from '../decor'
@@ -53,9 +53,6 @@ function downIn3d(e: PointerEvent): void {
 async function save(next: string[]): Promise<void> {
   msg.value = ''
   if (!(await setTrain(next, editing.value))) msg.value = 'Le train n\'a pas pu être rangé. Réessaie.'
-}
-async function rollThis(): Promise<void> {
-  if (!(await selectPreset(editing.value))) msg.value = 'Ce train n\'a pas pu partir. Réessaie.'
 }
 
 // --- les gestes -------------------------------------------------------------------------------------------
@@ -173,7 +170,6 @@ const dragId = computed(() => drag.value?.src.id ?? null)
   <section class="train-page" data-test="train-page" :class="{ dragging: !!drag }">
     <div class="head">
       <span v-if="myTrain.active === slot" class="road" data-test="preset-active">en route</span>
-      <button v-else type="button" class="btn btn--small" data-test="preset-roll" @click="rollThis">Faire rouler ce train</button>
     </div>
 
     <!-- l'atelier en 3D : le train attelé sur sa voie -->

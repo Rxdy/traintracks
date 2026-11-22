@@ -155,14 +155,13 @@ describe('Mon train : dépôt, personnalisation, collection', () => {
     })
     const w = mount(TrainEditView, { props: { slot: 2 } })
     await flushPromises()
-    expect(w.find('[data-test=preset-roll]').exists()).toBe(true)
+    expect(w.find('[data-test=preset-roll]').exists()).toBe(false) // on le fait rouler depuis le dépôt, en touchant le train
     await w.find('[data-test=train-car-0]').trigger('click')
     await w.find('[data-test=train-car-2]').trigger('click')
     await flushPromises()
     expect(calls.at(-1)!.body).toEqual({ cars: ['vert', 'violet', 'ambre'], slot: 2 })
     expect(myTrain.value.train).toEqual(STARTER_TRAIN) // celui qui roule n'a pas bougé
-    await w.find('[data-test=preset-roll]').trigger('click')
-    await flushPromises()
+    expect(await selectPreset(2)).toBe(true)
     expect(calls.at(-1)).toEqual({ key: 'POST /api/train/active', body: { slot: 2 } })
     expect(myTrain.value.active).toBe(2)
     expect(trainWagons.value.map((x) => x.id)).toEqual(['violet', 'vert', 'ambre'])
