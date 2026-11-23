@@ -16,7 +16,7 @@ describe('Paramètres', () => {
     const w = mount(SettingsView)
     expect(w.find('[data-test=set-sound]').exists()).toBe(true)
     for (const k of ['music', 'sfx', 'train', 'amb']) expect(w.find(`[data-test=set-${k}]`).exists()).toBe(true)
-    expect(w.findAll('[data-test^=set-speed-]')).toHaveLength(3)
+    expect(w.findAll('[data-test^=set-speed-]')).toHaveLength(2)
     expect(w.find('[data-test=set-anim-reduced]').exists()).toBe(true)
   })
 
@@ -26,8 +26,8 @@ describe('Paramètres', () => {
     ;(music.element as HTMLInputElement).value = '40'
     await music.trigger('input')
     expect(volumes.value.music).toBeCloseTo(0.4)
-    await w.find('[data-test=set-speed-fast]').trigger('click')
-    expect(speed.value).toBe('fast')
+    await w.find('[data-test=set-speed-slow]').trigger('click')
+    expect(speed.value).toBe('slow')
     await w.find('[data-test=set-anim-reduced]').trigger('click')
     expect(reducedPref.value).toBe(true)
     expect(reducedMotion()).toBe(true)

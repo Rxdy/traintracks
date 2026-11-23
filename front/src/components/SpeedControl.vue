@@ -1,12 +1,11 @@
 <script setup lang="ts">
-// La vitesse du train : trois crans, en haut à droite pendant le Trajet. Le cran actif est coloré ; un clic sur un autre l'active.
-export type Speed = 'slow' | 'normal' | 'fast'
+// La vitesse du train : deux crans (lent, normal), en haut à droite pendant le Trajet. Le cran actif est coloré ; un clic sur un autre l'active.
+export type Speed = 'slow' | 'normal'
 defineProps<{ modelValue: Speed }>()
 defineEmits<{ (e: 'update:modelValue', v: Speed): void }>()
 const STEPS: { id: Speed; label: string; n: number }[] = [
   { id: 'slow', label: 'Lent', n: 1 },
   { id: 'normal', label: 'Normal', n: 2 },
-  { id: 'fast', label: 'Rapide', n: 3 },
 ]
 </script>
 
