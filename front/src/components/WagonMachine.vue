@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { WAGON_IDS, MAX_PER_WAGON } from '../../../shared/wagons.js'
+import { WAGON_IDS } from '../../../shared/wagons.js'
 import { drawWagon, myTrain } from '../myTrain'
 import { coins } from '../wallet'
 import { styleOf, wagonLabel } from '../trainStyle'
@@ -12,12 +12,11 @@ import WagonThumb from './WagonThumb.vue'
 // à droite. Le serveur décide (2 chances sur 3) : gagné, les trois s'arrêtent sur le même wagon, un wagon qu'on a moins
 // de 6 fois ; perdu, ils s'arrêtent sur des wagons différents (souvent les deux premiers pareils : presque !).
 // Chaque rouleau montre 3 wagons ; seule la ligne du milieu compte.
-const emit = defineEmits<{ (e: 'close'): void; (e: 'myTrain'): void }>()
+const emit = defineEmits<{ (e: 'close'): void }>()
 
 type Phase = 'idle' | 'spinning' | 'won' | 'lost'
 const phase = ref<Phase>('idle')
 const prize = ref<string | null>(null)
-const added = ref(false)
 const message = ref('')
 const pulled = ref(false)
 
@@ -41,17 +40,16 @@ const price = computed(() => myTrain.value.price)
 const left = computed(() => myTrain.value.left)
 const poor = computed(() => (coins.value ?? 0) < price.value)
 const prizeStyle = computed(() => (prize.value ? styleOf(prize.value) : null))
-const prizeCount = computed(() => (prize.value ? myTrain.value.owned[prize.value] ?? 0 : 0))
 
 async function pull(): Promise<void> {
   if (phase.value === 'spinning') return
   message.value = ''
   if (left.value === 0) {
-    message.value = 'Tu as déjà tous les wagons !'
+    message.value = 'Tu as tous les wagons !'
     return
   }
   if (poor.value) {
-    message.value = `Il te faut ${price.value} pièces pour un tirage. Joue des niveaux pour en gagner.`
+    message.value = `Il te faut ${price.value} pièces.`
     sound.sfx('error')
     return
   }
@@ -67,7 +65,6 @@ async function pull(): Promise<void> {
     return
   }
   prize.value = out.wagon
-  added.value = out.added
   const mids = out.wagon ? [out.wagon, out.wagon, out.wagon] : losing()
   stopped.value = 0
   // les bandes : du hasard, puis [voisin, ARRÊT, voisin] ; on repart du haut sans animation
@@ -125,10 +122,11 @@ onUnmounted(() => {
               </div>
               <span class="line" aria-hidden="true" />
             </div>
-            <p class="plate" data-test="machine-plate">
-              <template v-if="phase === 'won' && prizeStyle">Gagné !</template>
-              <template v-else-if="phase === 'lost'">Perdu</template>
+            <p class="plate" data-test="machine-plate" role="status">
+              <strong v-if="phase === 'won' && prizeStyle" data-test="machine-prize">{{ wagonLabel(prize!) }} !</strong>
+              <strong v-else-if="phase === 'lost'" data-test="machine-lost">Perdu</strong>
               <template v-else-if="phase === 'spinning'">Ça tourne…</template>
+              <span v-else-if="message" class="err" data-test="machine-msg">{{ message }}</span>
               <template v-else>{{ price }} <CoinIcon /> le tirage</template>
             </p>
           </div>
@@ -137,23 +135,6 @@ onUnmounted(() => {
           <button type="button" class="lever" :class="{ pulled }" data-test="machine-pull" :disabled="phase === 'spinning'" aria-label="Tirer la manette" @click="pull">
             <span class="rod" /><span class="knob" />
           </button>
-        </div>
-
-        <div class="result" role="status">
-          <template v-if="phase === 'won' && prizeStyle">
-            <strong data-test="machine-prize">{{ wagonLabel(prize!) }} !</strong>
-            <span>Tu en as {{ prizeCount }}/{{ MAX_PER_WAGON }}. {{ added ? 'Il roule déjà dans ton train.' : 'Ton train est plein : choisis sa place dans Mon train.' }}</span>
-          </template>
-          <template v-else-if="phase === 'lost'">
-            <strong data-test="machine-lost">Pas de wagon cette fois.</strong>
-            <span>Il faut trois wagons pareils.</span>
-          </template>
-          <span v-else-if="message" class="err" data-test="machine-msg">{{ message }}</span>
-          <span v-else-if="phase === 'idle'">Trois wagons pareils : il est à toi. Deux chances sur trois.</span>
-          <div v-if="phase !== 'spinning'" class="actions">
-            <button type="button" class="btn btn--small" data-test="machine-again" :disabled="left === 0" @click="pull">{{ phase === 'won' || phase === 'lost' ? 'Encore' : 'Tirer' }} · {{ price }} <CoinIcon /></button>
-            <button v-if="phase === 'won'" type="button" class="btn btn--ghost btn--small" data-test="machine-my-train" @click="emit('myTrain')">Ma collection</button>
-          </div>
         </div>
       </div>
     </div>
@@ -405,30 +386,12 @@ onUnmounted(() => {
 .lever.pulled .knob {
   transform: translateY(calc(var(--item) * 2.4 - 0.6rem));
 }
-.result {
-  width: min(15rem, 80vw);
-  padding: 0.75rem;
-  border-radius: 1rem;
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-}
-.result strong {
-  font-size: 1.05rem;
-}
-.result strong::first-letter {
+.plate strong::first-letter {
   text-transform: uppercase;
 }
 .err {
-  color: #b91c1c;
-}
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  color: #991b1b;
+  font-size: 0.8rem;
 }
 @media (prefers-reduced-motion: reduce) {
   .bulb {

@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto'
 import { confirmEmailChange, exportData, importData, requestEmailChange, changePseudo, setLeaderboard } from './accountData.js'
 import { completeTutorial } from './tutorial.js'
 import { avatarState, buyAvatar, selectAvatar } from './avatars.js'
-import { drawWagon, selectPreset, setTrain, trainState } from './wagons.js'
+import { drawWagon, selectPreset, setTrain, trainState, type Rng } from './wagons.js'
 import { journeyStats, leaderboard, type Board } from './stats.js'
 
 const COOKIE = 'tt_session'
@@ -25,6 +25,7 @@ export interface AppOptions extends Ctx {
   dailyTz?: string // fuseau horaire qui définit « aujourd'hui » pour le puzzle du jour
   exportSecret?: string // clé qui signe les fichiers d'export (EXPORT_SECRET)
   legal?: LegalInfo // éditeur, contact et hébergeur affichés dans les mentions légales
+  drawRng?: Rng // hasard de la machine Wagon surprise : seulement pour les tests (le tirage est sinon cryptographique)
   google?: GoogleClient // connexion avec Google ; absent : la fonction est désactivée (bouton masqué)
 }
 
@@ -220,7 +221,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   app.post('/api/train/draw', async (req, reply) => {
     const owner = (await ownerOf(req, reply, true))!
-    const r = await drawWagon(opts.db, owner, opts.now())
+    const r = await drawWagon(opts.db, owner, opts.now(), opts.drawRng)
     if (r.ok) return r
     return reply.code(r.code === 'poor' ? 402 : 409).send({ ok: false, error: r.code })
   })

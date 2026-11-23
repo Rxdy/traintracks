@@ -387,6 +387,11 @@ section {
     position: relative;
   }
   /* Détail d'un pouvoir, message, achat, consigne : dans la bande entre la grille et la colonne, en face du pouvoir concerné. */
+  /* la colonne des 4 pouvoirs (4 cases + 3 écarts = 4,54 cases) tient dans la hauteur de la grille : sinon elle l'étire, la pousse vers le bas
+     et la dernière case sort de l'écran (iPhone couché : 343 px de haut sous les barres de Safari) */
+  .bonus-dock {
+    --aid: clamp(2.4rem, calc((100dvh - 4.1rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 4.54), 7rem);
+  }
   .bonus-dock :deep(.panel),
   .bonus-dock :deep(.msg),
   .bonus-dock :deep(div.fresh) {
@@ -502,6 +507,7 @@ section {
   justify-content: center;
   border-radius: inherit;
   background: rgba(156, 163, 175, 0.45);
+  padding-bottom: 26%; /* le cadenas se pose sur l'icône, pas sur le nom du cube */
   font-size: clamp(1.4rem, 6.5vw, 2.1rem);
 }
 .ico {
@@ -625,6 +631,40 @@ section {
 }
 .cta:hover:not(:disabled) {
   background: #15803d;
+}
+
+/* Téléphone couché : l'accueil se dimensionne sur la HAUTEUR (3 cubes + le grand cube tiennent entre l'en-tête et le pied de page),
+   pas sur la largeur comme debout, sinon il dépasse de l'écran et passe sous la barre du haut. */
+@media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  .home {
+    --gap: 0.5rem;
+    --avail: calc(100dvh - 8.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    --side: clamp(40px, calc((var(--avail) - 2 * var(--gap)) / 3), 92px);
+    --hero: clamp(110px, var(--avail), 320px);
+    gap: 1rem;
+    transform: none;
+  }
+  .side {
+    gap: var(--gap);
+  }
+  .ico {
+    width: calc(var(--side) * 0.5);
+    height: calc(var(--side) * 0.5);
+  }
+  .lbl {
+    font-size: clamp(0.5rem, calc(var(--side) * 0.15), 0.72rem);
+  }
+  .lock {
+    font-size: calc(var(--side) * 0.38);
+  }
+  .hero-level {
+    font-size: calc(var(--hero) * 0.09);
+  }
+  .hero-cta {
+    width: calc(var(--hero) * 0.2);
+    height: calc(var(--hero) * 0.2);
+    font-size: calc(var(--hero) * 0.08);
+  }
 }
 
 /* Téléphone couché : les messages des bonus tiennent entre la colonne et le bord de l'écran. */
