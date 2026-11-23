@@ -725,9 +725,17 @@ section {
   .bar > * {
     pointer-events: auto;
   }
+  /* Quitter dans le coin haut-gauche, en miroir du son et de la vitesse (coin haut-droit), centré au-dessus de la colonne des outils ;
+     au même endroit sur la grille et pendant le Trajet */
+  .bar .back {
+    position: fixed;
+    top: max(0.75rem, env(safe-area-inset-top));
+    left: calc(max(0.75rem, env(safe-area-inset-left)) + 0.55rem);
+    z-index: 9;
+  }
   .bar .hud-mid {
     justify-self: start;
-    margin-left: 0.6rem;
+    margin-left: 2.4rem; /* après Quitter */
   }
 }
 </style>

@@ -789,6 +789,16 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     }),
   )
 
+  // Sur téléphone et tablette, les arbres ne projettent pas d'ombre : c'était l'essentiel de la passe d'ombre, trop lourde pour eux ; la
+  // tache sombre posée à leur pied reste, ils ne flottent pas. Sur ordinateur, ils gardent leur ombre.
+  const touch = window.matchMedia?.('(pointer: coarse)').matches ?? false
+  if (touch)
+    for (const a of anims)
+      if (a.kind === 'sway')
+      a.g.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) o.castShadow = false
+      })
+
   // Les arbres et autres pièces répétées : un dessin par paquet (même forme, même matériau) au lieu d'un par pièce (voir batching.ts).
   // La fumée est exclue : elle déplace ses propres enfants et change leur opacité.
   const batches = batchGroups(
@@ -901,23 +911,31 @@ export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
   renderer.shadowMap.autoUpdate = true
   const fin = finish(renderer)
   const { draw } = fin
-  let lastScale = 0
+  let lastRatio = 0 // résolution de dessin en place, et taille (mise en page) pour laquelle elle a été choisie
+  let lastW = 0
+  let lastH = 0
   let sized = false // a-t-il déjà eu une vraie taille ? (masqué, il mesure 0)
   let frame = 0
   let lastT = 0
   const gov = makeGovernor() // si l'appareil ne tient pas ses images, on dessine moins fin (voir adaptive.ts)
   const MAX_PIXELS = 4_000_000 // plafond dur : au début de la victoire la grille est encore à taille réelle (9 millions de pixels sur un téléphone)
+  // la résolution qu'il faut pour être net à la taille où le canevas est affiché (il est agrandi ou rétréci par CSS)
+  const wanted = (w: number, h: number): number => {
+    const scale = canvas.getBoundingClientRect().width / w || 1
+    // téléphone et tablette : 2 fois la résolution au plus (au-delà, ça ne se voit pas et ça rame)
+    const cap = window.matchMedia?.('(pointer: coarse)').matches ? 2 : 3
+    const ratio = Math.min(cap, (window.devicePixelRatio || 1) * scale) * gov.scale
+    return Math.min(ratio, Math.sqrt(MAX_PIXELS / (w * h)))
+  }
   const fit = (onSize: (w: number, h: number) => void) => {
     const w = canvas.clientWidth
     const h = canvas.clientHeight
     if (!w || !h) return
     sized = true
-    const scale = canvas.getBoundingClientRect().width / w || 1
-    lastScale = scale
-    // téléphone et tablette : 2 fois la résolution au plus (au-delà, ça ne se voit pas et ça rame)
-    const cap = window.matchMedia?.('(pointer: coarse)').matches ? 2 : 3
-    const ratio = Math.min(cap, (window.devicePixelRatio || 1) * scale) * gov.scale
-    renderer.setPixelRatio(Math.min(ratio, Math.sqrt(MAX_PIXELS / (w * h))))
+    lastRatio = wanted(w, h)
+    lastW = w
+    lastH = h
+    renderer.setPixelRatio(lastRatio)
     renderer.setSize(w, h, false)
     onSize(w, h)
   }
@@ -934,9 +952,12 @@ export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
       if (!sized) return fit(onSize) // jamais une image étirée et floue : la vraie taille dès qu'elle existe
       if (!changed && ++frame % 20 !== 0) return
       const w = canvas.clientWidth
-      if (!w) return
-      const scale = canvas.getBoundingClientRect().width / w
-      if (changed || Math.abs(scale - lastScale) > 0.02 || renderer.domElement.width === 0) fit(onSize)
+      const h = canvas.clientHeight
+      if (!w || !h) return
+      // Changer la résolution réalloue les images du téléphone (une saccade). Pendant que la grille rétrécit à la victoire, il en faut de
+      // moins en moins : on garde celle qu'on a (c'est seulement plus fin que nécessaire). On ne change que s'il en faut nettement PLUS,
+      // si la mise en page change de taille, ou si la résolution adaptative baisse d'un cran.
+      if (changed || w !== lastW || h !== lastH || wanted(w, h) > lastRatio * 1.05 || renderer.domElement.width === 0) fit(onSize)
     },
   }
 }

@@ -2,7 +2,8 @@
 // et derrière les garages l'entrepôt de la collection. Le train « en route » s'avance jusqu'au quai ; les deux autres
 // attendent devant leur garage. Toucher un train le fait rouler (l'ancien recule devant son garage, le nouveau avance) ;
 // toucher un garage ouvre la personnalisation de son train ; toucher l'entrepôt ouvre la collection.
-// Les trains regardent vers la gauche : la locomotive tire vers le quai.
+// Les trains regardent vers la gauche : la locomotive tire vers le quai. Les voies filent vers la gauche bien au-delà de l'écran (le voyage
+// continue) ; les heurtoirs rouges gardent les trains dans l'écran. Une gare, à gauche de l'entrepôt, borde les quais.
 import { reducedMotion } from '../settings'
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
@@ -21,6 +22,7 @@ const W = 14 // largeur du dépôt (cases)
 const GAP = 1.25 // écart entre deux voies
 const GARAGE_X = W - 2.3 // porte des garages (le garage fait 2,2 de long)
 const QUAI_X = 1.1 // où s'arrête la locomotive du train en route
+const FAR_LEFT = -40 // les voies (et le sol) vont jusque-là : bien au-delà du bord gauche de l'écran
 
 export function createDepot(canvas: HTMLCanvasElement, onPick: (p: DepotPick) => void): Depot {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
@@ -51,21 +53,49 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (p: DepotPick) =>
     parent.add(o)
     return o
   }
+  // Un panneau écrit (enseigne sur un toit) : toujours de face pour la caméra, donc lisible dans les deux vues (voir fit).
+  const signs: THREE.Mesh[] = []
+  const sign = (text: string, w: number, h: number, x: number, y: number, z: number, parent: THREE.Object3D, bg = '#7f1d1d', fg = '#fde68a') => {
+    const px = 96
+    const c = document.createElement('canvas')
+    c.width = Math.round((px * w) / h)
+    c.height = px
+    const g2 = c.getContext('2d')!
+    g2.fillStyle = bg
+    g2.fillRect(0, 0, c.width, c.height)
+    g2.strokeStyle = '#fbbf24'
+    g2.lineWidth = 8
+    g2.strokeRect(4, 4, c.width - 8, c.height - 8)
+    g2.fillStyle = fg
+    g2.font = `bold ${Math.round(px * 0.56)}px system-ui, sans-serif`
+    g2.textAlign = 'center'
+    g2.textBaseline = 'middle'
+    g2.fillText(text, c.width / 2, px * 0.54)
+    const tex = new THREE.CanvasTexture(c)
+    tex.anisotropy = 4
+    disposables.push(tex)
+    const m = add(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex }), x, y, z, parent)
+    m.castShadow = m.receiveShadow = false
+    signs.push(m)
+    return m
+  }
 
   // le sol, le ballast, les voies
-  const ground = add(new THREE.PlaneGeometry(W + 30, GAP * 3 + 16).rotateX(-Math.PI / 2), mat('#9fd07f'), W / 2, 0, GAP)
+  const ground = add(new THREE.PlaneGeometry(W + 15 - FAR_LEFT, GAP * 3 + 16).rotateX(-Math.PI / 2), mat('#9fd07f'), (FAR_LEFT + W + 15) / 2, 0, GAP)
   ground.castShadow = false
   const ballast = mat('#b8b0a3'), tie = mat('#7a4e2d'), rail = mat('#9ca3af', { metalness: 0.6, roughness: 0.35 })
   for (let k = 0; k < 3; k++) {
     const z = k * GAP
-    add(new THREE.BoxGeometry(W + 1, 0.03, 0.62), ballast, W / 2 - 0.2, 0.015, z).castShadow = false
-    const ties = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 0.03, 0.46), tie, Math.ceil(W / 0.22))
+    // de FAR_LEFT (hors de l'écran) jusqu'aux garages
+    const len = W + 0.3 - FAR_LEFT
+    add(new THREE.BoxGeometry(len + 0.2, 0.03, 0.62), ballast, FAR_LEFT + len / 2, 0.015, z).castShadow = false
+    const ties = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 0.03, 0.46), tie, Math.ceil(len / 0.22))
     disposables.push(ties.geometry)
     const m = new THREE.Matrix4()
-    for (let i = 0; i < ties.count; i++) ties.setMatrixAt(i, m.makeTranslation(-0.5 + i * 0.22, 0.045, z))
+    for (let i = 0; i < ties.count; i++) ties.setMatrixAt(i, m.makeTranslation(FAR_LEFT + i * 0.22, 0.045, z))
     ties.receiveShadow = true
     scene.add(ties)
-    for (const o of [-0.12, 0.12]) add(new THREE.BoxGeometry(W + 0.8, 0.035, 0.03), rail, W / 2 - 0.3, 0.075, z + o)
+    for (const o of [-0.12, 0.12]) add(new THREE.BoxGeometry(len, 0.035, 0.03), rail, FAR_LEFT + len / 2, 0.075, z + o)
     // heurtoir rouge au bout du quai
     add(new RoundedBoxGeometry(0.12, 0.18, 0.5, 3, 0.03), mat('#dc2626'), QUAI_X - 0.7, 0.12, z)
   }
@@ -112,6 +142,7 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (p: DepotPick) =>
     const tex = new THREE.CanvasTexture(plate)
     disposables.push(tex)
     add(new THREE.CircleGeometry(0.13, 24).rotateY(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: tex }), -0.03, 0.62, 0, g)
+    sign(`TRAIN ${k + 1}`, 1.5, 0.36, d / 2, 1.32, 0, g) // sur le toit
     g.traverse((o) => (o.userData.pick = { kind: 'garage', slot: k }))
     scene.add(g)
     garages.push(g)
@@ -126,25 +157,7 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (p: DepotPick) =>
   add(new THREE.BoxGeometry(1.5, 0.75, 0.02), dark, sw / 2, 0.39, 0.755, store) // la grande porte ouverte
   add(new THREE.BoxGeometry(1.6, 0.06, 0.06), gold, sw / 2, 0.79, 0.77, store)
   for (const x of [0.45, sw - 0.45]) add(new THREE.BoxGeometry(0.5, 0.32, 0.02), mat('#bfe3fa', { metalness: 0.1, roughness: 0.2 }), x, 0.55, 0.755, store)
-  {
-    const sign = document.createElement('canvas')
-    sign.width = 512
-    sign.height = 96
-    const g2 = sign.getContext('2d')!
-    g2.fillStyle = '#7f1d1d'
-    g2.fillRect(0, 0, 512, 96)
-    g2.strokeStyle = '#fbbf24'
-    g2.lineWidth = 8
-    g2.strokeRect(4, 4, 504, 88)
-    g2.fillStyle = '#fde68a'
-    g2.font = 'bold 54px system-ui, sans-serif'
-    g2.textAlign = 'center'
-    g2.textBaseline = 'middle'
-    g2.fillText('COLLECTION', 256, 52)
-    const tex = new THREE.CanvasTexture(sign)
-    disposables.push(tex)
-    add(new THREE.PlaneGeometry(2.0, 0.38), new THREE.MeshBasicMaterial({ map: tex }), sw / 2, 1.08, 0.79, store)
-  }
+  sign('COLLECTION', 2.3, 0.42, sw / 2, 1.62, 0, store)
   // la voie qui entre dans l'entrepôt, et deux wagons qu'on aperçoit dehors
   for (const o of [-0.12, 0.12]) add(new THREE.BoxGeometry(0.03, 0.03, 1.4), rail, sw / 2 + o, 0.06, 1.35, store)
   for (const [id, z] of [['ambre', 1.25], ['vert', 0.6]] as const) {
@@ -156,9 +169,58 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (p: DepotPick) =>
   store.traverse((o) => (o.userData.pick = { kind: 'collection' }))
   scene.add(store)
 
+  // la gare, à gauche de l'entrepôt : face aux quais, derrière la première voie
+  const station = new THREE.Group()
+  station.position.set(QUAI_X + 2.4, 0, -1.75)
+  {
+    const sw2 = 3.4
+    const slate = mat('#64748b')
+    add(new RoundedBoxGeometry(sw2, 0.8, 0.85, 3, 0.04), mat('#f5ead3'), 0, 0.4, 0, station) // le bâtiment, pierre claire
+    add(new THREE.CylinderGeometry(0.5, 0.5, sw2 + 0.1, 3).rotateZ(Math.PI / 2).rotateX(Math.PI / 6).scale(1, 0.42, 1), slate, 0, 0.92, -0.05, station) // le toit d'ardoise
+    // la tour de l'horloge, au milieu, plus haute que le toit
+    add(new RoundedBoxGeometry(0.6, 1.25, 0.6, 3, 0.03), mat('#e7d8b9'), 0, 0.98, 0.05, station)
+    add(new THREE.ConeGeometry(0.46, 0.45, 4).rotateY(Math.PI / 4), slate, 0, 1.83, 0.05, station)
+    // portes et grandes fenêtres côté quais, encadrées d'or
+    for (const x of [-1.3, -0.85, 0.85, 1.3]) {
+      add(new THREE.BoxGeometry(0.32, 0.42, 0.02), mat('#bfe3fa', { metalness: 0.1, roughness: 0.2 }), x, 0.42, 0.43, station)
+      add(new THREE.BoxGeometry(0.36, 0.04, 0.03), gold, x, 0.65, 0.435, station)
+    }
+    add(new THREE.BoxGeometry(0.44, 0.58, 0.02), dark, 0, 0.29, 0.43, station)
+    add(new THREE.BoxGeometry(0.5, 0.05, 0.03), gold, 0, 0.6, 0.44, station)
+    // une marquise fine au-dessus du quai : on voit encore la façade
+    add(new THREE.BoxGeometry(sw2 + 0.3, 0.03, 0.32), mat('#94a3b8', { metalness: 0.3, roughness: 0.5 }), 0, 0.72, 0.62, station)
+    for (const x of [-1.6, 1.6]) add(new THREE.CylinderGeometry(0.02, 0.02, 0.72, 8), mat('#374151'), x, 0.36, 0.76, station)
+    // l'horloge (de face pour la caméra, comme les panneaux) : cadran blanc, aiguilles
+    {
+      const c = document.createElement('canvas')
+      c.width = c.height = 128
+      const g2 = c.getContext('2d')!
+      g2.fillStyle = '#fbbf24'
+      g2.beginPath(); g2.arc(64, 64, 62, 0, Math.PI * 2); g2.fill()
+      g2.fillStyle = '#ffffff'
+      g2.beginPath(); g2.arc(64, 64, 54, 0, Math.PI * 2); g2.fill()
+      g2.strokeStyle = '#1f2937'
+      g2.lineCap = 'round'
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2
+        g2.lineWidth = i % 3 ? 3 : 6
+        g2.beginPath(); g2.moveTo(64 + Math.sin(a) * 44, 64 - Math.cos(a) * 44); g2.lineTo(64 + Math.sin(a) * 52, 64 - Math.cos(a) * 52); g2.stroke()
+      }
+      g2.lineWidth = 7; g2.beginPath(); g2.moveTo(64, 64); g2.lineTo(64 + 24, 64 - 14); g2.stroke() // 10 h 10
+      g2.lineWidth = 5; g2.beginPath(); g2.moveTo(64, 64); g2.lineTo(64 - 30, 64 - 18); g2.stroke()
+      const tex = new THREE.CanvasTexture(c)
+      disposables.push(tex)
+      const clock = add(new THREE.CircleGeometry(0.24, 32), new THREE.MeshBasicMaterial({ map: tex }), 0, 1.3, 0.37, station)
+      clock.castShadow = clock.receiveShadow = false
+      signs.push(clock)
+    }
+    sign('GARE', 1.3, 0.38, 0, 2.3, 0.05, station)
+  }
+  scene.add(station)
+
   // quelques arbres autour du dépôt
   const leaf = mat('#3f9a4a'), trunk = mat('#7a4e2d')
-  for (const [x, z, h] of [[-0.6, -1.4, 0.9], [0.6, -2.1, 1.1], [2.4, -1.6, 0.8], [5.8, -2.3, 1.0], [-0.3, 3.6, 1.0], [3.8, 3.9, 0.8], [9.2, 3.7, 1.1], [13.8, 3.5, 0.9]] as const) {
+  for (const [x, z, h] of [[-0.6, -1.4, 0.9], [0.6, -2.4, 1.1], [5.8, -2.3, 1.0], [-0.3, 3.6, 1.0], [3.8, 3.9, 0.8], [9.2, 3.7, 1.1], [13.8, 3.5, 0.9]] as const) {
     add(new THREE.CylinderGeometry(0.05, 0.07, 0.3, 8), trunk, x, 0.15, z)
     add(new THREE.ConeGeometry(0.32 * h, 0.8 * h, 9), leaf, x, 0.3 + 0.4 * h, z)
   }
@@ -252,6 +314,10 @@ export function createDepot(canvas: HTMLCanvasElement, onPick: (p: DepotPick) =>
     camera.up.set(0, 1, 0)
     camera.lookAt(target)
     camera.updateMatrixWorld()
+    station.visible = !tall // écran en hauteur : la vue part du heurtoir, la gare serait hors champ
+    // les panneaux de face pour la caméra (dans le repère de leur bâtiment, qui peut être tourné)
+    scene.updateMatrixWorld()
+    for (const s of signs) s.parent!.getWorldQuaternion(s.quaternion).invert().multiply(camera.quaternion)
     // le cadre du dépôt, vu par la caméra
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
     for (const x of [box[0], box[1]]) for (const z of [box[2], box[3]]) for (const y of [0, 1.4]) {

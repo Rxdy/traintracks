@@ -27,7 +27,7 @@ html.lock-screen body {
   overscroll-behavior: none;
 }
 html.lock-screen .app {
-  height: 100%;
+  height: calc(100% + env(safe-area-inset-bottom)); /* jusqu'en bas de l'écran, sous la barre d'accueil (voir .app dans App.vue) */
   min-height: 0;
   overflow: hidden;
 }
