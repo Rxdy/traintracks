@@ -25,4 +25,4 @@ export function preloadWorldWhenIdle(): void {
 }
 
 // Durée minimale de l'écran de chargement (ms), pour que la barre se voie arriver au bout ; les tests la mettent à 0.
-export const loadingTiming = { minMs: 600 }
+export const loadingTiming = { minMs: 600, decorMaxMs: 5000 }
