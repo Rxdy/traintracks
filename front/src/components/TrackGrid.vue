@@ -26,6 +26,7 @@ import SceneryLayer from './SceneryLayer.vue'
 import Scenery3D from './Scenery3D.vue'
 import type { LandFrame } from '../scenery/motion'
 import { webglAvailable } from '../decor'
+import { solve } from '../solver'
 import SceneryLife from './SceneryLife.vue'
 import { sound, soundOn } from '../sound/director'
 import { setWheelGuard } from '../noZoom'
@@ -286,17 +287,98 @@ function sceneryMargins(): { x: number; y: number; top?: number; below?: number;
   const below = Math.max(0, (window.innerHeight - decorBottom) / unit + 0.05)
   return { x, y, top, below, dy }
 }
+function makeDecor(path: [number, number][], mg: ReturnType<typeof sceneryMargins>): { scenery: Scenery; route: Route } {
+  const sc = buildScenery(puz.value, path, props.theme, seedOf(puz.value), mg)
+  const horiz = (d: string) => d === 'left' || d === 'right'
+  const sm = sc.margin // marges réelles (avec le complément du haut) : la voie va jusqu'au bord du décor
+  const route = buildRoute(path, puz.value, { entry: horiz(puz.value.entry.dir) ? sm.x : puz.value.entry.dir === 'up' ? sm.y : sm.b, exit: horiz(puz.value.exit.dir) ? sm.x : puz.value.exit.dir === 'up' ? sm.y : sm.b })
+  return { scenery: sc, route }
+}
 function buildDecor(path: [number, number][]): void {
   decorReady.value = false
   sceneLandscape = isLandscape()
   const mg = sceneryMargins()
   glideY.value = mg.dy ?? 0
-  scenery.value = buildScenery(puz.value, path, props.theme, seedOf(puz.value), mg)
+  const p = prepared.value
+  prepared.value = null
+  clearPrepare()
+  if (p && p.path === JSON.stringify(path) && p.landscape === sceneLandscape && covers(p.mg, mg)) {
+    // le décor préparé pendant le Plateau : déjà construit et déjà dessiné une fois, il n'a plus qu'à apparaître (même composant)
+    scenery.value = p.scenery
+    sceneryRoute.value = p.route
+    return
+  }
+  const d = makeDecor(path, mg)
+  scenery.value = d.scenery
   decorId.value++
-  const horiz = (d: string) => d === 'left' || d === 'right'
-  const sm = scenery.value.margin // marges réelles (avec le complément du haut) : la voie va jusqu'au bord du décor
-  sceneryRoute.value = buildRoute(path, puz.value, { entry: horiz(puz.value.entry.dir) ? sm.x : puz.value.entry.dir === 'up' ? sm.y : sm.b, exit: horiz(puz.value.exit.dir) ? sm.x : puz.value.exit.dir === 'up' ? sm.y : sm.b })
+  sceneryRoute.value = d.route
 }
+
+// Décor préparé PENDANT le Plateau : la solution est unique, on connaît donc la voie avant que le joueur la trace. Le décor 3D est construit
+// et dessiné une fois en cachette dès que le navigateur a un moment libre ; à la victoire, si la voie et la forme de l'écran sont les mêmes,
+// il apparaît tout de suite : le premier passage du train ne paie plus la construction ni la compilation des shaders (sinon ça saccade).
+type Margins = ReturnType<typeof sceneryMargins>
+const prepared = ref<{ path: string; mg: Margins; landscape: boolean; scenery: Scenery; route: Route } | null>(null)
+// Le décor préparé convient s'il couvre au moins l'écran voulu à la victoire. La grille peut bouger de quelques pixels entre la
+// préparation et la victoire (un message, un bonus) : la marge sur les côtés change alors d'une case. On prépare donc une case de plus
+// sur les côtés, et on accepte un décor un peu plus grand que nécessaire.
+function covers(a: Margins, b: Margins): boolean {
+  const near = (u = 0, v = 0) => u >= v - 0.05
+  return a.y === b.y && a.x >= b.x && near(a.top, b.top) && near(a.below, b.below) && Math.abs((a.dy ?? 0) - (b.dy ?? 0)) <= 1
+}
+let prepTimer = 0
+let prepIdle = 0
+function clearPrepare(): void {
+  clearTimeout(prepTimer)
+  const cic = (window as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback
+  if (prepIdle && cic) cic(prepIdle)
+  prepTimer = prepIdle = 0
+}
+function prepareDecor(): void {
+  if (solved.value || scenery.value || prepared.value || !use3d.value || !boardEl.value) return
+  const sol = solve(puz.value, 1).solutions[0]
+  if (!sol) return
+  const need = sceneryMargins()
+  const mg = { ...need, x: Math.min(40, need.x + 1) } // une case de plus sur les côtés (voir covers)
+  const d = makeDecor(sol, mg)
+  prepared.value = { path: JSON.stringify(sol), mg, landscape: isLandscape(), scenery: d.scenery, route: d.route }
+}
+function schedulePrepare(delay = 900): void {
+  clearPrepare()
+  if (solved.value || !use3d.value) return
+  // un peu après l'arrivée du Plateau, au premier moment libre du navigateur (pas au milieu d'un geste)
+  prepTimer = window.setTimeout(() => {
+    const ric = (window as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback
+    if (ric) prepIdle = ric(prepareDecor, { timeout: 2500 })
+    else prepareDecor()
+  }, delay)
+}
+// Rail révélé par une aide : la préparation est refaite. Écran tourné ou redimensionné : seulement si le décor attendu a changé
+// (sur iPhone, Safari redimensionne la page quand ses barres se replient ; on ne reconstruit pas tout pour rien).
+function redoPrepare(): void {
+  if (solved.value) return
+  prepared.value = null
+  schedulePrepare(600)
+}
+let resizeTimer = 0
+function onResizePrepare(): void {
+  clearTimeout(resizeTimer)
+  resizeTimer = window.setTimeout(() => {
+    const p = prepared.value
+    if (solved.value || (p && p.landscape === isLandscape() && covers(p.mg, sceneryMargins()))) return
+    redoPrepare()
+  }, 900)
+}
+watch(revealed, redoPrepare)
+onMounted(() => {
+  schedulePrepare()
+  window.addEventListener('resize', onResizePrepare)
+})
+onUnmounted(() => {
+  clearPrepare()
+  clearTimeout(resizeTimer)
+  window.removeEventListener('resize', onResizePrepare)
+})
 function revealScenery(): void {
   const path = tracePath(connections.value, puz.value)
   if (!path) {
@@ -690,7 +772,17 @@ onMounted(() => {
     >
       <!-- Décor : en 3D si le joueur le veut et que l'appareil sait le faire ; sinon (ou en cas d'échec) le décor classique en SVG. -->
       <Transition name="decor">
-        <Scenery3D v-if="scenery && use3d" :key="'3d-' + decorId" :scenery="scenery" :route="sceneryRoute" :train="route && trainS >= 0 ? { route, s: trainS } : null" :life="life" @fail="failed3d = true" @ready="decorReady = true" />
+        <Scenery3D
+          v-if="(scenery || prepared) && use3d"
+          :key="'3d-' + decorId"
+          :scenery="scenery ?? prepared!.scenery"
+          :route="scenery ? sceneryRoute : prepared!.route"
+          :held="!scenery"
+          :train="route && trainS >= 0 ? { route, s: trainS } : null"
+          :life="life"
+          @fail="failed3d = true"
+          @ready="decorReady = true"
+        />
         <SceneryLayer v-else-if="scenery" :scenery="scenery" :route="sceneryRoute" />
       </Transition>
 
