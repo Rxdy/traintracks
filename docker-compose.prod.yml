@@ -52,7 +52,7 @@ services:
         aliases: [traintracks-api] # nom unique pour le nginx du front (« api » existe ailleurs sur le Pi)
 
   db:
-    image: postgres:17-alpine
+    image: postgres:19-alpine
     container_name: traintracks-db-prod
     restart: unless-stopped
     mem_limit: 256m
