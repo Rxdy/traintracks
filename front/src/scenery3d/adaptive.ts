@@ -1,10 +1,10 @@
 // Résolution adaptative du décor 3D : si l'appareil n'arrive pas à tenir ses images, on dessine un cran moins fin ; s'il s'ennuie, on remonte.
 //
 // On ne peut pas savoir à l'avance ce que vaut le processeur graphique d'un téléphone : on le mesure. Le décor est dessiné par fenêtres de
-// `WINDOW` images ; si plus de 60 % d'entre elles ont duré plus de 24 ms (moins de ~40 images par seconde), on baisse d'un cran. On ne remonte
+// `WINDOW` images ; si plus de 75 % d'entre elles ont duré plus de 33 ms (moins de 30 images par seconde), on baisse d'un cran. On ne remonte
 // qu'après plusieurs fenêtres entièrement fluides, et une seule fois : si la remontée ralentit de nouveau, on garde le cran bas (pas de va-et-vient).
-export const STEPS = [1, 0.8, 0.65, 0.5] as const // multiplicateur de la résolution de dessin
-const SLOW_MS = 24
+export const STEPS = [1, 0.8, 0.65] as const // multiplicateur de la résolution de dessin (plus bas, c'est trop flou sur un téléphone)
+const SLOW_MS = 33 // moins de 30 images par seconde
 const WINDOW = 40
 const WARM_UP = 90 // les premières images (compilation des shaders, arrivée du décor) ne comptent pas
 const CALM_WINDOWS = 5
@@ -37,7 +37,7 @@ export function makeGovernor() {
       const bad = slow / n
       n = 0
       slow = 0
-      if (bad > 0.6 && step < STEPS.length - 1) {
+      if (bad > 0.75 && step < STEPS.length - 1) {
         step++
         if (raised) locked = true
         calm = 0

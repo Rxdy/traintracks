@@ -15,6 +15,7 @@ import { themeForLevel } from '../scenery'
 import { sound } from '../sound/director'
 import LevelLoading from '../components/LevelLoading.vue'
 import { loadingTiming, preloadWorld, preloadWorldWhenIdle } from '../preload'
+import { webglAvailable } from '../decor'
 
 // Le Voyage : page principale. On ne montre que le niveau en cours (pas de
 // liste, pas de taille de grille) et un gros bouton pour jouer.
@@ -84,8 +85,19 @@ watch(levelFinished, (v) => {
 // Écran de chargement : toujours affiché entre « Jouer » et la grille. Le niveau (serveur) et le décor 3D (fichier) arrivent ensemble ;
 // si tout est déjà prêt, la barre se remplit vite. Durée minimale courte (loadingTiming.minMs) pour qu'elle se voie arriver au bout.
 const showLoading = ref(false)
-const loadSteps = ref({ level: false, scenery: false })
-const loadProgress = computed(() => (Number(loadSteps.value.level) + Number(loadSteps.value.scenery)) / 2)
+const loadSteps = ref({ level: false, scenery: false, decor: false })
+const loadProgress = computed(() => (Number(loadSteps.value.level) + Number(loadSteps.value.scenery) + Number(loadSteps.value.decor)) / 3)
+// Le décor du Trajet se prépare SOUS l'écran de chargement (la grille y est déjà posée, cachée) : on attend qu'il soit prêt, 5 s au plus.
+let decorDone: (() => void) | null = null
+function onPrepared(): void {
+  loadSteps.value.decor = true
+  decorDone?.()
+}
+const decorPrepared = (maxMs: number): Promise<void> =>
+  new Promise((done) => {
+    const t = window.setTimeout(() => ((decorDone = null), done()), maxMs)
+    decorDone = () => (clearTimeout(t), (decorDone = null), done())
+  })
 onMounted(preloadWorldWhenIdle) // à l'accueil, le décor se charge pendant que le joueur lit le menu
 // En partie dès l'écran de chargement : plus de menu, et la page ne défile plus (App.vue).
 watch([current, showLoading], ([c, l]) => emit('playing', c !== null || l), { immediate: true })
@@ -93,7 +105,7 @@ watch([current, showLoading], ([c, l]) => emit('playing', c !== null || l), { im
 async function play(): Promise<void> {
   loading.value = true
   loadError.value = ''
-  loadSteps.value = { level: false, scenery: false }
+  loadSteps.value = { level: false, scenery: false, decor: false }
   showLoading.value = true
   const minimum = new Promise<void>((done) => window.setTimeout(done, loadingTiming.minMs))
   const [r] = await Promise.all([
@@ -101,8 +113,10 @@ async function play(): Promise<void> {
     preloadWorld().then(() => (loadSteps.value.scenery = true)),
     minimum,
   ])
-  showLoading.value = false
-  loading.value = false
+  if (!r || 'done' in r) {
+    showLoading.value = false
+    loading.value = false
+  }
   if (!r) {
     loadError.value = 'Serveur injoignable : vérifie ta connexion.'
     return
@@ -120,7 +134,17 @@ async function play(): Promise<void> {
   trainRunning.value = false
   earned.value = null
   officialMs.value = null
-  current.value = r.level
+  // la grille se pose sous l'écran de chargement, qui reste affiché le temps que le décor du Trajet se prépare (sans 3D : rien à préparer)
+  if (webglAvailable()) {
+    const ready = decorPrepared(loadingTiming.decorMaxMs)
+    current.value = r.level
+    await ready
+    showLoading.value = false
+  } else {
+    showLoading.value = false
+    current.value = r.level
+  }
+  loading.value = false
   void refreshWallet() // une aide a pu se débloquer en démarrant ce niveau
 }
 
@@ -162,7 +186,7 @@ function quit(): void {
     <LevelLoading v-if="showLoading" :level="target" :theme="themeForLevel(target)" :progress="loadProgress" />
 
     <!-- Accueil du Voyage -->
-    <div v-else-if="!current" class="home">
+    <div v-if="!current && !showLoading" class="home">
       <div class="side">
         <button v-for="c in leftCubes" :key="c.id" type="button" class="mini" :data-test="'nav-' + c.id" :disabled="isLocked(c.id)" :title="isLocked(c.id) ? 'Connecte-toi (cube Compte) pour y accéder' : undefined" @click="emit('navigate', c.id)">
           <span class="ico" aria-hidden="true"><MenuIcon :name="c.id" /></span>
@@ -230,6 +254,8 @@ function quit(): void {
             @finish="levelFinished = true"
             @train="trainRunning = $event"
             :initial="{ givens: resume.reveals, crosses: resume.crosses }"
+            :eager="showLoading"
+            @prepared="onPrepared"
             :picking-line="pickingLine"
             @pick-line="(axis, index) => aidBar?.onPickLine(axis, index)"
             @pick="(r, c) => aidBar?.onPick(r, c)"

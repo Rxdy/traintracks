@@ -58,8 +58,10 @@ const props = defineProps<{
   locked?: boolean
   // Pouvoir « Une ligne » en attente : les compteurs se touchent pour choisir la ligne ou la colonne (événement pickLine).
   pickingLine?: boolean
+  // Vrai : la grille est montée sous l'écran de chargement ; le décor du Trajet se prépare tout de suite (événement `prepared`).
+  eager?: boolean
 }>()
-const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void; (e: 'train', running: boolean): void; (e: 'pickLine', axis: 'row' | 'col', index: number): void }>()
+const emit = defineEmits<{ (e: 'solved', ms: number): void; (e: 'pick', row: number, col: number): void; (e: 'begin'): void; (e: 'finish'): void; (e: 'train', running: boolean): void; (e: 'pickLine', axis: 'row' | 'col', index: number): void; (e: 'prepared'): void }>()
 
 // Puzzle « effectif » : le puzzle + les rails révélés par les aides, qui se comportent comme des rails imposés
 // (verrouillés, dans le bon sens).
@@ -334,10 +336,13 @@ function clearPrepare(): void {
   if (prepIdle && cic) cic(prepIdle)
   prepTimer = prepIdle = 0
 }
+// `prepared` est émis quand le décor est prêt (dessiné une fois en cachette), ou tout de suite s'il ne peut pas l'être : l'écran
+// de chargement l'attend (voir JourneyView), il ne doit jamais attendre pour rien.
 function prepareDecor(): void {
-  if (solved.value || scenery.value || prepared.value || !use3d.value || !boardEl.value) return
+  if (solved.value || scenery.value || prepared.value) return
+  if (!use3d.value || !boardEl.value) return emit('prepared')
   const sol = solve(puz.value, 1).solutions[0]
-  if (!sol) return
+  if (!sol) return emit('prepared')
   const need = sceneryMargins()
   const mg = { ...need, x: Math.min(40, need.x + 1) } // une case de plus sur les côtés (voir covers)
   const d = makeDecor(sol, mg)
@@ -371,7 +376,9 @@ function onResizePrepare(): void {
 }
 watch(revealed, redoPrepare)
 onMounted(() => {
-  schedulePrepare()
+  // sous l'écran de chargement (eager) : tout de suite, le joueur ne voit pas encore la grille ; sinon au premier moment libre
+  if (props.eager) void nextTick(prepareDecor)
+  else schedulePrepare()
   window.addEventListener('resize', onResizePrepare)
 })
 onUnmounted(() => {
@@ -780,8 +787,9 @@ onMounted(() => {
           :held="!scenery"
           :train="route && trainS >= 0 ? { route, s: trainS } : null"
           :life="life"
-          @fail="failed3d = true"
+          @fail="(failed3d = true), emit('prepared')"
           @ready="decorReady = true"
+          @warm="emit('prepared')"
         />
         <SceneryLayer v-else-if="scenery" :scenery="scenery" :route="sceneryRoute" />
       </Transition>
