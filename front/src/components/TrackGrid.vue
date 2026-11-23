@@ -1130,13 +1130,13 @@ onMounted(() => {
 /* Téléphone couché (peu de hauteur) : la grille prend toute la hauteur, les outils passent en colonne sur le bord gauche. */
 @media (min-aspect-ratio: 1/1) and (max-height: 560px) {
   .board {
-    --w: calc(100dvh - 4.1rem); /* sous la barre du haut, qui flotte (JourneyView) */
+    --w: calc(100dvh - 4.1rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); /* sous la barre du haut, qui flotte (JourneyView) */
   }
   .toolbar {
     position: fixed;
-    left: 0.75rem;
-    top: 4.25rem; /* sous Quitter */
-    bottom: 0.75rem;
+    left: max(0.75rem, env(safe-area-inset-left)); /* hors de l'encoche */
+    top: calc(4.25rem + env(safe-area-inset-top)); /* sous Quitter */
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: center;

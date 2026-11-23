@@ -12,6 +12,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { PAL, rng, type Scenery, type Tile } from '../scenery'
 import { riverD, sample } from '../scenery/motion'
 import type { Pal } from '../scenery/themes'
+import { batchGroups } from './batching'
 import { bridgesWithRails } from './bridgeRails'
 import { buildForest, buildMassif, buildVillage, components } from './clusters'
 import { revealDelay } from '../scenery/reveal'
@@ -785,6 +786,13 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     }),
   )
 
+  // Les arbres et autres pièces répétées : un dessin par paquet (même forme, même matériau) au lieu d'un par pièce (voir batching.ts).
+  // La fumée est exclue : elle déplace ses propres enfants et change leur opacité.
+  const batches = batchGroups(
+    world,
+    anims.filter((a) => a.kind !== 'smoke').map((a) => a.g),
+  )
+
   await groundReady
 
   // une seule boucle d'animation pour le monde ; chaque vue y dessine à son tour
@@ -800,6 +808,7 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     const dt = Math.min(0.1, (now - last) / 1000)
     last = now
     tickAnims(anims, t, dt, still)
+    batches.update()
     waveU.value = 1e9 // le sol peint est là tout de suite : seuls les éléments posés dessus apparaissent (au hasard)
     if (shineTex && !still) shineTex.offset.y -= dt * 0.35
     views.forEach((draw) => draw(t, dt))

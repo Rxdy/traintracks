@@ -17,11 +17,11 @@ async function onClick(): Promise<void> {
 
 <template>
   <div v-if="canPropose" class="install" data-test="install">
-    <button type="button" class="btn btn--ghost btn--small" data-test="install-btn" @click="onClick">
+    <button type="button" class="btn btn--ghost btn--small" data-test="install-btn" aria-label="Installer l'appli" @click="onClick">
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
         <path d="M12 3v11m0 0l-4-4m4 4l4-4M5 20h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
-      Installer
+      <span class="label">Installer</span>
     </button>
     <p v-if="help" class="help" data-test="install-help">
       Sur iPhone / iPad : touche <b>Partager</b> <span aria-hidden="true">⬆️</span> puis
@@ -33,6 +33,12 @@ async function onClick(): Promise<void> {
 <style scoped>
 .install {
   position: relative;
+}
+/* téléphone debout : l'icône seule, pour laisser la place au titre */
+@media (max-width: 26rem) {
+  .label {
+    display: none;
+  }
 }
 .help {
   position: absolute;
