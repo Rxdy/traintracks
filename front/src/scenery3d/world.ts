@@ -12,6 +12,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { PAL, rng, type Scenery, type Tile } from '../scenery'
 import { riverD, sample } from '../scenery/motion'
 import type { Pal } from '../scenery/themes'
+import { makeGovernor } from './adaptive'
 import { batchGroups } from './batching'
 import { bridgesWithRails } from './bridgeRails'
 import { buildForest, buildMassif, buildVillage, components } from './clusters'
@@ -892,6 +893,9 @@ export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
   const { draw } = fin
   let lastScale = 0
   let frame = 0
+  let lastT = 0
+  const gov = makeGovernor() // si l'appareil ne tient pas ses images, on dessine moins fin (voir adaptive.ts)
+  const MAX_PIXELS = 4_000_000 // plafond dur : au début de la victoire la grille est encore à taille réelle (9 millions de pixels sur un téléphone)
   const fit = (onSize: (w: number, h: number) => void) => {
     const w = canvas.clientWidth
     const h = canvas.clientHeight
@@ -900,7 +904,8 @@ export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
     lastScale = scale
     // téléphone et tablette : 2 fois la résolution au plus (au-delà, ça ne se voit pas et ça rame)
     const cap = window.matchMedia?.('(pointer: coarse)').matches ? 2 : 3
-    renderer.setPixelRatio(Math.min(cap, (window.devicePixelRatio || 1) * scale))
+    const ratio = Math.min(cap, (window.devicePixelRatio || 1) * scale) * gov.scale
+    renderer.setPixelRatio(Math.min(ratio, Math.sqrt(MAX_PIXELS / (w * h))))
     renderer.setSize(w, h, false)
     onSize(w, h)
   }
@@ -911,11 +916,14 @@ export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
     fit,
     // à appeler à chaque image : se recale si la taille à l'écran a changé (agrandissement CSS animé)
     check(onSize: (w: number, h: number) => void) {
-      if (++frame % 20 !== 0) return
+      const now = performance.now()
+      const changed = gov.frame(lastT ? now - lastT : 0) // la durée de l'image qui vient de finir
+      lastT = now
+      if (!changed && ++frame % 20 !== 0) return
       const w = canvas.clientWidth
       if (!w) return
       const scale = canvas.getBoundingClientRect().width / w
-      if (Math.abs(scale - lastScale) > 0.02 || renderer.domElement.width === 0) fit(onSize)
+      if (changed || Math.abs(scale - lastScale) > 0.02 || renderer.domElement.width === 0) fit(onSize)
     },
   }
 }

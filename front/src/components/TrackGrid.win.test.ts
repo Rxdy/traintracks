@@ -355,17 +355,15 @@ describe('TrackGrid : accélérer le train', () => {
     await w.vm.$nextTick()
   }
 
-  it('la vitesse du train a trois crans, le cran actif est marqué, et le choix change la vitesse', async () => {
+  it('la vitesse du train a deux crans (lent, normal), le cran actif est marqué, et le choix change la vitesse', async () => {
     const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
     expect(w.find('[data-test=speed]').exists()).toBe(false) // pas avant la victoire
     await tracer(w)
     const vitesse = () => w.findComponent(TrainRun).props('speed') as number
     expect(w.get('[data-test=speed-normal]').attributes('aria-pressed')).toBe('true')
     const normale = vitesse()
-    await w.get('[data-test=speed-fast]').trigger('click')
-    expect(w.get('[data-test=speed-fast]').attributes('aria-pressed')).toBe('true')
-    expect(w.get('[data-test=speed-normal]').attributes('aria-pressed')).toBe('false')
-    expect(vitesse()).toBeGreaterThan(normale)
+    expect(w.findAll('[data-test^=speed-]')).toHaveLength(2) // plus de cran « rapide »
+    expect(w.find('[data-test=speed-fast]').exists()).toBe(false)
     await w.get('[data-test=speed-slow]').trigger('click')
     expect(w.get('[data-test=speed-slow]').attributes('aria-pressed')).toBe('true')
     expect(vitesse()).toBeLessThan(normale)
@@ -374,7 +372,7 @@ describe('TrackGrid : accélérer le train', () => {
     w.unmount()
   })
 
-  it('par défaut, le train roule au cran du milieu (4,5 cases par seconde)', async () => {
+  it('par défaut, le train roule au cran « normal » (4,5 cases par seconde)', async () => {
     const w = mount(TrackGrid, { props: { puzzle: samplePuzzle }, attachTo: document.body })
     await tracer(w)
     expect(w.findComponent(TrainRun).props('speed')).toBe(4.5)

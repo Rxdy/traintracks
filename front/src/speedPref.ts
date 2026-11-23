@@ -4,7 +4,7 @@ import type { Speed } from './components/SpeedControl.vue'
 // Le cran de vitesse du train choisi par le joueur : gardé dans le navigateur, d'un niveau et d'une partie à l'autre.
 // « normal » tant qu'il n'a rien choisi. Le stockage peut être absent ou refusé (navigation privée) : on s'en passe.
 const KEY = 'traintracks.vitesse'
-const VALID: Speed[] = ['slow', 'normal', 'fast']
+const VALID: Speed[] = ['slow', 'normal'] // un ancien choix « rapide » (il a existé) n'est plus valide : on retombe sur « normal »
 function load(): Speed {
   try {
     const v = localStorage.getItem(KEY)
