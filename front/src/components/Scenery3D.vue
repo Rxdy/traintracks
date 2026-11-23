@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reducedMotion } from '../settings'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { Scenery } from '../scenery'
 import { pointAt, type Route } from '../trainRoute'
 import { carLength, carOffsets } from '../trainStyle'
@@ -13,7 +13,10 @@ import type { LandFrame } from '../scenery/motion'
 // Vue du dessus calée sur les cases. Three.js n'est chargé qu'ici, à la première victoire (fichier à part).
 // En cas d'échec (pas de WebGL, chargement raté), on prévient le parent, qui remet le décor classique.
 // `train` : la voie suivie et la position de la locomotive (cases) ; le train roule DANS la scène 3D, les arbres devant la voie le cachent.
-const props = defineProps<{ scenery: Scenery; route: Route | null; train?: { route: Route; s: number } | null; life?: LandFrame | null }>()
+// `held` : décor PRÉPARÉ pendant le Plateau (la voie est connue d'avance, la solution est unique). Il est construit et dessiné une fois,
+// caché : la construction des milliers d'objets, l'envoi des textures et la compilation des shaders (très lente sur iPhone) ne tombent
+// plus au premier passage du train. Il attend en pause ; quand `held` repasse à faux (la victoire), il apparaît et s'anime.
+const props = defineProps<{ scenery: Scenery; route: Route | null; train?: { route: Route; s: number } | null; life?: LandFrame | null; held?: boolean }>()
 const emit = defineEmits<{ (e: 'fail'): void; (e: 'ready'): void }>()
 
 const box = computed(() => {
@@ -26,7 +29,14 @@ const box = computed(() => {
 const canvas = ref<HTMLCanvasElement | null>(null)
 const ready = ref(false)
 let stop: (() => void) | null = null
+let release: (() => void) | null = null
 let gone = false
+watch(
+  () => props.held,
+  (h) => {
+    if (!h) release?.()
+  },
+)
 onMounted(async () => {
   const sc = props.scenery
   try {
@@ -34,6 +44,7 @@ onMounted(async () => {
     if (gone || !canvas.value) return
     const world = await acquireWorld(sc, props.route)
     if (gone) return releaseWorld(sc)
+    if (props.held) world.hold(true)
     const r = makeRenderer(canvas.value)
     const top = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 60)
     top.up.set(0, 0, -1)
@@ -230,6 +241,31 @@ onMounted(async () => {
     // `ready` (le décor apparaît en fondu, les rails des cases s'effacent) seulement après la PREMIÈRE image : la compilation
     // des shaders bloque le navigateur ~0,2 à 0,5 s, et elle ne doit pas tomber au milieu du fondu.
     ready.value = false
+    release = () => {
+      release = null
+      r.fit(onSize) // préparé caché (taille nulle) : la vraie taille, avant la première image visible
+      world.hold(false)
+    }
+    if (props.held) {
+      // une image d'échauffement, cachée : shaders compilés et textures envoyées maintenant. Le train (d'habitude invisible ici), une voiture
+      // et un animal témoins y sont : ils n'arrivent que pendant le Trajet et leurs matériaux ont des variantes que le décor n'a pas.
+      const probe = new THREE.Group()
+      part(probe, 0.1, 0.1, 0.1, '#ffffff', 0, 0)
+      const kind = [...ANIMALS_3D][0]
+      const critter = kind ? makeAnimal(kind, snow, 0) : null
+      if (critter) probe.add(critter.group)
+      // caché, le canevas n'a pas de taille : on cadre la caméra sur le décor (mêmes proportions), sinon presque tout serait hors champ
+      // et resterait à compiler ; témoins et train au milieu, dans le champ de la caméra comme dans celui de l'ombre
+      onSize(sc.cols, sc.frame.visibleRows)
+      probe.position.set(sc.cols / 2, 0, sc.rows / 2)
+      train.position.set(sc.cols / 2, 0, sc.rows / 2)
+      const unProbe = world.add(probe)
+      train.visible = true
+      r.draw(world.scene, top)
+      train.visible = false
+      train.position.set(0, 0, 0)
+      unProbe()
+    } else release()
   } catch {
     if (!gone) emit('fail')
   }
@@ -241,7 +277,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <canvas ref="canvas" class="scenery3d" :class="{ ready }" :style="box" data-test="scenery-3d" aria-hidden="true" />
+  <canvas ref="canvas" class="scenery3d" :class="{ ready, held }" :style="box" data-test="scenery-3d" aria-hidden="true" />
 </template>
 
 <style scoped>
@@ -254,5 +290,9 @@ onUnmounted(() => {
 }
 .scenery3d.ready {
   opacity: 1;
+}
+/* préparé pendant le Plateau : ne prend aucune place (il déborderait de la grille, qui n'a pas encore rétréci) */
+.scenery3d.held {
+  display: none;
 }
 </style>

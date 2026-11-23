@@ -588,6 +588,8 @@ export interface World {
   addView(draw: (t: number, dt: number) => void): () => void
   /** Pose un objet dans le monde (repère des cases, vue cavalière comprise) ; renvoie de quoi le retirer. */
   add(o: THREE.Object3D): () => void
+  /** En pause (monde préparé pendant le Plateau) : rien n'est animé ni dessiné. À la reprise, l'apparition du décor part de zéro. */
+  hold(on: boolean): void
 }
 
 async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { dispose(): void }> {
@@ -799,12 +801,13 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
   // une seule boucle d'animation pour le monde ; chaque vue y dessine à son tour
   const views = new Set<(t: number, dt: number) => void>()
   const still = reducedMotion()
-  const t0 = performance.now()
+  let t0 = performance.now()
   let raf = 0
   let last = t0
+  let held = false
   const loop = (now: number) => {
     raf = requestAnimationFrame(loop)
-    if (document.hidden) return
+    if (document.hidden || held) return
     const t = now - t0
     const dt = Math.min(0.1, (now - last) / 1000)
     last = now
@@ -826,6 +829,13 @@ async function makeWorld(sc: Scenery, rails: Route | null): Promise<World & { di
     add(o) {
       world.add(o)
       return () => world.remove(o)
+    },
+    hold(on) {
+      if (held && !on) {
+        t0 = performance.now() // les arbres poussent maintenant, à la victoire, pas pendant la préparation
+        last = t0
+      }
+      held = on
     },
     dispose() {
       cancelAnimationFrame(raf)
