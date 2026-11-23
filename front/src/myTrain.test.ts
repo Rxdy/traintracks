@@ -79,7 +79,8 @@ describe('Mon train : dépôt, personnalisation, collection', () => {
     expect(w.find('[data-test=coll-bleu]').attributes('disabled')).toBeDefined()
     expect(w.find('[data-test=train-left]').text()).toBe(`Encore ${COLLECTION_TOTAL - 4} wagons à gagner`)
     await w.find('[data-test=coll-ambre]').trigger('click')
-    expect(w.find('[data-test=wagon-big]').text()).toContain('Bagages')
+    expect(document.querySelector('[data-test=wagon-big]')!.textContent).toContain('Bagages') // posé à la racine de la page
+    w.unmount()
   })
 
   it('personnaliser un train : le train et seulement les wagons qu\'on a', async () => {

@@ -51,14 +51,16 @@ const big = computed(() => (shown.value ? WAGON_DEFS.find((w) => w.id === shown.
       </div>
     </div>
 
-    <!-- un wagon en grand -->
-    <div v-if="big" class="back" data-test="wagon-big" @click="shown = null">
-      <figure class="big card" @click.stop>
-        <WagonThumb :id="big.id" />
-        <figcaption><strong>{{ big.name }}</strong> · {{ myTrain.owned[big.id] ?? 0 }}/{{ MAX_PER_WAGON }}</figcaption>
-        <button type="button" class="btn btn--ghost btn--small" data-test="wagon-big-close" @click="shown = null">Fermer</button>
-      </figure>
-    </div>
+    <!-- un wagon en grand : posé à la racine de la page, au-dessus de tout (l'en-tête passait par-dessus) -->
+    <Teleport to="body">
+      <div v-if="big" class="back" data-test="wagon-big" @click="shown = null">
+        <figure class="big card" @click.stop>
+          <WagonThumb :id="big.id" />
+          <figcaption><strong>{{ big.name }}</strong> · {{ myTrain.owned[big.id] ?? 0 }}/{{ MAX_PER_WAGON }}</figcaption>
+          <button type="button" class="btn btn--ghost btn--small" data-test="wagon-big-close" @click="shown = null">Fermer</button>
+        </figure>
+      </div>
+    </Teleport>
   </section>
 </template>
 
@@ -174,7 +176,8 @@ const big = computed(() => (shown.value ? WAGON_DEFS.find((w) => w.id === shown.
 }
 .big {
   margin: 0;
-  width: min(36rem, 90vw);
+  /* l'image est en 8/5 : sa largeur suit aussi la HAUTEUR de l'écran (téléphone couché), pour que l'image, le nom et Fermer tiennent */
+  width: min(36rem, 90vw, calc((100dvh - 8.5rem) * 8 / 5));
   padding: 1rem;
   display: flex;
   flex-direction: column;

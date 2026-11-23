@@ -98,12 +98,20 @@ function tapCollection(id: string): void {
 // --- glisser-déposer (souris et doigt) ---------------------------------------------------------------------
 type Source = { kind: 'car'; index: number; id: string } | { kind: 'coll'; id: string }
 const drag = ref<{ src: Source; x: number; y: number; over: string | null } | null>(null)
-let start: { src: Source; x: number; y: number; pointer: number } | null = null
+let start: { src: Source; x: number; y: number; pointer: number; touch: boolean; t: number } | null = null
+// Au doigt, dans la liste de tes wagons : un geste vertical FAIT DÉFILER la liste. Pour glisser un wagon, on part sur le côté, ou on le
+// tient un instant (HOLD_MS) avant de le déplacer. À la souris, rien ne change : on glisse tout de suite.
+const HOLD_MS = 200
+const listGesture = (s: NonNullable<typeof start>): boolean => s.touch && s.src.kind === 'coll'
 let swallowClick = false
 
 function down(e: PointerEvent, src: Source): void {
   if (e.button !== 0) return
-  start = { src, x: e.clientX, y: e.clientY, pointer: e.pointerId }
+  start = { src, x: e.clientX, y: e.clientY, pointer: e.pointerId, touch: e.pointerType === 'touch', t: performance.now() }
+}
+// tenu un instant puis déplacé : c'est un glisser, la liste ne doit pas défiler en même temps
+function onTouchMove(e: TouchEvent): void {
+  if (drag.value || (start && listGesture(start) && performance.now() - start.t >= HOLD_MS)) e.preventDefault()
 }
 function targetAt(x: number, y: number): string | null {
   const el = document.elementFromPoint(x, y)?.closest('[data-drop]') as HTMLElement | null
@@ -112,7 +120,14 @@ function targetAt(x: number, y: number): string | null {
 function move(e: PointerEvent): void {
   if (!start || e.pointerId !== start.pointer) return
   if (!drag.value) {
-    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) < 8) return
+    const dx = e.clientX - start.x
+    const dy = e.clientY - start.y
+    if (Math.hypot(dx, dy) < 8) return
+    // dans la liste, au doigt : vertical et pas tenu = on fait défiler, ce n'est pas un glisser
+    if (listGesture(start) && performance.now() - start.t < HOLD_MS && Math.abs(dx) <= Math.abs(dy)) {
+      start = null
+      return
+    }
     drag.value = { src: start.src, x: e.clientX, y: e.clientY, over: null }
     picked.value = null
   }
@@ -155,11 +170,13 @@ const click = (f: () => void) => () => {
 }
 onMounted(() => {
   window.addEventListener('pointermove', move, { passive: false })
+  window.addEventListener('touchmove', onTouchMove, { passive: false })
   window.addEventListener('pointerup', up)
   window.addEventListener('pointercancel', up)
 })
 onUnmounted(() => {
   window.removeEventListener('pointermove', move)
+  window.removeEventListener('touchmove', onTouchMove)
   window.removeEventListener('pointerup', up)
   window.removeEventListener('pointercancel', up)
 })
@@ -456,7 +473,7 @@ const dragId = computed(() => drag.value?.src.id ?? null)
   background: #f8fafc;
   cursor: grab;
   font: inherit;
-  touch-action: none;
+  touch-action: pan-y; /* au doigt, la liste défile ; le glisser part sur le côté ou après un instant tenu (voir HOLD_MS) */
 }
 .item.spent {
   opacity: 0.55;
@@ -499,5 +516,45 @@ const dragId = computed(() => drag.value?.src.id ?? null)
   transform: translate(-50%, -60%) rotate(-4deg);
   pointer-events: none;
   filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.35));
+}
+/* Téléphone couché (peu de hauteur) : la scène ne prend que la bande de la voie (le rail remonte sous l'en-tête), tes wagons ont le reste
+   de l'écran et y défilent. */
+@media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  .train-page {
+    position: relative;
+    gap: 0.4rem;
+  }
+  /* « en route » se pose dans le coin de la scène au lieu de prendre une ligne au-dessus */
+  .head {
+    position: absolute;
+    top: 0.35rem;
+    left: 0.5rem;
+    z-index: 2;
+    min-height: 0;
+  }
+  .atelier {
+    flex: none;
+    height: clamp(5rem, 24dvh, 8rem);
+    min-height: 0;
+    max-height: none;
+  }
+  .hint {
+    padding: 0.25rem 0.7rem;
+    font-size: 0.78rem;
+  }
+  .below {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .collection {
+    padding: 0.5rem 0.8rem 0.8rem;
+  }
+  .collection h2 {
+    margin-bottom: 0.4rem;
+    font-size: 1rem;
+  }
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(6.2rem, 1fr));
+  }
 }
 </style>

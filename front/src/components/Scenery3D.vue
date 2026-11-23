@@ -250,13 +250,24 @@ onMounted(async () => {
       world.hold(false)
     }
     if (props.held) {
-      // une image d'échauffement, cachée : shaders compilés et textures envoyées maintenant. Le train (d'habitude invisible ici), une voiture
-      // et un animal témoins y sont : ils n'arrivent que pendant le Trajet et leurs matériaux ont des variantes que le décor n'a pas.
+      // une image d'échauffement, cachée : shaders compilés et textures envoyées maintenant. Le train (d'habitude invisible ici), sa fumée,
+      // une voiture et tous les animaux y sont : ils n'arrivent que pendant le Trajet et leurs matériaux ont des variantes que le décor n'a
+      // pas (transparence, ombres) ; sinon leur compilation tombait au départ du train (une saccade de plus d'une seconde sur téléphone).
       const probe = new THREE.Group()
       part(probe, 0.1, 0.1, 0.1, '#ffffff', 0, 0)
-      const kind = [...ANIMALS_3D][0]
-      const critter = kind ? makeAnimal(kind, snow, 0) : null
-      if (critter) probe.add(critter.group)
+      // tous les animaux possibles (feu de camp et poussière sont transparents : d'autres variantes de shaders), en rang au milieu
+      ;[...ANIMALS_3D].forEach((kind, i) => {
+        const critter = makeAnimal(kind, snow, i)
+        if (!critter) return
+        critter.group.position.set((i % 6) * 0.4 - 1, 0, Math.floor(i / 6) * 0.4 - 0.6)
+        probe.add(critter.group)
+      })
+      // la fumée de la locomotive (transparente), qui n'apparaît qu'au départ du train : ses bouffées visibles le temps de l'image
+      const puffs: InstanceType<typeof THREE.Mesh>[] = []
+      steam.group.traverse((o) => {
+        const m = o as InstanceType<typeof THREE.Mesh>
+        if (m.isMesh && !m.visible) (puffs.push(m), (m.visible = true), m.position.set(sc.cols / 2, 0.4, sc.rows / 2))
+      })
       // caché, le canevas n'a pas de taille : on cadre la caméra sur le décor (mêmes proportions), sinon presque tout serait hors champ
       // et resterait à compiler ; témoins et train au milieu, dans le champ de la caméra comme dans celui de l'ombre
       onSize(sc.cols, sc.frame.visibleRows)
@@ -267,6 +278,7 @@ onMounted(async () => {
       r.draw(world.scene, top)
       train.visible = false
       train.position.set(0, 0, 0)
+      for (const m of puffs) m.visible = false
       unProbe()
       emit('warm')
     } else release()
