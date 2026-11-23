@@ -145,7 +145,7 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
       </div>
     </header>
 
-    <WagonMachine v-if="machineOpen" @close="machineOpen = false" @my-train="machineOpen = false; go('collection')" />
+    <WagonMachine v-if="machineOpen" @close="machineOpen = false" />
 
     <p v-if="notice" class="notice" data-test="notice" role="status" @click="notice = ''">{{ notice }}</p>
 
@@ -241,7 +241,8 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
   position: relative;
   overflow-x: clip; /* le train sort de la page sans créer de défilement */
   min-height: 100vh;
-  min-height: 100dvh;
+  /* #app ajoute déjà les marges de l'encoche et de la barre d'accueil (style.css) : on les retire, sinon la page déborde d'autant */
+  min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -348,6 +349,14 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
 @media (max-width: 26rem) {
   .title {
     font-size: 1rem;
+  }
+  /* colonnes à parts égales : les 5 boutons de droite écrasaient le titre (« T. ») ; la colonne de gauche prend ce qu'il lui faut */
+  .header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: 0.5rem;
+  }
+  .right {
+    gap: 0.35rem;
   }
 }
 .content:not(.panel) {
