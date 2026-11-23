@@ -902,6 +902,7 @@ export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
   const fin = finish(renderer)
   const { draw } = fin
   let lastScale = 0
+  let sized = false // a-t-il déjà eu une vraie taille ? (masqué, il mesure 0)
   let frame = 0
   let lastT = 0
   const gov = makeGovernor() // si l'appareil ne tient pas ses images, on dessine moins fin (voir adaptive.ts)
@@ -910,6 +911,7 @@ export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
     const w = canvas.clientWidth
     const h = canvas.clientHeight
     if (!w || !h) return
+    sized = true
     const scale = canvas.getBoundingClientRect().width / w || 1
     lastScale = scale
     // téléphone et tablette : 2 fois la résolution au plus (au-delà, ça ne se voit pas et ça rame)
@@ -929,6 +931,7 @@ export function makeRenderer(canvas: HTMLCanvasElement, opaque = false) {
       const now = performance.now()
       const changed = gov.frame(lastT ? now - lastT : 0) // la durée de l'image qui vient de finir
       lastT = now
+      if (!sized) return fit(onSize) // jamais une image étirée et floue : la vraie taille dès qu'elle existe
       if (!changed && ++frame % 20 !== 0) return
       const w = canvas.clientWidth
       if (!w) return
