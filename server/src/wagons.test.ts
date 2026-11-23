@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildApp } from './app.js'
 import { COLLECTION_TOTAL, DRAW_PRICE, drawPool, leftToWin, MAX_PER_WAGON, STARTER_TRAIN, validTrain, WAGON_DEFS, WAGON_IDS } from '../../shared/wagons.js'
-import { drawWagon, setTrain, trainState } from './wagons.js'
+import { drawWagon, setTrain, trainState, type Rng } from './wagons.js'
 import { mergeAnonymous } from './journey.js'
 import { balance, credit } from './wallet.js'
 import { closeAll, makeGame, STRONG } from './helpers.test-util.js'
 
 afterEach(closeAll)
 
-async function setup() {
+async function setup(drawRng?: Rng) {
   const c = await makeGame()
-  const app = buildApp({ ...c.ctx, exportSecret: 'secret-de-test' })
+  const app = buildApp({ ...c.ctx, exportSecret: 'secret-de-test', drawRng })
   const post = (url: string, payload: object, cookie?: string) => app.inject({ method: 'POST', url, payload, headers: cookie ? { cookie } : {} })
   const get = (url: string, cookie?: string) => app.inject({ method: 'GET', url, headers: cookie ? { cookie } : {} })
   const cookieOf = (r: { headers: Record<string, unknown> }, name: string) => [r.headers['set-cookie']].flat().map(String).find((x) => x.startsWith(name + '='))?.split(';')[0]
@@ -71,8 +71,9 @@ describe('l\'état du train', () => {
 })
 
 describe('la machine « Wagon surprise »', () => {
-  it('un tirage coûte 50 pièces, donne toujours un wagon, l\'ajoute à la collection et au bout du train s\'il reste une place', async () => {
-    const { db, compte, post } = await setup()
+  it('un tirage gagné coûte 50 pièces, donne un wagon, l\'ajoute à la collection et au bout du train s\'il reste une place', async () => {
+    // le hasard est fixé sur « gagné » : la machine perd une fois sur trois, le test échouait sinon une fois sur trois
+    const { db, compte, post } = await setup(() => 0)
     const { cookie, owner } = await compte('Alice', 'alice@x.fr')
     const avant = await balance(db, owner)
     const r = (await post('/api/train/draw', {}, cookie)).json()
