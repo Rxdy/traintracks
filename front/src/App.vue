@@ -256,6 +256,13 @@ watch(pseudoPrompt, (v) => v && go('account'), { immediate: true })
 /* En partie : fond blanc, avec un léger voile de ciel pour garder l'ambiance. */
 .app.immersive {
   background: linear-gradient(#dbeefe, #ffffff 45%);
+  /* iPhone couché : #app laisse vides les marges de l'encoche, à gauche et à droite, et .app coupe ce qui dépasse (overflow-x) ; le
+     paysage du Trajet s'arrêtait donc avant les bords de l'écran (deux bandes). En partie, .app s'étend sous ces marges ; son
+     contenu reste dans la zone sûre grâce au padding. */
+  margin-left: calc(-1 * env(safe-area-inset-left));
+  margin-right: calc(-1 * env(safe-area-inset-right));
+  padding-left: calc(clamp(1rem, 4vmin, 2rem) + env(safe-area-inset-left));
+  padding-right: calc(clamp(1rem, 4vmin, 2rem) + env(safe-area-inset-right));
 }
 
 /* Mon train : chaque page a son propre fond, sans paysage. Le dépôt met sa scène dessous (position fixe),

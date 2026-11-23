@@ -6,3 +6,4 @@ timing.revealMs = 0
 
 // Pas d'attente minimale sur l'écran de chargement.
 loadingTiming.minMs = 0
+loadingTiming.decorMaxMs = 0

@@ -17,7 +17,7 @@ import type { LandFrame } from '../scenery/motion'
 // caché : la construction des milliers d'objets, l'envoi des textures et la compilation des shaders (très lente sur iPhone) ne tombent
 // plus au premier passage du train. Il attend en pause ; quand `held` repasse à faux (la victoire), il apparaît et s'anime.
 const props = defineProps<{ scenery: Scenery; route: Route | null; train?: { route: Route; s: number } | null; life?: LandFrame | null; held?: boolean }>()
-const emit = defineEmits<{ (e: 'fail'): void; (e: 'ready'): void }>()
+const emit = defineEmits<{ (e: 'fail'): void; (e: 'ready'): void; (e: 'warm'): void }>()
 
 const box = computed(() => {
   const s = props.scenery
@@ -31,11 +31,14 @@ const ready = ref(false)
 let stop: (() => void) | null = null
 let release: (() => void) | null = null
 let gone = false
+// après la mise à jour de la page (flush: 'post') : le canevas n'est plus masqué, il a sa vraie taille quand on la lui donne
+// (avant, il la mesurait masqué, donc nulle, et gardait son image d'échauffement de 300×150 étirée : tout était flou)
 watch(
   () => props.held,
   (h) => {
     if (!h) release?.()
   },
+  { flush: 'post' },
 )
 onMounted(async () => {
   const sc = props.scenery
@@ -265,6 +268,7 @@ onMounted(async () => {
       train.visible = false
       train.position.set(0, 0, 0)
       unProbe()
+      emit('warm')
     } else release()
   } catch {
     if (!gone) emit('fail')
