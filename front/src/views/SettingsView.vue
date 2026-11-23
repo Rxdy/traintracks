@@ -15,7 +15,6 @@ const SLIDERS: { key: keyof Volumes; label: string; hint: string }[] = [
 const SPEEDS: { id: Speed; label: string }[] = [
   { id: 'slow', label: 'Lent' },
   { id: 'normal', label: 'Normal' },
-  { id: 'fast', label: 'Rapide' },
 ]
 const pct = (k: keyof Volumes) => Math.round(volumes.value[k] * 100)
 function setVol(k: keyof Volumes, e: Event): void {
