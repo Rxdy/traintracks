@@ -86,7 +86,8 @@ function cowSkin(): THREE.MeshStandardMaterial {
   g.fillStyle = '#26262a'
   let seed = 11
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647
-  // une tache : un contour irrégulier lissé ; dessinée aussi de part et d'autre pour que la texture se raccorde autour du corps
+  // une tache : un contour irrégulier lissé ; dessinée aussi de part et d'autre pour que la texture se raccorde autour du corps.
+  // Aucune tache près du haut ni du bas de la texture : ce sont les pôles de la sphère (le nez et la queue de la vache), où elle se pince.
   const blob = (cx: number, cy: number, r: number) => {
     const n = 12
     const pts = Array.from({ length: n }, (_, i) => {
@@ -105,7 +106,7 @@ function cowSkin(): THREE.MeshStandardMaterial {
       g.fill()
     }
   }
-  for (const [x, y, r] of [[60, 80, 46], [170, 170, 38], [250, 70, 52], [340, 150, 44], [430, 60, 40], [470, 190, 36], [110, 215, 30], [300, 225, 34], [200, 20, 28]] as const) blob(x, y, r)
+  for (const [x, y, r] of [[60, 90, 40], [170, 160, 34], [250, 100, 46], [340, 160, 38], [430, 90, 36], [490, 170, 30], [120, 190, 26], [300, 190, 28]] as const) blob(x, y, r)
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.wrapS = THREE.RepeatWrapping
@@ -135,12 +136,14 @@ function cow(): Animal3D {
   limb(tail, '#e7e5e4', 0.006, [0, 0, 0], [-0.012, -0.075, 0])
   ell(tail, dark, 0.012, 0.018, 0.012, -0.013, -0.088, 0)
   const head = pivot(body, 0, 0, 0)
-  ell(head, hide, 0.044, 0.04, 0.036, 0.152, 0.135, 0)
-  ell(head, '#f9a8b4', 0.022, 0.02, 0.03, 0.185, 0.122, 0)
+  ell(head, hide, 0.04, 0.038, 0.04, 0.122, 0.128, 0) // le cou, plus étroit que le corps
+  ell(head, hide, 0.05, 0.038, 0.036, 0.168, 0.124, 0).rotation.z = -0.22 // la tête, un peu allongée
+  ell(head, '#f9a8b4', 0.02, 0.022, 0.03, 0.212, 0.108, 0) // le mufle rose
   for (const s of [-1, 1]) {
-    ell(head, '#111827', 0.006, 0.006, 0.006, 0.172, 0.142, s * 0.033)
-    ell(head, dark, 0.022, 0.008, 0.014, 0.132, 0.158, s * 0.044).rotation.z = 0.25
-    put(head, cone, '#e7e5e4', 0.008, 0.026, 0.008, 0.138, 0.18, s * 0.02)
+    ell(head, '#111827', 0.005, 0.005, 0.005, 0.226, 0.114, s * 0.012) // les naseaux
+    ell(head, '#111827', 0.008, 0.008, 0.006, 0.182, 0.138, s * 0.034) // l'œil, sur le côté
+    ell(head, dark, 0.014, 0.006, 0.026, 0.14, 0.15, s * 0.052).rotation.x = s * -0.3 // l'oreille, tendue sur le côté et un peu tombante
+    put(head, cone, '#f1e4c8', 0.007, 0.022, 0.007, 0.148, 0.168, s * 0.024).rotation.x = s * 0.7 // la corne, petite, vers l'extérieur
   }
   return {
     group,
